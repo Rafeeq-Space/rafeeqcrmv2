@@ -1,0 +1,258 @@
+@import "tailwindcss";
+
+/* ── Theme variant: light mode is opt-in via .light on <html>; dark is default ── */
+@custom-variant light (&:where(.light, .light *));
+
+/* ════════════════════════════════════════════════════════════
+   Design tokens — dark by default. Primary = light blue (sky).
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --background: #0a0e17;
+  --surface: #111827;
+  --surface-2: #1a2336;
+  --surface-3: #222e45;
+  --border: #25314c;
+  --border-strong: #34456a;
+  --foreground: #e8eef9;
+  --muted: #8ba0c0;
+  --muted-2: #5d6f8f;
+
+  --primary: #38bdf8;
+  --primary-strong: #0ea5e9;
+  --primary-soft: rgba(56, 189, 248, 0.12);
+  --primary-fg: #02131f;
+  --ring: rgba(56, 189, 248, 0.35);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --purple: #a78bfa;
+  --purple-soft: rgba(167, 139, 250, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 24px 60px -12px rgba(0, 0, 0, 0.65);
+}
+
+.light {
+  --background: #f4f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f5fa;
+  --surface-3: #e6edf6;
+  --border: #e2e8f1;
+  --border-strong: #cdd9e8;
+  --foreground: #0f1b2d;
+  --muted: #5a6b85;
+  --muted-2: #8a99b3;
+
+  --primary: #0ea5e9;
+  --primary-strong: #0284c7;
+  --primary-soft: rgba(14, 165, 233, 0.1);
+  --primary-fg: #ffffff;
+  --ring: rgba(14, 165, 233, 0.3);
+
+  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
+  --shadow-md: 0 8px 24px -10px rgba(15, 27, 45, 0.18);
+  --shadow-lg: 0 24px 60px -16px rgba(15, 27, 45, 0.25);
+}
+
+/* ── Expose tokens as Tailwind color/font utilities ── */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-surface3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted2: var(--muted-2);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-fg: var(--primary-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-purple: var(--purple);
+  --font-sans: var(--font-arabic);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: dark;
+}
+html.light {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-arabic), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle ambient glow behind the app for depth (cheap, GPU-friendly) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(900px 500px at 100% 0%, rgba(56, 189, 248, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, rgba(167, 139, 250, 0.05), transparent 55%);
+  pointer-events: none;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* ════════════════════════════════════════════════════════════
+   Component layer — minimal, consistent primitives
+   ════════════════════════════════════════════════════════════ */
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-hover {
+    transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+  }
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.16s, color 0.16s, border-color 0.16s, opacity 0.16s, transform 0.06s;
+  }
+  .btn:active { transform: translateY(0.5px) scale(0.99); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--primary);
+    color: var(--primary-fg);
+    box-shadow: 0 6px 18px -6px var(--ring);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-strong); }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--foreground);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-outline:hover:not(:disabled) { background: var(--surface-2); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--foreground); }
+
+  .btn-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+
+  .input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
+    outline: none;
+  }
+  .input::placeholder { color: var(--muted-2); }
+  .input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--ring);
+    background: var(--surface);
+  }
+  select.input { cursor: pointer; }
+
+  .label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  /* Frosted modal overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    background: rgba(3, 7, 14, 0.6);
+    backdrop-filter: blur(6px);
+    animation: fade-in 0.18s ease;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-lg);
+    animation: pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* ── Status badge palettes (used by leads/campaigns) ── */
+.badge-blue    { background: var(--primary-soft); color: var(--primary); }
+.badge-yellow  { background: var(--warning-soft); color: var(--warning); }
+.badge-purple  { background: var(--purple-soft); color: var(--purple); }
+.badge-green   { background: var(--success-soft); color: var(--success); }
+.badge-red     { background: var(--danger-soft); color: var(--danger); }
+.badge-muted   { background: var(--surface-3); color: var(--muted); }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-in { animation: pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }

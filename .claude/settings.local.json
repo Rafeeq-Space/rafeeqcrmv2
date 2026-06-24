@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/chakoos/Downloads/rafeeqcrm-main/.claude)"
+    ]
+  }
+}
