@@ -3,13 +3,11 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import AdminClientsTable, { AddClientButton } from '@/components/admin/ClientsTable'
 
-// Service-role client bypasses RLS — safe here because we've already verified super_admin role
-const serviceClient = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 export default async function AdminDashboardPage() {
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
