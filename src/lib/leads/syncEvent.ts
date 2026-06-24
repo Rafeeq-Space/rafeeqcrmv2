@@ -1,12 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
-
 const META_API_VERSION = 'v21.0'
 
 // Maps lead status → platform event name
@@ -53,6 +47,12 @@ export async function syncLeadEvent(params: {
   status?: string
   eventType?: string
 }): Promise<SyncResult> {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
   const { leadId, status, eventType } = params
 
   const { data: lead, error: leadError } = await supabase
