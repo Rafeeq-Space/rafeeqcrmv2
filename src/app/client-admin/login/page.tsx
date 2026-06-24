@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ShieldCheck, LogIn } from 'lucide-react'
 
 export default function ClientAdminLoginPage() {
+  const searchParams = useSearchParams()
+  const wrongTenant = searchParams.get('error') === 'wrong_tenant'
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(wrongTenant ? 'هذا الحساب غير مصرح له بالدخول لهذه الشركة' : '')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -26,18 +29,31 @@ export default function ClientAdminLoginPage() {
       return
     }
 
-    // Verify role is client_admin
+    // Verify role is client_admin and tenant matches subdomain
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, tenants(subdomain)')
         .eq('id', user.id)
         .single()
 
       if (profile?.role !== 'client_admin') {
         await supabase.auth.signOut()
         setError('هذا الحساب ليس لديه صلاحية الوصول للوحة الإدارة')
+        setLoading(false)
+        return
+      }
+
+      // Check tenant matches current subdomain (production only)
+      const currentHost = window.location.hostname
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
+      const currentSubdomain = currentHost.replace(`.${rootDomain}`, '').replace(rootDomain, '')
+      const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
+
+      if (currentSubdomain && currentSubdomain !== currentHost && profileSubdomain && profileSubdomain !== currentSubdomain) {
+        await supabase.auth.signOut()
+        setError('هذا الحساب مرتبط بشركة مختلفة، يرجى استخدام الرابط الصحيح')
         setLoading(false)
         return
       }

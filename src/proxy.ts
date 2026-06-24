@@ -77,6 +77,14 @@ export async function proxy(request: NextRequest) {
     if (user && profile?.role !== 'client_admin' && !isLoginPath) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
+    // Tenant isolation: block client_admin from accessing a different tenant's subdomain
+    if (user && profile?.role === 'client_admin' && !isLoginPath) {
+      const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
+      if (profileSubdomain && profileSubdomain !== subdomain) {
+        // Sign them out and redirect to this subdomain's login
+        return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
+      }
+    }
 
     // Rewrite /admin/* → /client-admin/*
     const url = request.nextUrl.clone()
@@ -127,10 +135,8 @@ export async function proxy(request: NextRequest) {
     if (user && !isLocalhost && profile) {
       const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (userSubdomain && userSubdomain !== subdomain) {
-        const ownUrl = new URL(request.url)
-        ownUrl.hostname = `${userSubdomain}.${rootDomain}`
-        ownUrl.pathname = '/app/dashboard'
-        return NextResponse.redirect(ownUrl)
+        // Wrong tenant — sign out and redirect to this subdomain's login
+        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
       }
     }
 
