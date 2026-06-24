@@ -12,5 +12,5 @@ export default async function KnowledgePage() {
     .eq('tenant_id', profile?.tenant_id)
     .order('created_at', { ascending: false })
 
-  return <KnowledgeBase items={items || []} tenantId={profile?.tenant_id || ''} />
+  return <KnowledgeBase items={items || []} tenantId={profile?.tenant_id || ''} readOnly />
 }

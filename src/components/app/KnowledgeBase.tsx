@@ -15,9 +15,10 @@ const CATEGORIES: { value: KnowledgeCategory; label: string; icon: React.Element
 interface Props {
   items: KnowledgeItem[]
   tenantId: string
+  readOnly?: boolean
 }
 
-export default function KnowledgeBase({ items: initialItems, tenantId }: Props) {
+export default function KnowledgeBase({ items: initialItems, tenantId, readOnly = false }: Props) {
   const [items, setItems] = useState(initialItems)
   const [activeCategory, setActiveCategory] = useState<KnowledgeCategory | 'all'>('all')
   const [showAdd, setShowAdd] = useState(false)
@@ -54,9 +55,11 @@ export default function KnowledgeBase({ items: initialItems, tenantId }: Props) 
           <h1 className="text-2xl font-extrabold text-foreground">قاعدة المعرفة</h1>
           <p className="text-muted text-sm mt-1">المنتجات والخدمات والأسئلة الشائعة والمعلومات العامة</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="btn btn-primary">
-          <Plus size={17} /> إضافة عنصر
-        </button>
+        {!readOnly && (
+          <button onClick={() => setShowAdd(true)} className="btn btn-primary">
+            <Plus size={17} /> إضافة عنصر
+          </button>
+        )}
       </div>
 
       {/* Category Tabs */}
@@ -100,13 +103,15 @@ export default function KnowledgeBase({ items: initialItems, tenantId }: Props) 
                   </div>
                   <span className="text-xs font-bold text-muted2">{cat?.label}</span>
                 </div>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="opacity-0 group-hover:opacity-100 text-muted2 hover:text-danger transition"
-                  aria-label="حذف"
-                >
-                  <Trash2 size={15} />
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="opacity-0 group-hover:opacity-100 text-muted2 hover:text-danger transition"
+                    aria-label="حذف"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </div>
               <h3 className="font-bold text-foreground mb-2">{item.title}</h3>
               <p className="text-sm text-muted line-clamp-3 leading-relaxed">{item.content}</p>

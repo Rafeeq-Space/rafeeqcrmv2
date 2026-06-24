@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, Users, LayoutDashboard, LogOut, Sparkles, Menu, X } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, LogOut, Sparkles, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useState } from 'react'
@@ -23,20 +23,20 @@ const navItems = [
   {
     href: '/app/dashboard',
     label: 'لوحة التحكم',
-    desc: 'التحليلات والحملات والعملاء المحتملين',
+    desc: 'ملخص أدائك خلال آخر ٣٠ يوماً',
     icon: LayoutDashboard,
+  },
+  {
+    href: '/app/my-leads',
+    label: 'العملاء المحتملون',
+    desc: 'اعرض العملاء وغيّر حالتهم',
+    icon: ClipboardList,
   },
   {
     href: '/app/knowledge',
     label: 'قاعدة المعرفة',
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
-  },
-  {
-    href: '/app/teams',
-    label: 'الفِرَق والموظفون',
-    desc: 'إدارة الفِرَق وأعضائها',
-    icon: Users,
   },
 ]
 
@@ -121,7 +121,7 @@ export default function AppNav({ profile }: Props) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{profile?.full_name || 'مستخدم'}</p>
-            <p className="text-xs text-muted2">{profile?.role === 'admin' ? 'مدير' : 'عميل'}</p>
+            <p className="text-xs text-muted2">موظف مبيعات</p>
           </div>
           <button
             onClick={handleLogout}
