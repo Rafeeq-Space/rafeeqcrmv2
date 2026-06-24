@@ -124,20 +124,23 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/client-admin/dashboard', request.url))
     }
 
+    // Tenant isolation check (production only) — must run before any rewrite
+    if (user && !isLocalhost && profile && subdomain) {
+      const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
+      if (userSubdomain && userSubdomain !== subdomain) {
+        // Wrong tenant: client_admin → their own admin login, client_user → their own app login
+        if (role === 'client_admin') {
+          return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
+        }
+        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
+      }
+    }
+
     // Already on /app or /client-admin — no rewrite needed
     if (pathname.startsWith('/app') || pathname.startsWith('/client-admin')) {
       const rewriteResponse = NextResponse.rewrite(request.nextUrl.clone())
       if (subdomain) rewriteResponse.headers.set('x-subdomain', subdomain)
       return rewriteResponse
-    }
-
-    // Verify user belongs to this subdomain (production only)
-    if (user && !isLocalhost && profile) {
-      const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
-      if (userSubdomain && userSubdomain !== subdomain) {
-        // Wrong tenant — sign out and redirect to this subdomain's login
-        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
-      }
     }
 
     // Rewrite /path → /app/path for subdomain requests
