@@ -42,6 +42,19 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         .eq('id', user.id)
         .single()
 
+      // Main domain (no subdomain) — only super_admin allowed
+      if (!subdomain) {
+        if (profile?.role !== 'super_admin') {
+          await supabase.auth.signOut()
+          setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
+          setLoading(false)
+          return
+        }
+        router.push('/admin/dashboard')
+        return
+      }
+
+      // Subdomain login — route by role
       if (profile?.role === 'super_admin') {
         router.push('/admin/dashboard')
         return
