@@ -42,8 +42,16 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         .eq('id', user.id)
         .single()
 
-      // Main domain (no subdomain) — only super_admin allowed
-      if (!subdomain) {
+      // Detect subdomain from hostname (production) or query param (localhost dev)
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
+      const hostname = window.location.hostname
+      const hostnameSubdomain = hostname.endsWith(`.${rootDomain}`)
+        ? hostname.replace(`.${rootDomain}`, '')
+        : ''
+      const onSubdomain = !!(subdomain || hostnameSubdomain)
+
+      // Main domain — only super_admin allowed
+      if (!onSubdomain) {
         if (profile?.role !== 'super_admin') {
           await supabase.auth.signOut()
           setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
