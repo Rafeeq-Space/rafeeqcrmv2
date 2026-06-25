@@ -18,8 +18,24 @@ export async function DELETE(
   }
 
   const { id } = await params
+
+  // Fetch all auth users linked to this tenant
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('tenant_id', id)
+
+  // Delete every auth user (cascades to profiles via FK)
+  if (profiles && profiles.length > 0) {
+    await Promise.all(
+      profiles.map(p => supabaseAdmin.auth.admin.deleteUser(p.id))
+    )
+  }
+
+  // Delete tenant (cascades to all related data via FK)
   const { error } = await supabaseAdmin.from('tenants').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
   return NextResponse.json({ success: true })
 }
 
@@ -58,7 +74,7 @@ export async function PATCH(
         .from('profiles')
         .select('id')
         .eq('tenant_id', id)
-        .eq('role', 'client')
+        .eq('role', 'client_admin')
         .single()
 
       if (profile) {
