@@ -1,5 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+
+async function tenantExists(subdomain: string): Promise<boolean> {
+  try {
+    const supabase = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data } = await supabase
+      .from('tenants')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .single()
+    return !!data
+  } catch {
+    return false
+  }
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -68,6 +87,8 @@ export async function proxy(request: NextRequest) {
 
   // Production: sub.rafeeqcrm.com/admin → rewrite to /client-admin
   if (subdomain && pathname.startsWith('/admin')) {
+    const valid = await tenantExists(subdomain)
+    if (!valid) return new NextResponse(null, { status: 404 })
     const { supabaseResponse, user, profile } = await updateSession(request)
     const isLoginPath = pathname === '/admin/login'
 
@@ -101,6 +122,12 @@ export async function proxy(request: NextRequest) {
   //    (also accessible on localhost:3000/app for dev)
   // ════════════════════════════════════════════════════
   if (subdomain || (isLocalhost && (pathname.startsWith('/app') || pathname.startsWith('/login')))) {
+    // Validate subdomain exists in DB (skip on localhost dev)
+    if (subdomain && !isLocalhost) {
+      const valid = await tenantExists(subdomain)
+      if (!valid) return new NextResponse(null, { status: 404 })
+    }
+
     const { supabaseResponse, user, profile } = await updateSession(request)
     const role = profile?.role
 
