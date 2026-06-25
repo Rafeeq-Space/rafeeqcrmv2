@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ShieldCheck, LogIn } from 'lucide-react'
 
-export default function ClientAdminLoginPage() {
+function LoginForm() {
   const searchParams = useSearchParams()
   const wrongTenant = searchParams.get('error') === 'wrong_tenant'
 
@@ -29,7 +29,6 @@ export default function ClientAdminLoginPage() {
       return
     }
 
-    // Verify role is client_admin and tenant matches subdomain
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase
@@ -45,7 +44,6 @@ export default function ClientAdminLoginPage() {
         return
       }
 
-      // Check tenant matches current subdomain (production only)
       const currentHost = window.location.hostname
       const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
       const currentSubdomain = currentHost.replace(`.${rootDomain}`, '').replace(rootDomain, '')
@@ -94,5 +92,13 @@ export default function ClientAdminLoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ClientAdminLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <LoginForm />
+    </Suspense>
   )
 }
