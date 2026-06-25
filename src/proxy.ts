@@ -45,24 +45,31 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/f/')) return NextResponse.next()
 
   // ════════════════════════════════════════════════════
-  // 1. SUPER ADMIN PORTAL  →  rafeeqcrm.com/admin
-  //    (or localhost:3000/admin when no subdomain)
+  // 1. SUPER ADMIN PORTAL  →  rafeeqcrm.com/saas
+  //    (or localhost:3000/saas when no subdomain)
+  //    Block anyone who is not super_admin
   // ════════════════════════════════════════════════════
   const isSuperAdminHost =
     hostname === `admin.${rootDomain}` ||
     (!subdomain && (isLocalhost || hostname === rootDomain))
 
-  if (isSuperAdminHost && pathname.startsWith('/admin')) {
+  if (isSuperAdminHost && pathname.startsWith('/saas')) {
     const { supabaseResponse, user, profile } = await updateSession(request)
-    const isLoginPath = pathname === '/admin/login'
+    const isLoginPath = pathname === '/saas/login'
 
     if (!user && !isLoginPath) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      return NextResponse.redirect(new URL('/saas/login', request.url))
     }
     if (user && profile?.role !== 'super_admin' && !isLoginPath) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      return NextResponse.redirect(new URL('/saas/login', request.url))
     }
     return supabaseResponse
+  }
+
+  // Block direct access to /admin on the root domain (no subdomain)
+  // Only subdomains should use /admin
+  if (isSuperAdminHost && pathname.startsWith('/admin')) {
+    return new NextResponse(null, { status: 404 })
   }
 
   // ════════════════════════════════════════════════════
@@ -102,7 +109,6 @@ export async function proxy(request: NextRequest) {
     if (user && profile?.role === 'client_admin' && !isLoginPath) {
       const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (profileSubdomain && profileSubdomain !== subdomain) {
-        // Sign them out and redirect to this subdomain's login
         return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
       }
     }
@@ -112,7 +118,6 @@ export async function proxy(request: NextRequest) {
     url.pathname = pathname.replace(/^\/admin/, '/client-admin')
     const rewriteResponse = NextResponse.rewrite(url)
     rewriteResponse.headers.set('x-subdomain', subdomain)
-    // Copy auth cookies
     supabaseResponse.cookies.getAll().forEach(c => rewriteResponse.cookies.set(c.name, c.value))
     return rewriteResponse
   }
@@ -140,13 +145,12 @@ export async function proxy(request: NextRequest) {
 
     if (pathname.startsWith('/login')) return supabaseResponse
 
-    // super_admin has no business on a client subdomain
+    // super_admin has no business on a client subdomain → send to their portal
     if (user && role === 'super_admin') {
-      return NextResponse.redirect(new URL('/admin/dashboard', `${request.nextUrl.protocol}//${isLocalhost ? 'localhost:3000' : rootDomain}`))
+      return NextResponse.redirect(new URL('/saas/dashboard', `${request.nextUrl.protocol}//${isLocalhost ? 'localhost:3000' : rootDomain}`))
     }
 
-    // client_user trying to access /app — allowed. Block access to /admin (already handled above).
-    // client_admin trying to access /app — redirect to their admin portal.
+    // client_admin trying to access /app — redirect to their admin portal
     if (user && role === 'client_admin' && pathname.startsWith('/app')) {
       return NextResponse.redirect(new URL('/client-admin/dashboard', request.url))
     }
@@ -155,7 +159,6 @@ export async function proxy(request: NextRequest) {
     if (user && !isLocalhost && profile && subdomain) {
       const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (userSubdomain && userSubdomain !== subdomain) {
-        // Wrong tenant: client_admin → their own admin login, client_user → their own app login
         if (role === 'client_admin') {
           return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
         }
@@ -184,5 +187,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webpo)$).*)'],
 }

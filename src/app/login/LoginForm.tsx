@@ -50,13 +50,13 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
           setLoading(false)
           return
         }
-        router.push('/admin/dashboard')
+        router.push('/saas/dashboard')
         return
       }
 
       // Subdomain login — route by role
       if (profile?.role === 'super_admin') {
-        router.push('/admin/dashboard')
+        router.push('/saas/dashboard')
         return
       }
       if (profile?.role === 'client_admin') {

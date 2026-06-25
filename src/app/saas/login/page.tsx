@@ -32,12 +32,12 @@ export default function AdminLoginPage() {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'super_admin') {
         await supabase.auth.signOut()
-        setError('هذا الحساب لا يملك صلاحية الأدمن الرئيسي')
+        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
         setLoading(false)
         return
       }
     }
-    router.push('/admin/dashboard')
+    router.push('/saas/dashboard')
   }
 
   return (
