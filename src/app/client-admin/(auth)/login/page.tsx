@@ -11,7 +11,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(wrongTenant ? 'هذا الحساب غير مصرح له بالدخول لهذه الشركة' : '')
+  const [error, setError] = useState(wrongTenant ? 'خطأ في كلمة السر أو البريد الإلكتروني' : '')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -39,7 +39,7 @@ function LoginForm() {
 
       if (profile?.role !== 'client_admin') {
         await supabase.auth.signOut()
-        setError('هذا الحساب ليس لديه صلاحية الوصول للوحة الإدارة')
+        setError('خطأ في كلمة السر أو البريد الإلكتروني')
         setLoading(false)
         return
       }
@@ -51,7 +51,7 @@ function LoginForm() {
 
       if (currentSubdomain && currentSubdomain !== currentHost && profileSubdomain && profileSubdomain !== currentSubdomain) {
         await supabase.auth.signOut()
-        setError('هذا الحساب مرتبط بشركة مختلفة، يرجى استخدام الرابط الصحيح')
+        setError('خطأ في كلمة السر أو البريد الإلكتروني')
         setLoading(false)
         return
       }
