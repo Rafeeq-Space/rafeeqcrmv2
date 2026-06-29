@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import TeamsManager from '@/components/app/TeamsManager'
+import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
 
 export default async function ClientAdminTeamsPage() {
   const supabase = await createClient()
@@ -12,5 +12,5 @@ export default async function ClientAdminTeamsPage() {
     supabase.from('employees').select('*').eq('tenant_id', tenantId).order('full_name'),
   ])
 
-  return <TeamsManager teams={teams || []} employees={employees || []} tenantId={tenantId} />
+  return <TeamsAndEmployeesManager teams={teams || []} employees={employees || []} tenantId={tenantId} />
 }

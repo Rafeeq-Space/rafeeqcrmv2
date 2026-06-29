@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, BookOpen, Users, Target, UserCog,
+  LayoutDashboard, BookOpen, Users, Target,
   LogOut, Sparkles, Menu, X
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -26,10 +26,10 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    href: '/client-admin/users',
+    href: '/client-admin/teams',
     label: 'المستخدمون',
-    desc: 'إضافة وإدارة أعضاء الفريق',
-    icon: UserCog,
+    desc: 'إدارة الفِرَق والموظفين',
+    icon: Users,
   },
   {
     href: '/client-admin/campaigns',
@@ -42,12 +42,6 @@ const navItems = [
     label: 'قاعدة المعرفة',
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
-  },
-  {
-    href: '/client-admin/teams',
-    label: 'الفِرَق والموظفون',
-    desc: 'إدارة الفِرَق وأعضائها',
-    icon: Users,
   },
 ]
 
