@@ -4,6 +4,33 @@ export type CampaignStatus = 'draft' | 'active' | 'paused' | 'ended'
 export type CampaignSource = 'tiktok' | 'facebook' | 'instagram' | 'google' | 'other'
 export type KnowledgeCategory = 'faq' | 'product' | 'service' | 'general'
 
+export interface KnowledgeCategoryDynamic {
+  id: string
+  tenant_id: string
+  name: string
+  created_at: string
+}
+
+export interface KnowledgeSection {
+  id: string
+  tenant_id: string
+  category_id: string
+  name: string
+  created_at: string
+}
+
+export interface KnowledgeFile {
+  name: string
+  url: string
+  size?: number
+  type?: string
+}
+
+export interface KnowledgeLink {
+  label: string
+  url: string
+}
+
 export interface Tenant {
   id: string
   name: string
@@ -46,8 +73,14 @@ export interface KnowledgeItem {
   id: string
   tenant_id: string
   category: KnowledgeCategory
+  category_id?: string
+  section_id?: string
   title: string
+  description?: string
   content: string
+  files?: KnowledgeFile[]
+  links?: KnowledgeLink[]
+  images?: string[]
   created_at: string
 }
 
