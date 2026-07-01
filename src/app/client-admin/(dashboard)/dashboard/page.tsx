@@ -4,8 +4,9 @@ import DashboardView from '@/components/app/DashboardView'
 export default async function ClientAdminDashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user!.id).single()
   const tenantId = profile?.tenant_id || ''
+  const isAdmin = profile?.role === 'client_admin'
 
   const [
     { data: campaigns },
@@ -26,6 +27,7 @@ export default async function ClientAdminDashboardPage() {
       forms={forms || []}
       employees={employees || []}
       tenantId={tenantId}
+      isAdmin={isAdmin}
     />
   )
 }

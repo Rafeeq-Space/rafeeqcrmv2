@@ -16,6 +16,7 @@ interface Props {
   tenantId: string
   defaultTab?: 'overview' | 'campaigns' | 'leads'
   allowedTabs?: Array<'overview' | 'campaigns' | 'leads'>
+  isAdmin?: boolean
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -47,7 +48,7 @@ const TABS = [
 
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
-export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs }: Props) {
+export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs, isAdmin = true }: Props) {
   const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
   const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'leads'>(
@@ -204,7 +205,7 @@ export default function DashboardView({ campaigns, leads, forms, employees, tena
       )}
 
       {activeTab === 'campaigns' && (
-        <CampaignsList campaigns={campaigns} forms={forms} tenantId={tenantId} />
+        <CampaignsList campaigns={campaigns} forms={forms} tenantId={tenantId} isAdmin={isAdmin} />
       )}
 
       {activeTab === 'leads' && (

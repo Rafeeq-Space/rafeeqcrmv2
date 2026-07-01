@@ -108,8 +108,14 @@ export interface Campaign {
   id: string
   tenant_id: string
   name: string
+  description?: string
   source: CampaignSource
   status: CampaignStatus
+  tags?: string[]
+  links?: KnowledgeLink[]
+  files?: KnowledgeFile[]
+  images?: string[]
+  campaign_date?: string
   tiktok_pixel_id?: string
   tiktok_access_token?: string
   meta_pixel_id?: string
