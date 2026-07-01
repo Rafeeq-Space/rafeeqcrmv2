@@ -37,7 +37,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     // Demote the previous manager back to client_user (if any and different).
     if (previousManager && previousManager !== manager_id) {
-      await supabase.from('profiles').update({ role: 'client_user' }).eq('id', previousManager)
+      const { error: demoteErr } = await supabase.from('profiles').update({ role: 'client_user' }).eq('id', previousManager)
+      if (demoteErr) return NextResponse.json({ error: `تعذّر تحديث دور المدير السابق: ${demoteErr.message}` }, { status: 500 })
     }
 
     if (manager_id) {
@@ -50,10 +51,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!member || member.tenant_id !== auth.tenantId) {
         return NextResponse.json({ error: 'الموظف غير موجود' }, { status: 400 })
       }
-      await supabase
+      const { error: promoteErr } = await supabase
         .from('profiles')
         .update({ role: 'client_sales_manager', team_id: id })
         .eq('id', manager_id)
+      // Surface constraint/enum errors instead of silently leaving role as client_user.
+      if (promoteErr) return NextResponse.json({ error: `تعذّر رفع دور المدير: ${promoteErr.message}` }, { status: 500 })
     }
 
     teamUpdates.manager_id = manager_id || null
