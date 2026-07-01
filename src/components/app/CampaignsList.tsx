@@ -5,17 +5,19 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
-  Calendar, Tag, Layers, ListChecks, Wand2, ChevronLeft
+  Calendar, Tag, Layers, ListChecks, Wand2, ChevronLeft, LayoutTemplate
 } from 'lucide-react'
-import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink } from '@/lib/types'
+import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink, Template } from '@/lib/types'
 import FormBuilder from './FormBuilder'
 import QuickFormBuilder from './QuickFormBuilder'
+import { FormTemplatesManager, TemplatePickerModal } from './FormTemplatesManager'
 
 interface Props {
   campaigns: Campaign[]
   forms: Form[]
   tenantId: string
   isAdmin?: boolean
+  templates?: Template[]
 }
 
 const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: string }[] = [
@@ -437,10 +439,11 @@ function CampaignDetailModal({
 
 // ─── Choose Form Method Modal ─────────────────────────────────────
 function ChooseFormMethodModal({
-  onQuick, onAdvanced, onClose,
+  onQuick, onAdvanced, onTemplate, onClose,
 }: {
   onQuick: () => void
   onAdvanced: () => void
+  onTemplate: () => void
   onClose: () => void
 }) {
   return (
@@ -460,7 +463,7 @@ function ChooseFormMethodModal({
               <ListChecks size={20} style={{ color: 'var(--primary)' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-foreground">إنشاء سريع بالحقول</p>
+              <p className="font-bold text-foreground">إنشاء نموذج جديد</p>
               <p className="text-xs text-muted2 mt-0.5">أضف الحقول مباشرةً في صفٍّ واحد — سريع وبسيط.</p>
             </div>
             <ChevronLeft size={18} className="text-muted2 shrink-0" />
@@ -479,6 +482,20 @@ function ChooseFormMethodModal({
             </div>
             <ChevronLeft size={18} className="text-muted2 shrink-0" />
           </button>
+
+          <button
+            onClick={onTemplate}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 hover:border-primary transition text-start"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--warning-soft)' }}>
+              <LayoutTemplate size={20} style={{ color: 'var(--warning)' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground">من القوالب المحفوظة</p>
+              <p className="text-xs text-muted2 mt-0.5">اختر قالباً جاهزاً (حقول أو HTML) وأنشئ منه نموذجاً فوراً.</p>
+            </div>
+            <ChevronLeft size={18} className="text-muted2 shrink-0" />
+          </button>
         </div>
       </div>
     </div>
@@ -486,12 +503,14 @@ function ChooseFormMethodModal({
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-type FormFlow = { campaignId: string; mode: 'choose' | 'quick' | 'advanced' }
+type FormFlow = { campaignId: string; mode: 'choose' | 'quick' | 'advanced' | 'template' }
 
-export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false }: Props) {
+export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, templates: initialTemplates = [] }: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
   const [forms, setForms] = useState(initialForms)
+  const [templates, setTemplates] = useState(initialTemplates)
   const [showAddCampaign, setShowAddCampaign] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
   const [formFlow, setFormFlow] = useState<FormFlow | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -517,9 +536,14 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h2 className="text-lg font-bold text-foreground">الحملات</h2>
         {isAdmin && (
-          <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary">
-            <Plus size={17} /> حملة جديدة
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowTemplates(true)} className="btn btn-outline gap-2">
+              <LayoutTemplate size={17} /> قوالب النماذج
+            </button>
+            <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary">
+              <Plus size={17} /> حملة جديدة
+            </button>
+          </div>
         )}
       </div>
 
@@ -605,11 +629,31 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         />
       )}
 
+      {showTemplates && isAdmin && (
+        <FormTemplatesManager
+          templates={templates}
+          onClose={() => setShowTemplates(false)}
+          onChange={setTemplates}
+        />
+      )}
+
       {formFlow && isAdmin && formFlow.mode === 'choose' && (
         <ChooseFormMethodModal
           onQuick={() => setFormFlow({ ...formFlow, mode: 'quick' })}
           onAdvanced={() => setFormFlow({ ...formFlow, mode: 'advanced' })}
+          onTemplate={() => setFormFlow({ ...formFlow, mode: 'template' })}
           onClose={() => setFormFlow(null)}
+        />
+      )}
+
+      {formFlow && isAdmin && formFlow.mode === 'template' && (
+        <TemplatePickerModal
+          templates={templates}
+          campaignId={formFlow.campaignId}
+          tenantId={tenantId}
+          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
+          onClose={() => setFormFlow(null)}
+          onCreated={onFormCreated}
         />
       )}
 

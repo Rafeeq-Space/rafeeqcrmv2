@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, Users, LayoutTemplate, LogOut, Sparkles, Menu, X } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Sparkles, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useState } from 'react'
@@ -43,12 +43,6 @@ const navItems = [
     label: 'قاعدة المعرفة',
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
-  },
-  {
-    href: '/app/templates',
-    label: 'القوالب',
-    desc: 'قوالب HTML جاهزة للعرض',
-    icon: LayoutTemplate,
   },
 ]
 

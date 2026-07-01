@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, BookOpen, Users, Target, LayoutTemplate, Globe,
+  LayoutDashboard, BookOpen, Users, Target,
   LogOut, Sparkles, Menu, X
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -42,18 +42,6 @@ const navItems = [
     label: 'قاعدة المعرفة',
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
-  },
-  {
-    href: '/client-admin/templates',
-    label: 'القوالب',
-    desc: 'قوالب HTML جاهزة للعرض والاستخدام',
-    icon: LayoutTemplate,
-  },
-  {
-    href: '/client-admin/landing-pages',
-    label: 'صفحات الهبوط',
-    desc: 'صفحات عامة بمحرّر بلوكات مع نموذج',
-    icon: Globe,
   },
 ]
 

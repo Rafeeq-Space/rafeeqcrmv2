@@ -123,36 +123,18 @@ export interface Campaign {
   created_at: string
 }
 
+// A reusable form template — either a set of structured fields
+// or a raw HTML form (rendered sandboxed, captures leads via [name] inputs).
+export type TemplateKind = 'fields' | 'html'
+
 export interface Template {
   id: string
   tenant_id: string
   name: string
   description?: string
-  html: string
-  created_by?: string
-  created_at: string
-}
-
-export type LandingBlock =
-  | { id: string; type: 'hero'; title: string; subtitle?: string; image?: string }
-  | { id: string; type: 'heading'; text: string; level: 1 | 2 | 3 }
-  | { id: string; type: 'text'; text: string }
-  | { id: string; type: 'image'; url: string; alt?: string }
-  | { id: string; type: 'button'; label: string; href: string }
-  | { id: string; type: 'video'; youtubeId: string }
-  | { id: string; type: 'spacer'; size: 'sm' | 'md' | 'lg' }
-  | { id: string; type: 'form' }
-
-export type LandingBlockType = LandingBlock['type']
-
-export interface LandingPage {
-  id: string
-  tenant_id: string
-  name: string
-  slug: string
-  form_id?: string
-  blocks: LandingBlock[]
-  published: boolean
+  kind: TemplateKind
+  fields?: FormField[]
+  html?: string
   created_by?: string
   created_at: string
 }
@@ -172,6 +154,7 @@ export interface Form {
   campaign_id: string
   name: string
   fields: FormField[]
+  html?: string // when set, form is rendered from raw HTML (sandboxed) instead of `fields`
   published_at?: string
   created_at: string
 }

@@ -26,13 +26,19 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { name, description, html } = body
-  if (!name || !html) return NextResponse.json({ error: 'الاسم والمحتوى مطلوبان' }, { status: 400 })
+  const { name, description, kind = 'html', html, fields } = body
+  if (!name) return NextResponse.json({ error: 'اسم القالب مطلوب' }, { status: 400 })
+  if (kind === 'html' && !html) return NextResponse.json({ error: 'كود HTML مطلوب' }, { status: 400 })
+  if (kind === 'fields' && (!Array.isArray(fields) || fields.length === 0)) {
+    return NextResponse.json({ error: 'أضف حقلاً واحداً على الأقل' }, { status: 400 })
+  }
 
   const payload: Record<string, unknown> = {
     tenant_id: profile.tenant_id,
     name,
-    html,
+    kind,
+    html: kind === 'html' ? html : null,
+    fields: kind === 'fields' ? fields : [],
     created_by: user.id,
   }
   if (description) payload.description = description

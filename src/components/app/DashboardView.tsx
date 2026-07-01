@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Target, FileText, Users, TrendingUp } from 'lucide-react'
-import type { Campaign, Form, Lead, Employee } from '@/lib/types'
+import type { Campaign, Form, Lead, Employee, Template } from '@/lib/types'
 import { LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
 import CampaignsList from './CampaignsList'
 import LeadsTable from './LeadsTable'
@@ -17,6 +17,7 @@ interface Props {
   defaultTab?: 'overview' | 'campaigns' | 'leads'
   allowedTabs?: Array<'overview' | 'campaigns' | 'leads'>
   isAdmin?: boolean
+  templates?: Template[]
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,7 +49,7 @@ const TABS = [
 
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
-export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs, isAdmin = true }: Props) {
+export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs, isAdmin = true, templates = [] }: Props) {
   const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
   const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'leads'>(
@@ -205,7 +206,7 @@ export default function DashboardView({ campaigns, leads, forms, employees, tena
       )}
 
       {activeTab === 'campaigns' && (
-        <CampaignsList campaigns={campaigns} forms={forms} tenantId={tenantId} isAdmin={isAdmin} />
+        <CampaignsList campaigns={campaigns} forms={forms} tenantId={tenantId} isAdmin={isAdmin} templates={templates} />
       )}
 
       {activeTab === 'leads' && (

@@ -37,7 +37,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updates: Record<string, unknown> = {}
   if (body.name !== undefined) updates.name = body.name
   if (body.description !== undefined) updates.description = body.description
+  if (body.kind !== undefined) updates.kind = body.kind
   if (body.html !== undefined) updates.html = body.html
+  if (body.fields !== undefined) updates.fields = body.fields
 
   const { data, error } = await supabase.from('templates').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
