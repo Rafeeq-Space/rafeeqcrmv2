@@ -8,12 +8,18 @@ import {
 import type { Team, TeamMember, UserRole } from '@/lib/types'
 import { COUNTRY_CODES, DEFAULT_COUNTRY, splitPhone, waNumber } from '@/lib/countryCodes'
 
+export interface TeamLeadStats {
+  open: number
+  pending: number
+}
+
 interface Props {
   teams: Team[]
   members: TeamMember[]
   tenantId: string
   currentRole: UserRole
   currentTeamId?: string | null
+  leadStats?: Record<string, TeamLeadStats>
 }
 
 // ─── Contact icons (call + whatsapp) ──────────────────────────────
@@ -360,7 +366,7 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId }: Props) {
+export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {} }: Props) {
   const isAdmin = currentRole === 'client_admin'
   const [activeTab, setActiveTab] = useState<'teams' | 'employees'>('teams')
   const [showAddTeam, setShowAddTeam] = useState(false)
@@ -390,7 +396,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">فريق العميل</h1>
+          <h1 className="text-2xl font-extrabold text-foreground">فريق العمل</h1>
           <p className="text-muted text-sm mt-1">{teams.length} فريق · {members.length} موظف</p>
         </div>
         {activeTab === 'teams' && isAdmin && (
@@ -421,6 +427,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           {teams.map(team => {
             const count = members.filter(m => m.team_id === team.id).length
             const manager = members.find(m => m.id === team.manager_id)
+            const stats = leadStats[team.id] || { open: 0, pending: 0 }
             return (
               <button key={team.id} onClick={() => setOpenTeam(team)}
                 className="card p-5 text-start hover:shadow-md hover:-translate-y-0.5 transition group">
@@ -431,9 +438,23 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                   <ChevronLeft size={18} className="text-muted2 group-hover:text-foreground transition" />
                 </div>
                 <p className="font-bold text-foreground text-lg">{team.name}</p>
-                <p className="text-sm text-muted mt-0.5">عدد الأعضاء: {count}</p>
+                {team.description && <p className="text-sm text-muted mt-0.5 line-clamp-2">{team.description}</p>}
+                <p className="text-sm text-muted mt-1">عدد الأعضاء: {count}</p>
+
+                {/* Lead counters */}
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--primary-soft)' }}>
+                    <p className="text-lg font-extrabold" style={{ color: 'var(--primary)' }}>{stats.open}</p>
+                    <p className="text-[0.68rem] font-semibold" style={{ color: 'var(--primary)' }}>عملاء مفتوحة</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--warning-soft)' }}>
+                    <p className="text-lg font-extrabold" style={{ color: 'var(--warning)' }}>{stats.pending}</p>
+                    <p className="text-[0.68rem] font-semibold" style={{ color: 'var(--warning)' }}>عملاء معلّقة</p>
+                  </div>
+                </div>
+
                 {manager && (
-                  <p className="text-xs text-muted2 mt-2 flex items-center gap-1">
+                  <p className="text-xs text-muted2 mt-3 flex items-center gap-1">
                     <Crown size={12} style={{ color: 'var(--warning)' }} /> {manager.full_name}
                   </p>
                 )}

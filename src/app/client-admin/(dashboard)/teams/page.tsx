@@ -37,6 +37,22 @@ export default async function ClientAdminTeamsPage() {
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
 
+  // Lead counters per team (open = new, pending = in-progress).
+  const { data: leads } = await adminSupabase
+    .from('leads')
+    .select('assigned_to, status')
+    .eq('tenant_id', tenantId)
+
+  const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
+  const leadStats: Record<string, { open: number; pending: number }> = {}
+  for (const lead of leads || []) {
+    const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
+    if (!teamId) continue
+    if (!leadStats[teamId]) leadStats[teamId] = { open: 0, pending: 0 }
+    if (lead.status === 'new') leadStats[teamId].open++
+    else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
+  }
+
   // Sales manager only sees their own team + its members.
   let visibleTeams = teams || []
   let visibleMembers = members || []
@@ -52,6 +68,7 @@ export default async function ClientAdminTeamsPage() {
       tenantId={tenantId}
       currentRole={role}
       currentTeamId={currentTeamId}
+      leadStats={leadStats}
     />
   )
 }

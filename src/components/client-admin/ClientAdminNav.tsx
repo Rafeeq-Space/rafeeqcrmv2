@@ -27,7 +27,7 @@ const navItems = [
   },
   {
     href: '/client-admin/teams',
-    label: 'فريق العميل',
+    label: 'فريق العمل',
     desc: 'إدارة الفِرَق والموظفين',
     icon: Users,
   },
