@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, BookOpen, Users, Target,
+  LayoutDashboard, BookOpen, Users, Target, Contact,
   LogOut, Sparkles, Menu, X
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -36,6 +36,12 @@ const navItems = [
     label: 'الحملات والنماذج',
     desc: 'إدارة الحملات الإعلانية والنماذج',
     icon: Target,
+  },
+  {
+    href: '/client-admin/leads',
+    label: 'مركز العملاء',
+    desc: 'إدارة ومتابعة العملاء المحتملين',
+    icon: Contact,
   },
   {
     href: '/client-admin/knowledge',

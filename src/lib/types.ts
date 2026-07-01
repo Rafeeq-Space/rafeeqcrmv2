@@ -172,11 +172,45 @@ export interface Lead {
   ttclid?: string
   fbclid?: string
   status: LeadStatus
-  assigned_to?: string
+  assigned_to?: string // legacy: employee id (kept for backward-compat)
+  assigned_sales_id?: string // profile id of the sales rep
+  assigned_team_id?: string // team id
   notes?: string
   created_at: string
   updated_at: string
   campaigns?: Campaign
   forms?: Form
   employees?: Employee
+  // joined helpers
+  assigned_sales?: { id: string; full_name: string } | null
+  assigned_team?: { id: string; name: string; manager_id?: string } | null
+  shares?: LeadShare[]
+}
+
+export type LeadActivityType = 'created' | 'status_change' | 'call' | 'comment' | 'assignment' | 'share'
+
+export interface LeadActivity {
+  id: string
+  tenant_id: string
+  lead_id: string
+  actor_id?: string | null
+  type: LeadActivityType
+  from_status?: string | null
+  to_status?: string | null
+  call_result?: 'answered' | 'no_answer' | null
+  body?: string | null
+  mentioned_id?: string | null
+  created_at: string
+  // joined helpers
+  actor?: { id: string; full_name: string } | null
+  mentioned?: { id: string; full_name: string } | null
+}
+
+export interface LeadShare {
+  id: string
+  tenant_id: string
+  lead_id: string
+  profile_id: string
+  created_at: string
+  profile?: { id: string; full_name: string } | null
 }

@@ -40,3 +40,23 @@ export const SOURCE_LABELS: Record<string, string> = {
   google: 'Google',
   other: 'أخرى',
 }
+
+// Pull a display name / phone out of a lead's free-form submitted data.
+const NAME_KEYS = ['name', 'full_name', 'fullname', 'الاسم', 'الاسم الكامل', 'اسم']
+const PHONE_KEYS = ['phone', 'tel', 'mobile', 'phone_number', 'رقم الهاتف', 'رقم الجوال', 'الهاتف', 'الجوال', 'رقم_الهاتف', 'رقم التليفون']
+const EMAIL_KEYS = ['email', 'e-mail', 'mail', 'البريد', 'البريد الإلكتروني', 'الايميل']
+
+function pick(data: Record<string, string> | undefined, keys: string[]): string {
+  if (!data) return ''
+  for (const [k, v] of Object.entries(data)) {
+    const nk = k.toLowerCase().trim()
+    if (keys.some(key => nk === key || nk.includes(key))) {
+      if (v) return String(v)
+    }
+  }
+  return ''
+}
+
+export const leadName = (data?: Record<string, string>) => pick(data, NAME_KEYS) || 'عميل بدون اسم'
+export const leadPhone = (data?: Record<string, string>) => pick(data, PHONE_KEYS)
+export const leadEmail = (data?: Record<string, string>) => pick(data, EMAIL_KEYS)

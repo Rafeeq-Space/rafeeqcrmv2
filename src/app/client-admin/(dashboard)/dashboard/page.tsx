@@ -38,6 +38,7 @@ export default async function ClientAdminDashboardPage() {
       tenantId={tenantId}
       isAdmin={isAdmin}
       templates={templates || []}
+      allowedTabs={['overview', 'campaigns']}
     />
   )
 }

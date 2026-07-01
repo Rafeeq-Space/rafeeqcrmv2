@@ -28,8 +28,8 @@ const navItems = [
   },
   {
     href: '/app/my-leads',
-    label: 'العملاء المحتملون',
-    desc: 'اعرض العملاء وغيّر حالتهم',
+    label: 'مركز العملاء',
+    desc: 'العملاء المُسنَدون إليك ومتابعتهم',
     icon: ClipboardList,
   },
   {
