@@ -123,6 +123,16 @@ export interface Campaign {
   created_at: string
 }
 
+export interface Template {
+  id: string
+  tenant_id: string
+  name: string
+  description?: string
+  html: string
+  created_by?: string
+  created_at: string
+}
+
 export interface FormField {
   id: string
   type: 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox'
