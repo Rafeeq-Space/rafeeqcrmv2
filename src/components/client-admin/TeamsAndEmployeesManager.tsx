@@ -57,6 +57,9 @@ function Avatar({ name, url, size = 36 }: { name: string; url?: string; size?: n
 }
 
 // ─── Member Modal (add / edit) ────────────────────────────────────
+// Preset job titles (descriptive only — NOT permissions). "أخرى" enables free text.
+const JOB_TITLES = ['مندوب مبيعات', 'مدير مبيعات', 'مشرف مبيعات', 'خدمة عملاء', 'تسويق']
+
 function MemberModal({
   teams, member, lockedTeamId, onClose, onSaved,
 }: {
@@ -77,6 +80,8 @@ function MemberModal({
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
   })
+  // Free-text mode when the existing title isn't one of the presets.
+  const [customTitle, setCustomTitle] = useState(!!member?.job_title && !JOB_TITLES.includes(member.job_title))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -156,7 +161,27 @@ function MemberModal({
 
           <div>
             <label className="label">المسمى الوظيفي</label>
-            <input className="input" value={form.job_title} onChange={e => setForm({ ...form, job_title: e.target.value })} placeholder="مندوب مبيعات" />
+            <select
+              className="input"
+              value={customTitle ? 'أخرى' : form.job_title}
+              onChange={e => {
+                if (e.target.value === 'أخرى') { setCustomTitle(true); setForm({ ...form, job_title: '' }) }
+                else { setCustomTitle(false); setForm({ ...form, job_title: e.target.value }) }
+              }}
+            >
+              <option value="">-- اختر --</option>
+              {JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+              <option value="أخرى">أخرى (كتابة حرة)</option>
+            </select>
+            {customTitle && (
+              <input
+                className="input mt-2"
+                value={form.job_title}
+                onChange={e => setForm({ ...form, job_title: e.target.value })}
+                placeholder="اكتب المسمى الوظيفي"
+                autoFocus
+              />
+            )}
           </div>
 
           <div>
