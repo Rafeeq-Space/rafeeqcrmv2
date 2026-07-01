@@ -34,7 +34,9 @@ export async function POST(request: Request) {
 
   const userId = authData.user.id
 
-  const { error: profileError } = await adminSupabase.from('profiles').insert({
+  // Upsert: a DB trigger may already have created the profile row on auth signup,
+  // so update it (or insert if absent) to persist all fields including phone.
+  const { error: profileError } = await adminSupabase.from('profiles').upsert({
     id: userId,
     full_name,
     role: 'client_user',
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     job_title: job_title || null,
     team_id: finalTeamId,
     suspended: false,
-  })
+  }, { onConflict: 'id' })
 
   if (profileError) {
     await adminSupabase.auth.admin.deleteUser(userId)
