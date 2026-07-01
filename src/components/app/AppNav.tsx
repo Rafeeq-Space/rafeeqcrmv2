@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, LogOut, Sparkles, Menu, X } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Sparkles, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import { useState } from 'react'
@@ -31,6 +31,12 @@ const navItems = [
     label: 'العملاء المحتملون',
     desc: 'اعرض العملاء وغيّر حالتهم',
     icon: ClipboardList,
+  },
+  {
+    href: '/app/team',
+    label: 'فريق العمل',
+    desc: 'الفِرَق وبيانات الزملاء والتواصل',
+    icon: Users,
   },
   {
     href: '/app/knowledge',
