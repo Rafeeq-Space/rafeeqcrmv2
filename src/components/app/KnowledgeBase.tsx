@@ -16,6 +16,8 @@ interface Props {
   tenantId: string
   isAdmin?: boolean
   pending?: KnowledgeItem[]
+  defaultCategoryId?: string
+  defaultSectionId?: string
 }
 
 // ─── Settings Modal ───────────────────────────────────────────────
@@ -149,17 +151,19 @@ function SettingsModal({
 
 // ─── Add Item Modal ───────────────────────────────────────────────
 function AddItemModal({
-  categories, sections, tenantId, isAdmin,
+  categories, sections, tenantId, isAdmin, defaultCategoryId, defaultSectionId,
   onClose, onAdded,
 }: {
   categories: KnowledgeCategoryDynamic[]
   sections: KnowledgeSection[]
   tenantId: string
   isAdmin: boolean
+  defaultCategoryId?: string
+  defaultSectionId?: string
   onClose: () => void
   onAdded: (item: KnowledgeItem) => void
 }) {
-  const [form, setForm] = useState({ category_id: '', section_id: '', title: '', description: '', content: '' })
+  const [form, setForm] = useState({ category_id: defaultCategoryId || '', section_id: defaultSectionId || '', title: '', description: '', content: '' })
   const [links, setLinks] = useState<KnowledgeLink[]>([])
   const [linkForm, setLinkForm] = useState({ label: '', url: '' })
   const [files, setFiles] = useState<KnowledgeFile[]>([])
@@ -446,7 +450,7 @@ function RequestsModal({
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-export default function KnowledgeBase({ items: initialItems, categories: initialCategories, sections: initialSections, tenantId, isAdmin = false, pending = [] }: Props) {
+export default function KnowledgeBase({ items: initialItems, categories: initialCategories, sections: initialSections, tenantId, isAdmin = false, pending = [], defaultCategoryId, defaultSectionId }: Props) {
   const [items, setItems] = useState(initialItems)
   const [categories, setCategories] = useState(initialCategories)
   const [sections, setSections] = useState(initialSections)
@@ -553,7 +557,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
         <div className="flex flex-wrap gap-2 mb-5">
           <button
             onClick={() => setActiveSecId('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${activeSecId === 'all' ? 'bg-surface2 text-foreground border-border' : 'border-transparent text-muted hover:text-foreground'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${activeSecId === 'all' ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-border text-muted hover:text-foreground hover:bg-surface2'}`}
           >
             كل الأقسام
           </button>
@@ -561,7 +565,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
             <button
               key={sec.id}
               onClick={() => setActiveSecId(sec.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${activeSecId === sec.id ? 'bg-surface2 text-foreground border-border' : 'border-transparent text-muted hover:text-foreground'}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${activeSecId === sec.id ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-border text-muted hover:text-foreground hover:bg-surface2'}`}
             >
               {sec.name}
             </button>
@@ -691,6 +695,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
       {showAdd && (
         <AddItemModal
           categories={categories} sections={sections} tenantId={tenantId} isAdmin={isAdmin}
+          defaultCategoryId={defaultCategoryId} defaultSectionId={defaultSectionId}
           onClose={() => setShowAdd(false)}
           onAdded={item => setItems(prev => [item, ...prev])}
         />

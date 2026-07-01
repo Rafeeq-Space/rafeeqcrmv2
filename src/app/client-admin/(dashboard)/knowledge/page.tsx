@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import KnowledgeBase from '@/components/app/KnowledgeBase'
+import { ensureGeneralTaxonomy } from '@/lib/knowledge'
 
 export default async function ClientAdminKnowledgePage() {
   const supabase = await createClient()
@@ -14,6 +15,8 @@ export default async function ClientAdminKnowledgePage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+
+  const { categoryId: defaultCategoryId, sectionId: defaultSectionId } = await ensureGeneralTaxonomy(adminSupabase, tenantId)
 
   const [{ data: items }, { data: categories }, { data: sections }, { data: pending }] = await Promise.all([
     adminSupabase.from('knowledge_items').select('*').eq('tenant_id', tenantId).eq('status', 'approved').order('created_at', { ascending: false }),
@@ -32,6 +35,8 @@ export default async function ClientAdminKnowledgePage() {
       tenantId={tenantId}
       isAdmin={isAdmin}
       pending={pending || []}
+      defaultCategoryId={defaultCategoryId || undefined}
+      defaultSectionId={defaultSectionId || undefined}
     />
   )
 }
