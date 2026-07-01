@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
-  Calendar, Tag, Layers
+  Calendar, Tag, Layers, ListChecks, Wand2, ChevronLeft
 } from 'lucide-react'
 import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink } from '@/lib/types'
 import FormBuilder from './FormBuilder'
+import QuickFormBuilder from './QuickFormBuilder'
 
 interface Props {
   campaigns: Campaign[]
@@ -434,12 +435,64 @@ function CampaignDetailModal({
   )
 }
 
+// ─── Choose Form Method Modal ─────────────────────────────────────
+function ChooseFormMethodModal({
+  onQuick, onAdvanced, onClose,
+}: {
+  onQuick: () => void
+  onAdvanced: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="overlay items-center justify-center p-4" onClick={onClose}>
+      <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground">إنشاء نموذج</h3>
+          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+        </div>
+        <p className="text-sm text-muted mb-4">اختر طريقة الإنشاء:</p>
+        <div className="space-y-3">
+          <button
+            onClick={onQuick}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 hover:border-primary transition text-start"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--primary-soft)' }}>
+              <ListChecks size={20} style={{ color: 'var(--primary)' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground">إنشاء سريع بالحقول</p>
+              <p className="text-xs text-muted2 mt-0.5">أضف الحقول مباشرةً في صفٍّ واحد — سريع وبسيط.</p>
+            </div>
+            <ChevronLeft size={18} className="text-muted2 shrink-0" />
+          </button>
+
+          <button
+            onClick={onAdvanced}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 hover:border-primary transition text-start"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--purple-soft)' }}>
+              <Wand2 size={20} style={{ color: 'var(--purple)' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground">أداة منشئ النماذج</p>
+              <p className="text-xs text-muted2 mt-0.5">تحكم كامل: إعادة ترتيب، نص توضيحي، خيارات، ومعاينة حية.</p>
+            </div>
+            <ChevronLeft size={18} className="text-muted2 shrink-0" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────
+type FormFlow = { campaignId: string; mode: 'choose' | 'quick' | 'advanced' }
+
 export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false }: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
   const [forms, setForms] = useState(initialForms)
   const [showAddCampaign, setShowAddCampaign] = useState(false)
-  const [showFormBuilder, setShowFormBuilder] = useState<string | null>(null)
+  const [formFlow, setFormFlow] = useState<FormFlow | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
@@ -454,7 +507,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
 
   function onFormCreated(form: Form) {
     setForms(prev => [form, ...prev])
-    setShowFormBuilder(null)
+    setFormFlow(null)
   }
 
   const detailCampaign = campaigns.find(c => c.id === detailId) || null
@@ -547,16 +600,35 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
           getFormLink={getFormLink}
           copied={copied}
           onCopyLink={copyLink}
-          onCreateForm={() => setShowFormBuilder(detailCampaign.id)}
+          onCreateForm={() => setFormFlow({ campaignId: detailCampaign.id, mode: 'choose' })}
           onClose={() => setDetailId(null)}
         />
       )}
 
-      {showFormBuilder && isAdmin && (
-        <FormBuilder
-          campaignId={showFormBuilder}
+      {formFlow && isAdmin && formFlow.mode === 'choose' && (
+        <ChooseFormMethodModal
+          onQuick={() => setFormFlow({ ...formFlow, mode: 'quick' })}
+          onAdvanced={() => setFormFlow({ ...formFlow, mode: 'advanced' })}
+          onClose={() => setFormFlow(null)}
+        />
+      )}
+
+      {formFlow && isAdmin && formFlow.mode === 'quick' && (
+        <QuickFormBuilder
+          campaignId={formFlow.campaignId}
           tenantId={tenantId}
-          onClose={() => setShowFormBuilder(null)}
+          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
+          onClose={() => setFormFlow(null)}
+          onCreated={onFormCreated}
+        />
+      )}
+
+      {formFlow && isAdmin && formFlow.mode === 'advanced' && (
+        <FormBuilder
+          campaignId={formFlow.campaignId}
+          tenantId={tenantId}
+          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
+          onClose={() => setFormFlow(null)}
           onCreated={onFormCreated}
         />
       )}

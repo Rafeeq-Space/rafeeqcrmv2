@@ -8,6 +8,7 @@ import type { Form, FormField } from '@/lib/types'
 interface Props {
   campaignId: string
   tenantId: string
+  onBack?: () => void
   onClose: () => void
   onCreated: (form: Form) => void
 }
@@ -32,7 +33,7 @@ function createField(): FormField {
   }
 }
 
-export default function FormBuilder({ campaignId, tenantId, onClose, onCreated }: Props) {
+export default function FormBuilder({ campaignId, tenantId, onBack, onClose, onCreated }: Props) {
   const [formName, setFormName] = useState('')
   const [fields, setFields] = useState<FormField[]>([createField()])
   const [saving, setSaving] = useState(false)
@@ -77,6 +78,9 @@ export default function FormBuilder({ campaignId, tenantId, onClose, onCreated }
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-bold text-foreground">منشئ النماذج</h3>
           <div className="flex gap-2">
+            {onBack && (
+              <button onClick={onBack} className="btn btn-outline !py-1.5 !px-3 text-sm">رجوع</button>
+            )}
             <button
               onClick={() => setPreviewMode(!previewMode)}
               className={`btn !py-1.5 !px-3 text-sm ${previewMode ? 'btn-primary' : 'btn-outline'}`}
