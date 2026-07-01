@@ -15,6 +15,7 @@ interface Props {
   employees: Employee[]
   tenantId: string
   defaultTab?: 'overview' | 'campaigns' | 'leads'
+  allowedTabs?: Array<'overview' | 'campaigns' | 'leads'>
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,8 +47,12 @@ const TABS = [
 
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
-export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview' }: Props) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'leads'>(defaultTab)
+export default function DashboardView({ campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs }: Props) {
+  const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
+  const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'leads'>(
+    allowedTabs && !allowedTabs.includes(defaultTab) ? allowedTabs[0] : defaultTab
+  )
 
   const totalLeads = leads.length
   const convertedLeads = leads.filter(l => l.status === 'converted').length
@@ -92,22 +97,26 @@ export default function DashboardView({ campaigns, leads, forms, employees, tena
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">لوحة التحكم</h1>
-          <p className="text-muted text-sm mt-1">نظرة شاملة على أداء حملاتك وعملائك المحتملين</p>
+          <h1 className="text-2xl font-extrabold text-foreground">{campaignsOnly ? 'الحملات والنماذج' : 'لوحة التحكم'}</h1>
+          <p className="text-muted text-sm mt-1">
+            {campaignsOnly ? 'إدارة الحملات الإعلانية والنماذج' : 'نظرة شاملة على أداء حملاتك وعملائك المحتملين'}
+          </p>
         </div>
-        <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border">
-          {TABS.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
-                activeTab === tab.key ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {visibleTabs.length > 1 && (
+          <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border">
+            {visibleTabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  activeTab === tab.key ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {activeTab === 'overview' && (

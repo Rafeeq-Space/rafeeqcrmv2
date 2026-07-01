@@ -28,6 +28,7 @@ export default async function ClientAdminCampaignsPage() {
       employees={employees || []}
       tenantId={tenantId}
       defaultTab="campaigns"
+      allowedTabs={['campaigns']}
     />
   )
 }
