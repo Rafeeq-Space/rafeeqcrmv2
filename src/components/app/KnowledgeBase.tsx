@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Settings, Search, ChevronDown, ChevronLeft,
   Trash2, X, Link as LinkIcon, Image as ImageIcon,
-  FileText, ExternalLink, Paperclip
+  FileText, ExternalLink, Paperclip, Inbox, Check, Clock
 } from 'lucide-react'
 import type { KnowledgeItem, KnowledgeCategoryDynamic, KnowledgeSection, KnowledgeFile, KnowledgeLink } from '@/lib/types'
 
@@ -14,7 +14,8 @@ interface Props {
   categories: KnowledgeCategoryDynamic[]
   sections: KnowledgeSection[]
   tenantId: string
-  readOnly?: boolean
+  isAdmin?: boolean
+  pending?: KnowledgeItem[]
 }
 
 // ─── Settings Modal ───────────────────────────────────────────────
@@ -148,12 +149,13 @@ function SettingsModal({
 
 // ─── Add Item Modal ───────────────────────────────────────────────
 function AddItemModal({
-  categories, sections, tenantId,
+  categories, sections, tenantId, isAdmin,
   onClose, onAdded,
 }: {
   categories: KnowledgeCategoryDynamic[]
   sections: KnowledgeSection[]
   tenantId: string
+  isAdmin: boolean
   onClose: () => void
   onAdded: (item: KnowledgeItem) => void
 }) {
@@ -164,6 +166,7 @@ function AddItemModal({
   const [images, setImages] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
 
@@ -212,33 +215,45 @@ function AddItemModal({
     e.preventDefault()
     if (!form.title || !form.content) return
     setSaving(true)
-    const supabase = createClient()
-    const payload: Record<string, unknown> = {
-      tenant_id: tenantId,
-      title: form.title,
-      content: form.content,
-      category: 'general',
-      files,
-      links,
-      images,
+    setError('')
+    try {
+      const res = await fetch('/api/knowledge/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title,
+          content: form.content,
+          description: form.description,
+          category_id: form.category_id,
+          section_id: form.section_id,
+          files, links, images,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      // Admin items are approved and shown immediately; requests await approval.
+      if (data.status === 'approved' && data.item) onAdded(data.item as KnowledgeItem)
+      else alert('تم إرسال طلبك إلى مدير الحساب للمراجعة والموافقة.')
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setSaving(false)
     }
-    if (form.description) payload.description = form.description
-    if (form.category_id) payload.category_id = form.category_id
-    if (form.section_id) payload.section_id = form.section_id
-
-    const { data } = await supabase.from('knowledge_items').insert(payload).select().single()
-    if (data) onAdded(data as KnowledgeItem)
-    onClose()
-    setSaving(false)
   }
 
   return (
     <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="modal p-6 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-foreground">إضافة عنصر معرفي</h3>
+          <h3 className="text-lg font-bold text-foreground">{isAdmin ? 'إضافة عنصر معرفي' : 'طلب إضافة عنصر معرفي'}</h3>
           <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
         </div>
+        {!isAdmin && (
+          <p className="text-sm text-muted mb-4 bg-surface2 border border-border rounded-xl px-4 py-2.5">
+            سيُرسَل هذا العنصر إلى مدير الحساب للمراجعة قبل نشره.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Category + Section */}
@@ -339,9 +354,12 @@ function AddItemModal({
             </div>
           </div>
 
+          {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
-            <button type="submit" disabled={saving || uploading} className="btn btn-primary flex-1">{saving ? 'جارٍ الحفظ...' : 'حفظ العنصر'}</button>
+            <button type="submit" disabled={saving || uploading} className="btn btn-primary flex-1">
+              {saving ? 'جارٍ الإرسال...' : isAdmin ? 'حفظ العنصر' : 'إرسال الطلب'}
+            </button>
           </div>
         </form>
       </div>
@@ -349,8 +367,86 @@ function AddItemModal({
   )
 }
 
+// ─── Requests Modal (admin: approve/reject pending items) ─────────
+function RequestsModal({
+  pending, getCategoryName, getSectionName, onClose,
+}: {
+  pending: KnowledgeItem[]
+  getCategoryName: (id?: string) => string
+  getSectionName: (id?: string) => string
+  onClose: () => void
+}) {
+  const [list, setList] = useState(pending)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function approve(id: string) {
+    setBusy(id)
+    await fetch(`/api/knowledge/items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    })
+    setList(prev => prev.filter(i => i.id !== id))
+    setBusy(null)
+  }
+
+  async function reject(id: string) {
+    if (!confirm('رفض هذا الطلب وحذفه؟')) return
+    setBusy(id)
+    await fetch(`/api/knowledge/items/${id}`, { method: 'DELETE' })
+    setList(prev => prev.filter(i => i.id !== id))
+    setBusy(null)
+  }
+
+  return (
+    <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="modal p-6 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+            <Inbox size={18} /> طلبات الإضافة ({list.length})
+          </h3>
+          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+        </div>
+
+        {list.length === 0 ? (
+          <div className="text-center py-12 text-muted2">لا توجد طلبات معلّقة.</div>
+        ) : (
+          <div className="space-y-3">
+            {list.map(item => (
+              <div key={item.id} className="card p-4">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground">{item.title}</p>
+                    {item.description && <p className="text-sm text-muted mt-0.5">{item.description}</p>}
+                  </div>
+                  <span className="flex items-center gap-1 text-xs shrink-0" style={{ color: 'var(--warning)' }}>
+                    <Clock size={12} /> معلّق
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {getCategoryName(item.category_id) && <span className="badge badge-blue text-xs">{getCategoryName(item.category_id)}</span>}
+                  {getSectionName(item.section_id) && <span className="badge badge-yellow text-xs">{getSectionName(item.section_id)}</span>}
+                </div>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap mb-3 line-clamp-4">{item.content}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => approve(item.id)} disabled={busy === item.id} className="btn btn-primary !py-2 gap-2 flex-1">
+                    <Check size={16} /> {busy === item.id ? '...' : 'موافقة ونشر'}
+                  </button>
+                  <button onClick={() => reject(item.id)} disabled={busy === item.id} className="btn btn-outline !py-2 gap-2 flex-1">
+                    <X size={16} /> رفض
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────
-export default function KnowledgeBase({ items: initialItems, categories: initialCategories, sections: initialSections, tenantId, readOnly = false }: Props) {
+export default function KnowledgeBase({ items: initialItems, categories: initialCategories, sections: initialSections, tenantId, isAdmin = false, pending = [] }: Props) {
   const [items, setItems] = useState(initialItems)
   const [categories, setCategories] = useState(initialCategories)
   const [sections, setSections] = useState(initialSections)
@@ -360,6 +456,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showRequests, setShowRequests] = useState(false)
 
   const filteredSections = activeCatId === 'all' ? sections : sections.filter(s => s.category_id === activeCatId)
 
@@ -377,8 +474,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
 
   async function handleDelete(id: string) {
     if (!confirm('حذف هذا العنصر نهائياً؟')) return
-    const supabase = createClient()
-    await supabase.from('knowledge_items').delete().eq('id', id)
+    await fetch(`/api/knowledge/items/${id}`, { method: 'DELETE' })
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
@@ -398,16 +494,26 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
           <h1 className="text-2xl font-extrabold text-foreground">قاعدة المعرفة</h1>
           <p className="text-muted text-sm mt-1">{filtered.length} عنصر</p>
         </div>
-        {!readOnly && (
-          <div className="flex gap-2">
-            <button onClick={() => setShowSettings(true)} className="btn btn-outline !py-2 !px-3" title="إدارة الفئات والأقسام">
-              <Settings size={17} />
-            </button>
-            <button onClick={() => setShowAdd(true)} className="btn btn-primary gap-2">
-              <Plus size={17} /> إضافة عنصر
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && (
+            <>
+              <button onClick={() => setShowSettings(true)} className="btn btn-outline !py-2 !px-3" title="إدارة الفئات والأقسام">
+                <Settings size={17} />
+              </button>
+              <button onClick={() => setShowRequests(true)} className="btn btn-outline gap-2 relative" title="طلبات الإضافة">
+                <Inbox size={17} /> الطلبات
+                {pending.length > 0 && (
+                  <span className="absolute -top-2 -start-2 min-w-5 h-5 px-1 rounded-full text-[0.68rem] font-bold flex items-center justify-center text-white" style={{ background: 'var(--danger)' }}>
+                    {pending.length}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
+          <button onClick={() => setShowAdd(true)} className="btn btn-primary gap-2">
+            <Plus size={17} /> {isAdmin ? 'إضافة عنصر' : 'طلب إضافة عنصر'}
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -491,7 +597,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
                     {(item.links?.length ?? 0) > 0 && <span className="flex items-center gap-1 text-xs text-muted2"><LinkIcon size={11} />{item.links!.length}</span>}
                   </div>
                 </div>
-                {!readOnly && (
+                {isAdmin && (
                   <button
                     onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
                     className="text-muted2 hover:text-danger transition shrink-0 p-1"
@@ -571,7 +677,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
         )}
       </div>
 
-      {showSettings && !readOnly && (
+      {showSettings && isAdmin && (
         <SettingsModal
           categories={categories} sections={sections} tenantId={tenantId}
           onClose={() => setShowSettings(false)}
@@ -582,11 +688,20 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
         />
       )}
 
-      {showAdd && !readOnly && (
+      {showAdd && (
         <AddItemModal
-          categories={categories} sections={sections} tenantId={tenantId}
+          categories={categories} sections={sections} tenantId={tenantId} isAdmin={isAdmin}
           onClose={() => setShowAdd(false)}
           onAdded={item => setItems(prev => [item, ...prev])}
+        />
+      )}
+
+      {showRequests && isAdmin && (
+        <RequestsModal
+          pending={pending}
+          getCategoryName={getCategoryName}
+          getSectionName={getSectionName}
+          onClose={() => setShowRequests(false)}
         />
       )}
     </div>
