@@ -14,7 +14,6 @@ export default async function ClientAdminTeamsPage() {
 
   const tenantId = profile?.tenant_id || ''
   const role = (profile?.role || 'client_user') as UserRole
-  const currentTeamId = profile?.team_id || null
 
   // Service role to read all tenant members regardless of RLS.
   const adminSupabase = createAdminClient(
@@ -28,6 +27,10 @@ export default async function ClientAdminTeamsPage() {
     .select('*')
     .eq('tenant_id', tenantId)
     .order('created_at')
+
+  // A manager's team = the team they manage (by manager_id), or their own team_id.
+  const managedTeam = (teams || []).find(t => t.manager_id === user!.id)
+  const currentTeamId = managedTeam?.id || profile?.team_id || null
 
   // Members = sales managers + sales users (exclude the admins).
   const { data: members } = await adminSupabase

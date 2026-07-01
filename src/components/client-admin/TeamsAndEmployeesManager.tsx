@@ -209,7 +209,22 @@ function TeamDetailModal({
   const [assigning, setAssigning] = useState(false)
   const [newManagerId, setNewManagerId] = useState(team.manager_id || '')
   const [saving, setSaving] = useState(false)
+  const [editingTeam, setEditingTeam] = useState(false)
+  const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '' })
   const teamMembers = members.filter(m => m.team_id === team.id)
+
+  async function saveTeamInfo(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await fetch(`/api/client-admin/teams/${team.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: teamForm.name, description: teamForm.description }),
+    })
+    setSaving(false)
+    setEditingTeam(false)
+    onChanged()
+  }
 
   async function removeFromTeam(id: string) {
     if (!confirm('إزالة هذا الموظف من الفريق؟')) return
@@ -238,10 +253,35 @@ function TeamDetailModal({
     <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="modal p-6 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xl font-extrabold text-foreground">{team.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-extrabold text-foreground">{team.name}</h3>
+            {canManageTeam && !editingTeam && (
+              <button onClick={() => setEditingTeam(true)} className="text-muted2 hover:text-foreground transition" title="تعديل الفريق">
+                <Pencil size={15} />
+              </button>
+            )}
+          </div>
           <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
         </div>
-        {team.description && <p className="text-sm text-muted mb-4">{team.description}</p>}
+
+        {editingTeam ? (
+          <form onSubmit={saveTeamInfo} className="bg-surface2 rounded-xl p-4 border border-border mb-4 space-y-3">
+            <div>
+              <label className="label">اسم الفريق</label>
+              <input className="input" value={teamForm.name} onChange={e => setTeamForm({ ...teamForm, name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">وصف الفريق</label>
+              <textarea className="input resize-none h-20" value={teamForm.description} onChange={e => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="وصف مختصر للفريق" />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setEditingTeam(false); setTeamForm({ name: team.name, description: team.description || '' }) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
+              <button type="submit" disabled={saving} className="btn btn-primary flex-1 !py-2">{saving ? 'جارٍ الحفظ...' : 'حفظ'}</button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-muted mb-4">{team.description || 'لا يوجد وصف لهذا الفريق.'}</p>
+        )}
 
         {/* Manager row */}
         <div className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-3 border border-border mb-5">
