@@ -86,7 +86,7 @@ export async function proxy(request: NextRequest) {
     if (!user && !isLoginPath) {
       return NextResponse.redirect(new URL('/client-admin/login', request.url))
     }
-    if (user && profile?.role !== 'client_admin' && !isLoginPath) {
+    if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
       return NextResponse.redirect(new URL('/client-admin/login', request.url))
     }
     return supabaseResponse
@@ -102,11 +102,11 @@ export async function proxy(request: NextRequest) {
     if (!user && !isLoginPath) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
-    if (user && profile?.role !== 'client_admin' && !isLoginPath) {
+    if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
       return NextResponse.redirect(new URL('/admin/login', request.url))
     }
-    // Tenant isolation: block client_admin from accessing a different tenant's subdomain
-    if (user && profile?.role === 'client_admin' && !isLoginPath) {
+    // Tenant isolation: block admins/managers from accessing a different tenant's subdomain
+    if (user && (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') && !isLoginPath) {
       const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (profileSubdomain && profileSubdomain !== subdomain) {
         return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
@@ -136,6 +136,14 @@ export async function proxy(request: NextRequest) {
     const { supabaseResponse, user, profile } = await updateSession(request)
     const role = profile?.role
 
+    // Suspended accounts → force logout to login page
+    if (user && profile?.suspended && !pathname.startsWith('/login')) {
+      const loginUrl = new URL('/login', request.url)
+      if (subdomain) loginUrl.searchParams.set('subdomain', subdomain)
+      loginUrl.searchParams.set('error', 'suspended')
+      return NextResponse.redirect(loginUrl)
+    }
+
     // Unauthenticated → login
     if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/admin')) {
       const loginUrl = new URL('/login', request.url)
@@ -150,8 +158,8 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL('/saas/dashboard', `${request.nextUrl.protocol}//${isLocalhost ? 'localhost:3000' : rootDomain}`))
     }
 
-    // client_admin trying to access /app — redirect to their admin portal
-    if (user && role === 'client_admin' && pathname.startsWith('/app')) {
+    // client_admin / sales_manager trying to access /app — redirect to admin portal
+    if (user && (role === 'client_admin' || role === 'client_sales_manager') && pathname.startsWith('/app')) {
       return NextResponse.redirect(new URL('/client-admin/dashboard', request.url))
     }
 
@@ -159,7 +167,7 @@ export async function proxy(request: NextRequest) {
     if (user && !isLocalhost && profile && subdomain) {
       const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (userSubdomain && userSubdomain !== subdomain) {
-        if (role === 'client_admin') {
+        if (role === 'client_admin' || role === 'client_sales_manager') {
           return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
         }
         return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))

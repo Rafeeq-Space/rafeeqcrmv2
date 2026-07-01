@@ -27,7 +27,7 @@ const navItems = [
   },
   {
     href: '/client-admin/teams',
-    label: 'المستخدمون',
+    label: 'فريق العميل',
     desc: 'إدارة الفِرَق والموظفين',
     icon: Users,
   },
@@ -36,6 +36,7 @@ const navItems = [
     label: 'الحملات والنماذج',
     desc: 'إدارة الحملات الإعلانية والنماذج',
     icon: Target,
+    adminOnly: true,
   },
   {
     href: '/client-admin/knowledge',
@@ -58,11 +59,13 @@ export default function ClientAdminNav({ profile }: Props) {
 
   const initial = profile?.full_name?.[0]?.toUpperCase() || 'م'
 
+  const isAdmin = profile?.role === 'client_admin'
+
   function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">الإدارة</p>
-        {navItems.map(({ href, label, desc, icon: Icon }) => {
+        {navItems.filter(item => isAdmin || !item.adminOnly).map(({ href, label, desc, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
             <Link

@@ -14,7 +14,7 @@ export default async function ClientAdminLayout({ children }: { children: React.
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'client_admin') redirect('/admin/login')
+  if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') redirect('/admin/login')
 
   return (
     <div className="min-h-screen">

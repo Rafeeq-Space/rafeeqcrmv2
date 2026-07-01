@@ -6,6 +6,7 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions }
 type SessionProfile = {
   role: string | null
   tenant_id: string | null
+  suspended: boolean | null
   tenants: { subdomain: string } | null
 }
 
@@ -43,7 +44,7 @@ export async function updateSession(request: NextRequest): Promise<{
   if (user) {
     const { data } = await supabase
       .from('profiles')
-      .select('role, tenant_id, tenants(subdomain)')
+      .select('role, tenant_id, suspended, tenants(subdomain)')
       .eq('id', user.id)
       .single()
     profile = data as unknown as SessionProfile | null

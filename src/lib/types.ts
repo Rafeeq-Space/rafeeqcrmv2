@@ -40,13 +40,18 @@ export interface Tenant {
   created_at: string
 }
 
-export type UserRole = 'super_admin' | 'client_admin' | 'client_user'
+export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
 
 export interface Profile {
   id: string
   tenant_id: string | null
   full_name: string
   role: UserRole
+  phone?: string
+  job_title?: string
+  team_id?: string
+  suspended?: boolean
+  avatar_url?: string
   created_at: string
 }
 
@@ -55,6 +60,21 @@ export interface Team {
   tenant_id: string
   name: string
   description?: string
+  manager_id?: string
+  created_at: string
+}
+
+// A tenant member (profile) as shown in the team management page.
+export interface TeamMember {
+  id: string
+  tenant_id: string | null
+  full_name: string
+  role: UserRole
+  phone?: string
+  job_title?: string
+  team_id?: string
+  suspended?: boolean
+  avatar_url?: string
   created_at: string
 }
 

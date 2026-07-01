@@ -1,0 +1,54 @@
+import { NextResponse } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { requireTeamManager } from '@/lib/auth/requireTeamManager'
+
+// POST — create a new team member (auth account + profile) under the tenant.
+export async function POST(request: Request) {
+  const auth = await requireTeamManager()
+  if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+
+  const { full_name, email, password, phone, job_title, team_id } = await request.json()
+  if (!full_name || !email || !password) {
+    return NextResponse.json({ error: 'الاسم والبريد وكلمة السر مطلوبة' }, { status: 400 })
+  }
+
+  // Sales managers can only add members to their own team.
+  let finalTeamId: string | null = team_id || null
+  if (auth.role === 'client_sales_manager') {
+    if (!auth.teamId) return NextResponse.json({ error: 'ليس لديك فريق مُسنَد' }, { status: 403 })
+    finalTeamId = auth.teamId
+  }
+
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
+  const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+  if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
+
+  const userId = authData.user.id
+
+  const { error: profileError } = await adminSupabase.from('profiles').insert({
+    id: userId,
+    full_name,
+    role: 'client_user',
+    tenant_id: auth.tenantId,
+    phone: phone || null,
+    job_title: job_title || null,
+    team_id: finalTeamId,
+    suspended: false,
+  })
+
+  if (profileError) {
+    await adminSupabase.auth.admin.deleteUser(userId)
+    return NextResponse.json({ error: profileError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true, id: userId })
+}

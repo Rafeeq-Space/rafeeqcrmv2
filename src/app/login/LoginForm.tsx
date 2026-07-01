@@ -15,7 +15,9 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(
-    errorParam === 'wrong_tenant' ? 'هذا الحساب مرتبط بشركة مختلفة' : ''
+    errorParam === 'wrong_tenant' ? 'هذا الحساب مرتبط بشركة مختلفة'
+    : errorParam === 'suspended' ? 'تم تعليق هذا الحساب. تواصل مع مدير الحساب.'
+    : ''
   )
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -38,9 +40,17 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, suspended')
         .eq('id', user.id)
         .single()
+
+      // Suspended accounts cannot log in.
+      if (profile?.suspended) {
+        await supabase.auth.signOut()
+        setError('تم تعليق هذا الحساب. تواصل مع مدير الحساب.')
+        setLoading(false)
+        return
+      }
 
       // Detect subdomain from hostname (production) or query param (localhost dev)
       const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
@@ -67,7 +77,7 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         router.push('/saas/dashboard')
         return
       }
-      if (profile?.role === 'client_admin') {
+      if (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') {
         router.push('/client-admin/dashboard')
         return
       }
