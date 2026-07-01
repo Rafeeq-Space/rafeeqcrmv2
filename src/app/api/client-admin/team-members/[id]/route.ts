@@ -36,13 +36,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json()
   const { full_name, phone, job_title, team_id, suspended, password } = body
 
+  const isAdmin = auth.role === 'client_admin'
+
   const updates: Record<string, unknown> = {}
   if (full_name !== undefined) updates.full_name = full_name
   if (phone !== undefined) updates.phone = phone || null
   if (job_title !== undefined) updates.job_title = job_title || null
-  if (suspended !== undefined) updates.suspended = suspended
-  // Only admins can reassign team; managers cannot move members out of their team.
-  if (team_id !== undefined && auth.role === 'client_admin') updates.team_id = team_id || null
+
+  // Suspend/unsuspend is admin-only.
+  if (suspended !== undefined) {
+    if (!isAdmin) return NextResponse.json({ error: 'ليس لديك صلاحية تعليق الحسابات' }, { status: 403 })
+    updates.suspended = suspended
+  }
+
+  // Team assignment: admin sets any team; a manager may only remove a member from their team.
+  if (team_id !== undefined) {
+    if (isAdmin) updates.team_id = team_id || null
+    else if (team_id === null) updates.team_id = null
+    else return NextResponse.json({ error: 'ليس لديك صلاحية تغيير الفريق' }, { status: 403 })
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await supabase.from('profiles').update(updates).eq('id', id)
@@ -57,10 +69,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ success: true })
 }
 
-// DELETE — remove the member's account entirely.
+// DELETE — permanently delete the member's account (admin only).
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTeamManager()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+  if (auth.role !== 'client_admin') {
+    return NextResponse.json({ error: 'ليس لديك صلاحية حذف الحسابات نهائياً' }, { status: 403 })
+  }
   const { id } = await params
 
   const supabase = adminClient()
