@@ -53,18 +53,11 @@ export default async function ClientAdminTeamsPage() {
     else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
   }
 
-  // Sales manager only sees their own team + its members.
-  let visibleTeams = teams || []
-  let visibleMembers = members || []
-  if (role === 'client_sales_manager') {
-    visibleTeams = visibleTeams.filter(t => t.id === currentTeamId)
-    visibleMembers = visibleMembers.filter(m => m.team_id === currentTeamId)
-  }
-
+  // Everyone sees all teams + members; management is gated per-role in the component.
   return (
     <TeamsAndEmployeesManager
-      teams={visibleTeams}
-      members={visibleMembers}
+      teams={teams || []}
+      members={members || []}
       tenantId={tenantId}
       currentRole={role}
       currentTeamId={currentTeamId}

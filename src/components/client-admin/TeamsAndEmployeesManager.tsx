@@ -196,15 +196,16 @@ function MemberModal({
 
 // ─── Team detail modal ────────────────────────────────────────────
 function TeamDetailModal({
-  team, members, canManageTeam, canManageMembers, onClose, onChanged,
+  team, members, canManageTeam, canManageMember, onClose, onChanged,
 }: {
   team: Team
   members: TeamMember[]
-  canManageTeam: boolean       // admin can change manager
-  canManageMembers: boolean    // can remove members from team
+  canManageTeam: boolean                          // admin can change manager
+  canManageMember: (m: TeamMember) => boolean     // can remove a given member
   onClose: () => void
   onChanged: () => void
 }) {
+  const canManageAny = members.filter(m => m.team_id === team.id).some(canManageMember)
   const [assigning, setAssigning] = useState(false)
   const [newManagerId, setNewManagerId] = useState(team.manager_id || '')
   const [saving, setSaving] = useState(false)
@@ -284,7 +285,7 @@ function TeamDetailModal({
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">العضو</th>
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">المسمى الوظيفي</th>
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">اتصال</th>
-                {canManageMembers && <th className="px-4 py-2.5" />}
+                {canManageAny && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
             <tbody>
@@ -301,11 +302,13 @@ function TeamDetailModal({
                   </td>
                   <td className="px-4 py-2.5 text-muted">{m.job_title || '—'}</td>
                   <td className="px-4 py-2.5"><ContactIcons phone={m.phone} /></td>
-                  {canManageMembers && (
+                  {canManageAny && (
                     <td className="px-4 py-2.5 text-end">
-                      <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-danger transition p-1" title="إزالة من الفريق">
-                        <Trash2 size={15} />
-                      </button>
+                      {canManageMember(m) && (
+                        <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-danger transition p-1" title="إزالة من الفريق">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -372,7 +375,11 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 // ─── Main Component ───────────────────────────────────────────────
 export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {}, readOnly = false }: Props) {
   const isAdmin = currentRole === 'client_admin' && !readOnly
-  const canManageMembers = !readOnly
+  const isManager = currentRole === 'client_sales_manager' && !readOnly
+  // Admins can create teams; admins + managers can add members.
+  const canAddMember = isAdmin || isManager
+  // Admin manages everyone; a sales manager manages only their own team's members.
+  const canManageMember = (m: TeamMember) => isAdmin || (isManager && !!currentTeamId && m.team_id === currentTeamId)
   const [activeTab, setActiveTab] = useState<'teams' | 'employees'>('teams')
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
@@ -409,7 +416,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
             <Plus size={17} /> إضافة فريق
           </button>
         )}
-        {activeTab === 'employees' && canManageMembers && (
+        {activeTab === 'employees' && canAddMember && (
           <button onClick={() => { setEditMember(null); setShowAddMember(true) }} className="btn btn-primary gap-2">
             <UserPlus size={17} /> إضافة موظف
           </button>
@@ -482,7 +489,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">المسمى الوظيفي</th>
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">الفريق</th>
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">اتصال</th>
-                {canManageMembers && <th className="text-start px-5 py-3 text-muted2 font-semibold">إجراءات</th>}
+                {canAddMember && <th className="text-start px-5 py-3 text-muted2 font-semibold">إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -506,19 +513,23 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                       {team ? <span className="badge badge-blue">{team.name}</span> : <span className="text-muted2 text-xs">غير مُسنَد</span>}
                     </td>
                     <td className="px-5 py-3"><ContactIcons phone={m.phone} /></td>
-                    {canManageMembers && (
+                    {canAddMember && (
                       <td className="px-5 py-3">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
-                            <Pencil size={15} />
-                          </button>
-                          <button onClick={() => toggleSuspend(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
-                            {m.suspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
-                          </button>
-                          <button onClick={() => deleteMember(m.id)} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="حذف">
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
+                        {canManageMember(m) ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
+                              <Pencil size={15} />
+                            </button>
+                            <button onClick={() => toggleSuspend(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
+                              {m.suspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
+                            </button>
+                            <button onClick={() => deleteMember(m.id)} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="حذف">
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-muted2 text-xs">—</span>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -548,7 +559,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           team={openTeam}
           members={members}
           canManageTeam={isAdmin}
-          canManageMembers={canManageMembers}
+          canManageMember={canManageMember}
           onClose={() => setOpenTeam(null)}
           onChanged={refresh}
         />
