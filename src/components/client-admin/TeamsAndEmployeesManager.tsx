@@ -196,12 +196,13 @@ function MemberModal({
 
 // ─── Team detail modal ────────────────────────────────────────────
 function TeamDetailModal({
-  team, members, canManageTeam, canManageMember, onClose, onChanged,
+  team, members, canManageTeam, canManageMember, onEditMember, onClose, onChanged,
 }: {
   team: Team
   members: TeamMember[]
   canManageTeam: boolean                          // admin can change manager
-  canManageMember: (m: TeamMember) => boolean     // can remove a given member
+  canManageMember: (m: TeamMember) => boolean     // can manage a given member
+  onEditMember: (m: TeamMember) => void           // open edit form for a member
   onClose: () => void
   onChanged: () => void
 }) {
@@ -233,6 +234,21 @@ function TeamDetailModal({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ team_id: null }),
     })
+    onChanged()
+  }
+
+  async function toggleSuspendMember(m: TeamMember) {
+    await fetch(`/api/client-admin/team-members/${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ suspended: !m.suspended }),
+    })
+    onChanged()
+  }
+
+  async function deleteMemberAccount(id: string) {
+    if (!confirm('حذف هذا الموظف نهائياً؟ سيُحذف حسابه بالكامل.')) return
+    await fetch(`/api/client-admin/team-members/${id}`, { method: 'DELETE' })
     onChanged()
   }
 
@@ -343,11 +359,22 @@ function TeamDetailModal({
                   <td className="px-4 py-2.5 text-muted">{m.job_title || '—'}</td>
                   <td className="px-4 py-2.5"><ContactIcons phone={m.phone} /></td>
                   {canManageAny && (
-                    <td className="px-4 py-2.5 text-end">
+                    <td className="px-4 py-2.5">
                       {canManageMember(m) && (
-                        <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-danger transition p-1" title="إزالة من الفريق">
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => { onEditMember(m); onClose() }} className="text-muted2 hover:text-foreground transition p-1" title="تعديل">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => toggleSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
+                            {m.suspended ? <PlayCircle size={15} /> : <PauseCircle size={15} />}
+                          </button>
+                          <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-foreground transition p-1" title="إزالة من الفريق">
+                            <UserPlus size={15} className="rotate-45" />
+                          </button>
+                          <button onClick={() => deleteMemberAccount(m.id)} className="text-muted2 hover:text-danger transition p-1" title="حذف الحساب">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       )}
                     </td>
                   )}
@@ -600,6 +627,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           members={members}
           canManageTeam={isAdmin}
           canManageMember={canManageMember}
+          onEditMember={(m) => { setOpenTeam(null); setEditMember(m); setShowAddMember(true) }}
           onClose={() => setOpenTeam(null)}
           onChanged={refresh}
         />
