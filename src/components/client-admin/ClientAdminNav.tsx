@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, BookOpen, Users, Target, LayoutTemplate,
+  LayoutDashboard, BookOpen, Users, Target, LayoutTemplate, Globe,
   LogOut, Sparkles, Menu, X
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -48,6 +48,12 @@ const navItems = [
     label: 'القوالب',
     desc: 'قوالب HTML جاهزة للعرض والاستخدام',
     icon: LayoutTemplate,
+  },
+  {
+    href: '/client-admin/landing-pages',
+    label: 'صفحات الهبوط',
+    desc: 'صفحات عامة بمحرّر بلوكات مع نموذج',
+    icon: Globe,
   },
 ]
 

@@ -133,6 +133,30 @@ export interface Template {
   created_at: string
 }
 
+export type LandingBlock =
+  | { id: string; type: 'hero'; title: string; subtitle?: string; image?: string }
+  | { id: string; type: 'heading'; text: string; level: 1 | 2 | 3 }
+  | { id: string; type: 'text'; text: string }
+  | { id: string; type: 'image'; url: string; alt?: string }
+  | { id: string; type: 'button'; label: string; href: string }
+  | { id: string; type: 'video'; youtubeId: string }
+  | { id: string; type: 'spacer'; size: 'sm' | 'md' | 'lg' }
+  | { id: string; type: 'form' }
+
+export type LandingBlockType = LandingBlock['type']
+
+export interface LandingPage {
+  id: string
+  tenant_id: string
+  name: string
+  slug: string
+  form_id?: string
+  blocks: LandingBlock[]
+  published: boolean
+  created_by?: string
+  created_at: string
+}
+
 export interface FormField {
   id: string
   type: 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox'
