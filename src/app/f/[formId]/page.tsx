@@ -10,9 +10,13 @@ export default async function PublicFormPage({
   params: Promise<{ formId: string }>
   searchParams: Promise<Record<string, string>>
 }) {
+  // Read with the service role (server-side only) so the public page bypasses
+  // the tenant RLS on `forms`. Only safe campaign fields are selected — never
+  // the pixel access tokens, which must not reach the browser.
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
   const { formId } = await params
@@ -20,7 +24,7 @@ export default async function PublicFormPage({
 
   const { data: form } = await supabase
     .from('forms')
-    .select('*, campaigns(*)')
+    .select('*, campaigns(id, name, source)')
     .eq('id', formId)
     .single()
 

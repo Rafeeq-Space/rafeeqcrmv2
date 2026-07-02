@@ -94,13 +94,17 @@ export default function FormBuilder({ campaignId, tenantId, onBack, onClose, onC
     }
     setSaving(true)
     const supabase = createClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('forms')
       .insert({ name: formName, campaign_id: campaignId, tenant_id: tenantId, fields, design, published_at: new Date().toISOString() })
       .select()
       .single()
-    if (data) onCreated(data)
     setSaving(false)
+    if (error) {
+      alert(`تعذّر نشر النموذج: ${error.message}`)
+      return
+    }
+    if (data) onCreated(data)
   }
 
   const { widthClass, pageStyle, cardStyle, buttonStyle } = designStyles(design)
