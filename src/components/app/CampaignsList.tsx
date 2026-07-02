@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
-  Calendar, Tag, Layers, ListChecks, Wand2, ChevronLeft, LayoutTemplate
+  Calendar, Tag, Layers, ListChecks, Wand2, ChevronLeft, ChevronDown, LayoutTemplate,
+  Code2, Palette
 } from 'lucide-react'
 import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink, Template } from '@/lib/types'
 import FormBuilder from './FormBuilder'
@@ -30,6 +31,13 @@ const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: string }[] 
 
 const STATUS_LABELS: Record<string, string> = { active: 'نشطة', paused: 'متوقفة', draft: 'مسودة', ended: 'منتهية' }
 const STATUS_BADGE: Record<string, string> = { active: 'badge-green', paused: 'badge-yellow', draft: 'badge-muted', ended: 'badge-muted' }
+
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: 'نص', textarea: 'نص طويل', email: 'بريد إلكتروني', phone: 'هاتف',
+  number: 'رقم', date: 'تاريخ', time: 'وقت', select: 'قائمة منسدلة',
+  radio: 'اختيار واحد', checkboxes: 'اختيار متعدّد', checkbox: 'مربع موافقة',
+  file: 'رفع ملف', rating: 'تقييم بالنجوم', heading: 'عنوان / فاصل',
+}
 
 function formatDate(d?: string) {
   if (!d) return null
@@ -316,6 +324,7 @@ function CampaignDetailModal({
 }) {
   const src = SOURCE_OPTIONS.find(s => s.value === campaign.source)
   const date = formatDate(campaign.campaign_date)
+  const [expandedFormId, setExpandedFormId] = useState<string | null>(null)
 
   return (
     <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
@@ -410,23 +419,82 @@ function CampaignDetailModal({
 
           {forms.length > 0 ? (
             <div className="space-y-2">
-              {forms.map(form => (
-                <div key={form.id} className="flex items-center gap-3 bg-surface2 rounded-xl px-4 py-3 border border-border">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{form.name}</p>
-                    <p className="text-xs text-muted2 mt-0.5">{form.fields.length} حقل</p>
+              {forms.map(form => {
+                const isOpen = expandedFormId === form.id
+                const isHtml = !!form.html
+                return (
+                  <div key={form.id} className="bg-surface2 rounded-xl border border-border overflow-hidden">
+                    {/* Row header */}
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <button
+                        onClick={() => setExpandedFormId(isOpen ? null : form.id)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-start"
+                      >
+                        {isOpen ? <ChevronDown size={16} className="text-muted2 shrink-0" /> : <ChevronLeft size={16} className="text-muted2 shrink-0" />}
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-foreground truncate">{form.name}</span>
+                          <span className="block text-xs text-muted2 mt-0.5">
+                            {isHtml ? 'نموذج HTML مخصّص' : `${form.fields.length} حقل`}
+                          </span>
+                        </span>
+                      </button>
+                      <code className="text-xs text-muted bg-surface border border-border px-2 py-1 rounded-lg hidden md:block" dir="ltr">
+                        {getFormLink(form.id)}
+                      </code>
+                      <button onClick={() => onCopyLink(form.id)} className="text-muted2 hover:text-foreground transition shrink-0" aria-label="نسخ الرابط">
+                        {copied === form.id ? <CheckCircle size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
+                      </button>
+                      <a href={getFormLink(form.id)} target="_blank" className="text-muted2 hover:text-foreground shrink-0" aria-label="فتح الرابط">
+                        <ExternalLink size={16} />
+                      </a>
+                    </div>
+
+                    {/* Expanded details */}
+                    {isOpen && (
+                      <div className="border-t border-border px-4 py-4 space-y-3">
+                        {isHtml ? (
+                          <p className="flex items-center gap-2 text-sm text-muted2">
+                            <Code2 size={15} /> هذا النموذج مبني بكود HTML مخصّص. افتح الرابط لمعاينته.
+                          </p>
+                        ) : form.fields.length > 0 ? (
+                          <>
+                            {(form.design && Object.keys(form.design).length > 0) && (
+                              <p className="flex items-center gap-2 text-xs text-muted2">
+                                <Palette size={13} /> يحتوي على تصميم مخصّص.
+                              </p>
+                            )}
+                            <div className="space-y-2">
+                              {form.fields.map((field, i) => (
+                                field.type === 'heading' ? (
+                                  <p key={field.id} className="text-sm font-bold text-foreground pt-2">{field.label || `عنوان ${i + 1}`}</p>
+                                ) : (
+                                  <div key={field.id} className="bg-surface rounded-lg border border-border px-3 py-2.5">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-semibold text-foreground">{field.label || `حقل ${i + 1}`}</span>
+                                      <span className="badge badge-blue text-xs">{FIELD_TYPE_LABELS[field.type] || field.type}</span>
+                                      {field.required && <span className="badge badge-red text-xs">مطلوب</span>}
+                                      {field.width === 'half' && <span className="badge badge-muted text-xs">نصف العرض</span>}
+                                    </div>
+                                    {field.description && <p className="text-xs text-muted2 mt-1">{field.description}</p>}
+                                    {field.placeholder && <p className="text-xs text-muted2 mt-1">نص توضيحي: {field.placeholder}</p>}
+                                    {(field.options?.length ?? 0) > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {field.options!.map((o, j) => <span key={j} className="badge badge-muted text-xs">{o}</span>)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-sm text-muted2">لا توجد حقول في هذا النموذج.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <code className="text-xs text-muted bg-surface border border-border px-2 py-1 rounded-lg hidden md:block" dir="ltr">
-                    {getFormLink(form.id)}
-                  </code>
-                  <button onClick={() => onCopyLink(form.id)} className="text-muted2 hover:text-foreground transition" aria-label="نسخ الرابط">
-                    {copied === form.id ? <CheckCircle size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
-                  </button>
-                  <a href={getFormLink(form.id)} target="_blank" className="text-muted2 hover:text-foreground" aria-label="فتح الرابط">
-                    <ExternalLink size={16} />
-                  </a>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted2 text-center py-6">لا توجد نماذج في هذه الحملة بعد.</p>
