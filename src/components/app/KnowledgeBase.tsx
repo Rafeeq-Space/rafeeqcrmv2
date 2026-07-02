@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Settings, Search, ChevronDown, ChevronLeft,
-  Trash2, X, Link as LinkIcon, Image as ImageIcon,
+  Trash2, Pencil, X, Link as LinkIcon, Image as ImageIcon,
   FileText, ExternalLink, Paperclip, Inbox, Check, Clock
 } from 'lucide-react'
 import type { KnowledgeItem, KnowledgeCategoryDynamic, KnowledgeSection, KnowledgeFile, KnowledgeLink } from '@/lib/types'
@@ -152,7 +152,7 @@ function SettingsModal({
 // ─── Add Item Modal ───────────────────────────────────────────────
 function AddItemModal({
   categories, sections, tenantId, isAdmin, defaultCategoryId, defaultSectionId,
-  onClose, onAdded,
+  editItem, onClose, onAdded, onUpdated,
 }: {
   categories: KnowledgeCategoryDynamic[]
   sections: KnowledgeSection[]
@@ -160,14 +160,23 @@ function AddItemModal({
   isAdmin: boolean
   defaultCategoryId?: string
   defaultSectionId?: string
+  editItem?: KnowledgeItem | null
   onClose: () => void
   onAdded: (item: KnowledgeItem) => void
+  onUpdated?: (item: KnowledgeItem) => void
 }) {
-  const [form, setForm] = useState({ category_id: defaultCategoryId || '', section_id: defaultSectionId || '', title: '', description: '', content: '' })
-  const [links, setLinks] = useState<KnowledgeLink[]>([])
+  const isEdit = !!editItem
+  const [form, setForm] = useState({
+    category_id: editItem?.category_id || defaultCategoryId || '',
+    section_id: editItem?.section_id || defaultSectionId || '',
+    title: editItem?.title || '',
+    description: editItem?.description || '',
+    content: editItem?.content || '',
+  })
+  const [links, setLinks] = useState<KnowledgeLink[]>(editItem?.links || [])
   const [linkForm, setLinkForm] = useState({ label: '', url: '' })
-  const [files, setFiles] = useState<KnowledgeFile[]>([])
-  const [images, setImages] = useState<string[]>([])
+  const [files, setFiles] = useState<KnowledgeFile[]>(editItem?.files || [])
+  const [images, setImages] = useState<string[]>(editItem?.images || [])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -221,23 +230,32 @@ function AddItemModal({
     setSaving(true)
     setError('')
     try {
-      const res = await fetch('/api/knowledge/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: form.title,
-          content: form.content,
-          description: form.description,
-          category_id: form.category_id,
-          section_id: form.section_id,
-          files, links, images,
-        }),
-      })
+      const payload = {
+        title: form.title,
+        content: form.content,
+        description: form.description,
+        category_id: form.category_id,
+        section_id: form.section_id,
+        files, links, images,
+      }
+      const res = await fetch(
+        isEdit ? `/api/knowledge/items/${editItem!.id}` : '/api/knowledge/items',
+        {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      )
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'خطأ')
-      // Admin items are approved and shown immediately; requests await approval.
-      if (data.status === 'approved' && data.item) onAdded(data.item as KnowledgeItem)
-      else alert('تم إرسال طلبك إلى مدير الحساب للمراجعة والموافقة.')
+      if (isEdit) {
+        if (data.item) onUpdated?.(data.item as KnowledgeItem)
+      } else if (data.status === 'approved' && data.item) {
+        // Admin items are approved and shown immediately; requests await approval.
+        onAdded(data.item as KnowledgeItem)
+      } else {
+        alert('تم إرسال طلبك إلى مدير الحساب للمراجعة والموافقة.')
+      }
       onClose()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'خطأ')
@@ -250,10 +268,10 @@ function AddItemModal({
     <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="modal p-6 w-full max-w-2xl my-8" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-foreground">{isAdmin ? 'إضافة عنصر معرفي' : 'طلب إضافة عنصر معرفي'}</h3>
+          <h3 className="text-lg font-bold text-foreground">{isEdit ? 'تعديل عنصر معرفي' : isAdmin ? 'إضافة عنصر معرفي' : 'طلب إضافة عنصر معرفي'}</h3>
           <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
         </div>
-        {!isAdmin && (
+        {!isAdmin && !isEdit && (
           <p className="text-sm text-muted mb-4 bg-surface2 border border-border rounded-xl px-4 py-2.5">
             سيُرسَل هذا العنصر إلى مدير الحساب للمراجعة قبل نشره.
           </p>
@@ -362,7 +380,7 @@ function AddItemModal({
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
             <button type="submit" disabled={saving || uploading} className="btn btn-primary flex-1">
-              {saving ? 'جارٍ الإرسال...' : isAdmin ? 'حفظ العنصر' : 'إرسال الطلب'}
+              {saving ? 'جارٍ الحفظ...' : isEdit ? 'حفظ التعديلات' : isAdmin ? 'حفظ العنصر' : 'إرسال الطلب'}
             </button>
           </div>
         </form>
@@ -459,6 +477,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
   const [activeSecId, setActiveSecId] = useState<string>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [editItem, setEditItem] = useState<KnowledgeItem | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showRequests, setShowRequests] = useState(false)
 
@@ -602,12 +621,22 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
                   </div>
                 </div>
                 {isAdmin && (
-                  <button
-                    onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
-                    className="text-muted2 hover:text-danger transition shrink-0 p-1"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditItem(item) }}
+                      className="text-muted2 hover:text-foreground transition p-1"
+                      title="تعديل"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
+                      className="text-muted2 hover:text-danger transition p-1"
+                      title="حذف"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -698,6 +727,16 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
           defaultCategoryId={defaultCategoryId} defaultSectionId={defaultSectionId}
           onClose={() => setShowAdd(false)}
           onAdded={item => setItems(prev => [item, ...prev])}
+        />
+      )}
+
+      {editItem && isAdmin && (
+        <AddItemModal
+          categories={categories} sections={sections} tenantId={tenantId} isAdmin={isAdmin}
+          editItem={editItem}
+          onClose={() => setEditItem(null)}
+          onAdded={item => setItems(prev => [item, ...prev])}
+          onUpdated={item => setItems(prev => prev.map(i => i.id === item.id ? item : i))}
         />
       )}
 

@@ -23,7 +23,7 @@ function adminClient() {
   )
 }
 
-// PATCH — approve a pending request (admin only).
+// PATCH — approve a pending request or edit an item's data (admin only).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireKnowledgeAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
@@ -36,10 +36,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json()
   const updates: Record<string, unknown> = {}
   if (body.status !== undefined) updates.status = body.status
+  if (body.title !== undefined) updates.title = body.title
+  if (body.description !== undefined) updates.description = body.description || null
+  if (body.content !== undefined) updates.content = body.content
+  if (body.category_id !== undefined) updates.category_id = body.category_id || null
+  if (body.section_id !== undefined) updates.section_id = body.section_id || null
+  if (body.files !== undefined) updates.files = body.files
+  if (body.links !== undefined) updates.links = body.links
+  if (body.images !== undefined) updates.images = body.images
 
-  const { error } = await supabase.from('knowledge_items').update(updates).eq('id', id)
+  const { data, error } = await supabase.from('knowledge_items').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, item: data })
 }
 
 // DELETE — delete an item or reject a pending request (admin only).
