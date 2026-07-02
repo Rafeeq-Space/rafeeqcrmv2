@@ -139,13 +139,39 @@ export interface Template {
   created_at: string
 }
 
+export type FormFieldType =
+  | 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox'
+  | 'number' | 'date' | 'time' | 'radio' | 'checkboxes' | 'file' | 'rating' | 'heading'
+
 export interface FormField {
   id: string
-  type: 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox'
+  type: FormFieldType
   label: string
   placeholder?: string
   required: boolean
-  options?: string[] // for select fields
+  options?: string[] // for select / radio / checkboxes
+  description?: string // helper text shown under the label
+  defaultValue?: string
+  width?: 'full' | 'half' // layout width in the rendered form
+}
+
+// Visual customization for a form's public page.
+export interface FormDesign {
+  bgType?: 'color' | 'gradient' | 'image'
+  bgColor?: string
+  bgGradient?: string
+  bgImage?: string
+  cardColor?: string
+  textColor?: string
+  primaryColor?: string
+  buttonTextColor?: string
+  fontFamily?: string
+  radius?: number
+  width?: 'narrow' | 'medium' | 'wide'
+  logo?: string
+  cover?: string
+  submitText?: string
+  successMessage?: string
 }
 
 export interface Form {
@@ -154,6 +180,7 @@ export interface Form {
   campaign_id: string
   name: string
   fields: FormField[]
+  design?: FormDesign
   html?: string // when set, form is rendered from raw HTML (sandboxed) instead of `fields`
   published_at?: string
   created_at: string

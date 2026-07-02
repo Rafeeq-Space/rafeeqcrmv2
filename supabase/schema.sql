@@ -73,6 +73,7 @@ create table forms (
   campaign_id uuid references campaigns(id) on delete cascade not null,
   name text not null,
   fields jsonb not null default '[]', -- array of field definitions
+  design jsonb not null default '{}', -- visual customization (colors, background, fonts, logo…)
   published_at timestamptz,
   created_at timestamptz default now()
 );
