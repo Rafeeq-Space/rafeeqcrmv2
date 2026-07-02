@@ -7,17 +7,17 @@ export async function POST(request: Request) {
   const auth = await requireTeamManager()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
 
+  // Only admins may create members; sales managers are view-only.
+  if (auth.role !== 'client_admin') {
+    return NextResponse.json({ error: 'ليس لديك صلاحية إضافة موظفين' }, { status: 403 })
+  }
+
   const { full_name, email, password, phone, job_title, team_id } = await request.json()
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'الاسم والبريد وكلمة السر مطلوبة' }, { status: 400 })
   }
 
-  // Sales managers can only add members to their own team.
-  let finalTeamId: string | null = team_id || null
-  if (auth.role === 'client_sales_manager') {
-    if (!auth.teamId) return NextResponse.json({ error: 'ليس لديك فريق مُسنَد' }, { status: 403 })
-    finalTeamId = auth.teamId
-  }
+  const finalTeamId: string | null = team_id || null
 
   const adminSupabase = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

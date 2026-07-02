@@ -38,23 +38,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const isAdmin = auth.role === 'client_admin'
 
+  // Sales managers are view-only, with a single exception: removing a member
+  // from their own team (team_id: null). Any other edit is rejected outright.
+  if (!isAdmin) {
+    const onlyRemovingFromTeam =
+      team_id === null &&
+      full_name === undefined &&
+      phone === undefined &&
+      job_title === undefined &&
+      suspended === undefined &&
+      password === undefined
+    if (!onlyRemovingFromTeam) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية تعديل بيانات الأعضاء' }, { status: 403 })
+    }
+    const { error } = await supabase.from('profiles').update({ team_id: null }).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+
   const updates: Record<string, unknown> = {}
   if (full_name !== undefined) updates.full_name = full_name
   if (phone !== undefined) updates.phone = phone || null
   if (job_title !== undefined) updates.job_title = job_title || null
-
-  // Suspend/unsuspend is admin-only.
-  if (suspended !== undefined) {
-    if (!isAdmin) return NextResponse.json({ error: 'ليس لديك صلاحية تعليق الحسابات' }, { status: 403 })
-    updates.suspended = suspended
-  }
-
-  // Team assignment: admin sets any team; a manager may only remove a member from their team.
-  if (team_id !== undefined) {
-    if (isAdmin) updates.team_id = team_id || null
-    else if (team_id === null) updates.team_id = null
-    else return NextResponse.json({ error: 'ليس لديك صلاحية تغيير الفريق' }, { status: 403 })
-  }
+  if (suspended !== undefined) updates.suspended = suspended
+  if (team_id !== undefined) updates.team_id = team_id || null
 
   if (Object.keys(updates).length > 0) {
     const { error } = await supabase.from('profiles').update(updates).eq('id', id)

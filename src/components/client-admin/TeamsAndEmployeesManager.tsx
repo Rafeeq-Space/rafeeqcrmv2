@@ -206,18 +206,19 @@ function MemberModal({
 
 // ─── Team detail modal ────────────────────────────────────────────
 function TeamDetailModal({
-  team, members, canManageTeam, canManageMember, canFullyManage, onEditMember, onClose, onChanged,
+  team, members, canManageTeam, canEditMember, canRemoveMember, canFullyManage, onEditMember, onClose, onChanged,
 }: {
   team: Team
   members: TeamMember[]
   canManageTeam: boolean                          // admin can change manager
-  canManageMember: (m: TeamMember) => boolean     // can edit / remove from team
+  canEditMember: (m: TeamMember) => boolean       // can edit member details
+  canRemoveMember: (m: TeamMember) => boolean     // can remove member from team
   canFullyManage: boolean                         // admin only: suspend / delete account
   onEditMember: (m: TeamMember) => void           // open edit form for a member
   onClose: () => void
   onChanged: () => void
 }) {
-  const canManageAny = members.filter(m => m.team_id === team.id).some(canManageMember)
+  const canManageAny = members.filter(m => m.team_id === team.id).some(m => canEditMember(m) || canRemoveMember(m))
   const [assigning, setAssigning] = useState(false)
   const [newManagerId, setNewManagerId] = useState(team.manager_id || '')
   const [saving, setSaving] = useState(false)
@@ -371,14 +372,18 @@ function TeamDetailModal({
                   <td className="px-4 py-2.5"><ContactIcons phone={m.phone} /></td>
                   {canManageAny && (
                     <td className="px-4 py-2.5">
-                      {canManageMember(m) && (
+                      {(canEditMember(m) || canRemoveMember(m)) && (
                         <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => { onEditMember(m); onClose() }} className="text-muted2 hover:text-foreground transition p-1" title="تعديل">
-                            <Pencil size={14} />
-                          </button>
-                          <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-foreground transition p-1" title="إزالة من الفريق">
-                            <UserPlus size={15} className="rotate-45" />
-                          </button>
+                          {canEditMember(m) && (
+                            <button onClick={() => { onEditMember(m); onClose() }} className="text-muted2 hover:text-foreground transition p-1" title="تعديل">
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {canRemoveMember(m) && (
+                            <button onClick={() => removeFromTeam(m.id)} className="text-muted2 hover:text-foreground transition p-1" title="إزالة من الفريق">
+                              <UserPlus size={15} className="rotate-45" />
+                            </button>
+                          )}
                           {canFullyManage && (
                             <>
                               <button onClick={() => toggleSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
@@ -458,10 +463,12 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {}, readOnly = false }: Props) {
   const isAdmin = currentRole === 'client_admin' && !readOnly
   const isManager = currentRole === 'client_sales_manager' && !readOnly
-  // Admins can create teams; admins + managers can add members.
-  const canAddMember = isAdmin || isManager
-  // Admin manages everyone; a sales manager manages only their own team's members.
-  const canManageMember = (m: TeamMember) => isAdmin || (isManager && !!currentTeamId && m.team_id === currentTeamId)
+  // Only admins create teams / add members. Managers are view-only here.
+  const canAddMember = isAdmin
+  // Admin can edit member details; managers cannot edit anything.
+  const canEditMember = (_m: TeamMember) => isAdmin
+  // Admin removes anyone; a sales manager may only remove members of their own team.
+  const canRemoveMember = (m: TeamMember) => isAdmin || (isManager && !!currentTeamId && m.team_id === currentTeamId)
   const [activeTab, setActiveTab] = useState<'teams' | 'employees'>('teams')
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
@@ -597,7 +604,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                     <td className="px-5 py-3"><ContactIcons phone={m.phone} /></td>
                     {canAddMember && (
                       <td className="px-5 py-3">
-                        {canManageMember(m) ? (
+                        {canEditMember(m) ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
                               <Pencil size={15} />
@@ -645,7 +652,8 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           team={openTeam}
           members={members}
           canManageTeam={isAdmin}
-          canManageMember={canManageMember}
+          canEditMember={canEditMember}
+          canRemoveMember={canRemoveMember}
           canFullyManage={isAdmin}
           onEditMember={(m) => { setOpenTeam(null); setEditMember(m); setShowAddMember(true) }}
           onClose={() => setOpenTeam(null)}
