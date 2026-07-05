@@ -24,6 +24,7 @@ const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: string }[] 
   { value: 'facebook', label: 'فيسبوك', badge: 'badge-blue' },
   { value: 'instagram', label: 'إنستغرام', badge: 'badge-purple' },
   { value: 'google', label: 'جوجل', badge: 'badge-red' },
+  { value: 'website', label: 'موقع إلكتروني', badge: 'badge-green' },
   { value: 'other', label: 'أخرى', badge: 'badge-muted' },
 ]
 
@@ -46,6 +47,13 @@ function formatDate(d?: string) {
   }
 }
 
+// All platform options for a campaign — prefers the multi-select `sources`,
+// falling back to the legacy single `source`.
+function campaignSources(c: Campaign) {
+  const list = (c.sources?.length ? c.sources : [c.source]).filter(Boolean)
+  return SOURCE_OPTIONS.filter(o => list.includes(o.value))
+}
+
 // ─── Add Campaign Modal ───────────────────────────────────────────
 function AddCampaignModal({
   tenantId, onClose, onCreated,
@@ -57,13 +65,13 @@ function AddCampaignModal({
   const [form, setForm] = useState({
     name: '',
     description: '',
-    source: 'tiktok' as CampaignSource,
     campaign_date: '',
     tiktok_pixel_id: '',
     tiktok_access_token: '',
     meta_pixel_id: '',
     meta_access_token: '',
   })
+  const [sources, setSources] = useState<CampaignSource[]>(['tiktok'])
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [links, setLinks] = useState<KnowledgeLink[]>([])
@@ -75,8 +83,10 @@ function AddCampaignModal({
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
 
-  const isTikTok = form.source === 'tiktok'
-  const isMeta = form.source === 'facebook' || form.source === 'instagram'
+  const isTikTok = sources.includes('tiktok')
+  const isMeta = sources.includes('facebook') || sources.includes('instagram')
+  const toggleSource = (v: CampaignSource) =>
+    setSources(prev => prev.includes(v) ? prev.filter(s => s !== v) : [...prev, v])
 
   async function uploadFile(file: File, folder: 'files' | 'images'): Promise<string> {
     const supabase = createClient()
@@ -127,12 +137,14 @@ function AddCampaignModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name) return
+    if (sources.length === 0) { alert('اختر منصة واحدة على الأقل'); return }
     setSaving(true)
     const supabase = createClient()
     const { data } = await supabase.from('campaigns').insert({
       name: form.name,
       description: form.description || null,
-      source: form.source,
+      source: sources[0], // primary platform (kept for compatibility)
+      sources,
       campaign_date: form.campaign_date || null,
       tags,
       links,
@@ -169,15 +181,15 @@ function AddCampaignModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="label">المنصة</label>
+              <label className="label">المنصات (يمكن اختيار أكثر من واحدة)</label>
               <div className="grid grid-cols-3 gap-2">
                 {SOURCE_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setForm({ ...form, source: opt.value })}
+                    onClick={() => toggleSource(opt.value)}
                     className={`py-2 rounded-lg text-xs font-semibold transition border ${
-                      form.source === opt.value
+                      sources.includes(opt.value)
                         ? 'bg-primary text-primary-fg border-transparent'
                         : 'border-border text-muted hover:bg-surface2'
                     }`}
@@ -320,7 +332,7 @@ function CampaignDetailModal({
   onCreateForm: () => void
   onClose: () => void
 }) {
-  const src = SOURCE_OPTIONS.find(s => s.value === campaign.source)
+  const srcList = campaignSources(campaign)
   const date = formatDate(campaign.campaign_date)
   const [expandedFormId, setExpandedFormId] = useState<string | null>(null)
 
@@ -335,7 +347,7 @@ function CampaignDetailModal({
             <div className="min-w-0">
               <h3 className="font-bold text-foreground truncate">{campaign.name}</h3>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {src && <span className={`badge ${src.badge}`}>{src.label}</span>}
+                {srcList.map(s => <span key={s.value} className={`badge ${s.badge}`}>{s.label}</span>)}
                 <span className={`badge ${STATUS_BADGE[campaign.status]}`}>{STATUS_LABELS[campaign.status] || campaign.status}</span>
               </div>
             </div>
@@ -593,7 +605,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {campaigns.map(campaign => {
-          const src = SOURCE_OPTIONS.find(s => s.value === campaign.source)
+          const srcList = campaignSources(campaign)
           const campaignForms = forms.filter(f => f.campaign_id === campaign.id)
           const date = formatDate(campaign.campaign_date)
           const cover = campaign.images?.[0]
@@ -617,7 +629,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
 
               <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  {src && <span className={`badge ${src.badge} text-xs`}>{src.label}</span>}
+                  {srcList.map(s => <span key={s.value} className={`badge ${s.badge} text-xs`}>{s.label}</span>)}
                   <span className={`badge ${STATUS_BADGE[campaign.status]} text-xs`}>{STATUS_LABELS[campaign.status] || campaign.status}</span>
                 </div>
 

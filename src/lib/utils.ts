@@ -38,6 +38,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
   google: 'Google',
+  website: 'موقع إلكتروني',
   other: 'أخرى',
 }
 

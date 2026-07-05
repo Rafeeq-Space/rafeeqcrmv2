@@ -57,7 +57,8 @@ create table campaigns (
   id uuid primary key default uuid_generate_v4(),
   tenant_id uuid references tenants(id) on delete cascade not null,
   name text not null,
-  source text not null, -- 'tiktok' | 'facebook' | 'instagram' | 'google' | 'other'
+  source text not null, -- primary platform (first selected), kept for compatibility
+  sources jsonb not null default '[]', -- all selected platforms: tiktok|facebook|instagram|google|website|other
   status text default 'draft', -- 'draft' | 'active' | 'paused' | 'ended'
   tiktok_pixel_id text,
   tiktok_access_token text,

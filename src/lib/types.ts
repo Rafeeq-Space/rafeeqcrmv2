@@ -1,7 +1,7 @@
 export type TenantStatus = 'active' | 'inactive'
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'ended'
-export type CampaignSource = 'tiktok' | 'facebook' | 'instagram' | 'google' | 'other'
+export type CampaignSource = 'tiktok' | 'facebook' | 'instagram' | 'google' | 'website' | 'other'
 export type KnowledgeCategory = 'faq' | 'product' | 'service' | 'general'
 
 export interface KnowledgeCategoryDynamic {
@@ -109,7 +109,8 @@ export interface Campaign {
   tenant_id: string
   name: string
   description?: string
-  source: CampaignSource
+  source: CampaignSource // primary platform (first selected) — kept for compatibility
+  sources?: CampaignSource[] // all selected platforms
   status: CampaignStatus
   tags?: string[]
   links?: KnowledgeLink[]
