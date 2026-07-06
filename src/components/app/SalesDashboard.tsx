@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Users, CheckCircle, Clock, XCircle, TrendingUp } from 'lucide-react'
 import type { Lead } from '@/lib/types'
@@ -79,13 +80,13 @@ export default function SalesDashboard({ leads, fullName }: Props) {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STAT_CONFIG.map(({ key, label, icon: Icon, color, soft }) => (
-          <div key={key} className="card card-hover p-5">
+          <Link key={key} href="/app/my-leads" className="card card-hover p-5 transition hover:border-primary">
             <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: soft }}>
               <Icon size={21} style={{ color }} />
             </div>
             <p className="text-2xl font-extrabold text-foreground">{stats[key as keyof typeof stats]}</p>
             <p className="text-sm text-muted mt-0.5">{label}</p>
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -95,7 +96,7 @@ export default function SalesDashboard({ leads, fullName }: Props) {
           <TrendingUp size={26} style={{ color: 'var(--primary)' }} />
         </div>
         <div className="flex-1">
-          <p className="text-sm text-muted mb-1">معدل التحويل هذا الشهر</p>
+          <p className="text-sm text-muted mb-1">نسبة العملاء المكتملين هذا الشهر</p>
           <div className="flex items-center gap-3">
             <p className="text-3xl font-extrabold text-foreground">{conversionRate}%</p>
             <div className="flex-1 bg-surface2 rounded-full h-2.5 border border-border overflow-hidden">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import {
   Target, FileText, Users, TrendingUp, Users2, UserCheck,
@@ -64,20 +65,20 @@ export default function DashboardView({
   // Stat cards differ by role: admins get org totals, managers get team lead metrics.
   const cards = isManager
     ? [
-        { label: 'عملاء الفريق', value: stats.total, icon: Users, color: 'blue' },
-        { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green' },
-        { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning' },
-        { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger' },
-        { label: 'معدل التحويل', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'purple' },
-        { label: 'أعضاء الفريق', value: employeesCount ?? members.length, icon: UserCheck, color: 'sky' },
+        { label: 'عملاء الفريق', value: stats.total, icon: Users, color: 'blue', href: '/client-admin/leads' },
+        { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green', href: '/client-admin/leads' },
+        { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning', href: '/client-admin/leads' },
+        { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger', href: '/client-admin/leads' },
+        { label: 'نسبة العملاء المكتملين', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'purple', href: '/client-admin/leads' },
+        { label: 'أعضاء الفريق', value: employeesCount ?? members.length, icon: UserCheck, color: 'sky', href: '/client-admin/teams' },
       ]
     : [
-        { label: 'إجمالي العملاء', value: stats.total, icon: Users, color: 'blue' },
-        { label: 'الحملات', value: campaigns.length, icon: Target, color: 'purple' },
-        { label: 'النماذج', value: forms.length, icon: FileText, color: 'warning' },
-        { label: 'الفِرَق', value: teamsCount ?? teams.length, icon: Users2, color: 'sky' },
-        { label: 'الموظفون', value: employeesCount ?? members.length, icon: UserCheck, color: 'green' },
-        { label: 'معدل التحويل', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'danger' },
+        { label: 'إجمالي العملاء', value: stats.total, icon: Users, color: 'blue', href: '/client-admin/leads' },
+        { label: 'الحملات', value: campaigns.length, icon: Target, color: 'purple', href: '/client-admin/campaigns' },
+        { label: 'النماذج', value: forms.length, icon: FileText, color: 'warning', href: '/client-admin/campaigns' },
+        { label: 'الفِرَق', value: teamsCount ?? teams.length, icon: Users2, color: 'sky', href: '/client-admin/teams' },
+        { label: 'الموظفون', value: employeesCount ?? members.length, icon: UserCheck, color: 'green', href: '/client-admin/teams' },
+        { label: 'نسبة العملاء المكتملين', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'danger', href: '/client-admin/leads' },
       ]
 
   const statusData = Object.entries(
@@ -151,14 +152,14 @@ export default function DashboardView({
         <div className="space-y-6">
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {cards.map(({ label, value, icon: Icon, color }) => (
-              <div key={label} className="card card-hover p-5">
+            {cards.map(({ label, value, icon: Icon, color, href }) => (
+              <Link key={label} href={href} className="card card-hover p-5 transition hover:border-primary">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: STAT_SOFT[color] }}>
                   <Icon size={21} style={{ color: STAT_COLORS[color] }} />
                 </div>
                 <p className="text-2xl font-extrabold text-foreground">{value}</p>
                 <p className="text-sm text-muted mt-0.5">{label}</p>
-              </div>
+              </Link>
             ))}
           </div>
 
@@ -217,13 +218,15 @@ export default function DashboardView({
                       <th className="text-start font-semibold px-3 py-2.5">الموظف</th>
                       <th className="text-start font-semibold px-3 py-2.5">العملاء</th>
                       <th className="text-start font-semibold px-3 py-2.5">مكتملة</th>
-                      <th className="text-start font-semibold px-3 py-2.5">معدل التحويل</th>
+                      <th className="text-start font-semibold px-3 py-2.5">نسبة العملاء المكتملين</th>
                     </tr>
                   </thead>
                   <tbody>
                     {memberPerf.map(m => (
                       <tr key={m.id} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2.5 font-semibold text-foreground">{m.name}</td>
+                        <td className="px-3 py-2.5 font-semibold">
+                          <Link href="/client-admin/teams" className="text-foreground hover:text-primary transition">{m.name}</Link>
+                        </td>
                         <td className="px-3 py-2.5 text-muted">{m.total}</td>
                         <td className="px-3 py-2.5" style={{ color: 'var(--success)' }}>{m.converted}</td>
                         <td className="px-3 py-2.5">
@@ -267,10 +270,10 @@ export default function DashboardView({
                 <h3 className="font-bold text-foreground mb-4 flex items-center gap-2"><Megaphone size={17} style={{ color: 'var(--primary)' }} /> أحدث الحملات</h3>
                 <div className="space-y-2">
                   {recentCampaigns.map(c => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-2.5 border border-border">
+                    <Link key={c.id} href="/client-admin/campaigns" className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-2.5 border border-border hover:border-primary transition">
                       <span className="text-sm font-semibold text-foreground truncate">{c.name}</span>
                       <span className="text-xs text-muted2 shrink-0">{leadsByCampaign.get(c.id) || 0} عميل</span>
-                    </div>
+                    </Link>
                   ))}
                   {recentCampaigns.length === 0 && <p className="text-sm text-muted2 text-center py-4">لا توجد حملات بعد.</p>}
                 </div>
@@ -279,10 +282,10 @@ export default function DashboardView({
                 <h3 className="font-bold text-foreground mb-4 flex items-center gap-2"><FileText size={17} style={{ color: 'var(--primary)' }} /> أحدث النماذج</h3>
                 <div className="space-y-2">
                   {recentForms.map(f => (
-                    <div key={f.id} className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-2.5 border border-border">
+                    <Link key={f.id} href="/client-admin/campaigns" className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-2.5 border border-border hover:border-primary transition">
                       <span className="text-sm font-semibold text-foreground truncate">{f.name}</span>
                       <span className="text-xs text-muted2 shrink-0">{leadsByForm.get(f.id) || 0} عميل</span>
-                    </div>
+                    </Link>
                   ))}
                   {recentForms.length === 0 && <p className="text-sm text-muted2 text-center py-4">لا توجد نماذج بعد.</p>}
                 </div>

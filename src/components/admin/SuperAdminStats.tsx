@@ -38,7 +38,7 @@ export default function SuperAdminStats({ rows }: { rows: TenantStat[] }) {
     { label: 'الحملات', value: totals.campaigns, icon: Megaphone, color: 'purple' },
     { label: 'العملاء المحتملون', value: totals.leads, icon: Users, color: 'warning' },
     { label: 'مكتملة', value: totals.converted, icon: CheckCircle2, color: 'green' },
-    { label: 'معدل التحويل', value: `${rate}%`, icon: TrendingUp, color: 'danger' },
+    { label: 'نسبة العملاء المكتملين', value: `${rate}%`, icon: TrendingUp, color: 'danger' },
   ]
 
   const sorted = [...rows].sort((a, b) => b.leads - a.leads)
@@ -72,7 +72,7 @@ export default function SuperAdminStats({ rows }: { rows: TenantStat[] }) {
                 <th className="text-start font-semibold px-4 py-3">العملاء</th>
                 <th className="text-start font-semibold px-4 py-3">مكتملة</th>
                 <th className="text-start font-semibold px-4 py-3">مرفوضة</th>
-                <th className="text-start font-semibold px-4 py-3">التحويل</th>
+                <th className="text-start font-semibold px-4 py-3">نسبة الإكمال</th>
                 <th className="text-start font-semibold px-4 py-3">آخر ٣٠ يوم</th>
                 <th className="text-start font-semibold px-4 py-3">المستخدمون</th>
               </tr>
