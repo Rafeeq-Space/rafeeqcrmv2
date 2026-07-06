@@ -59,6 +59,7 @@ create table campaigns (
   name text not null,
   source text not null, -- primary platform (first selected), kept for compatibility
   sources jsonb not null default '[]', -- all selected platforms: tiktok|facebook|instagram|google|website|other
+  team_ids jsonb not null default '[]', -- teams working on this campaign
   status text default 'draft', -- 'draft' | 'active' | 'paused' | 'ended'
   tiktok_pixel_id text,
   tiktok_access_token text,
@@ -75,6 +76,8 @@ create table forms (
   name text not null,
   fields jsonb not null default '[]', -- array of field definitions
   design jsonb not null default '{}', -- visual customization (colors, background, fonts, logo…)
+  assignee_ids jsonb not null default '[]', -- ordered profile ids for round-robin lead distribution
+  rr_index int not null default 0, -- rotating counter: index of the next assignee
   published_at timestamptz,
   created_at timestamptz default now()
 );
@@ -94,6 +97,7 @@ create table leads (
   fbclid text,
   status text default 'new', -- 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
   assigned_to uuid references employees(id) on delete set null,
+  attachments jsonb not null default '[]', -- images/files uploaded to the lead
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()

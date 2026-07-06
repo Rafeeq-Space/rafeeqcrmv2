@@ -13,12 +13,22 @@ export default async function ClientAdminDashboardPage() {
     { data: leads },
     { data: forms },
     { data: employees },
+    { data: teamRows },
+    { data: memberRows },
   ] = await Promise.all([
     supabase.from('campaigns').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supabase.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supabase.from('forms').select('*, campaigns(name)').eq('tenant_id', tenantId),
     supabase.from('employees').select('*').eq('tenant_id', tenantId),
+    supabase.from('teams').select('id, name').eq('tenant_id', tenantId).order('name'),
+    supabase.from('profiles').select('id, full_name, team_id').eq('tenant_id', tenantId),
   ])
+
+  const teams = (teamRows || []).map(t => ({
+    id: t.id,
+    name: t.name,
+    members: (memberRows || []).filter(m => m.team_id === t.id).map(m => ({ id: m.id, name: m.full_name })),
+  }))
 
   return (
     <DashboardView
@@ -26,6 +36,7 @@ export default async function ClientAdminDashboardPage() {
       leads={leads || []}
       forms={forms || []}
       employees={employees || []}
+      teams={teams}
       tenantId={tenantId}
       isAdmin={isAdmin}
       allowedTabs={['overview', 'campaigns']}

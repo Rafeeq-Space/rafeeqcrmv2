@@ -3,11 +3,13 @@
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { X, Code2, Upload, Eye, FileCode } from 'lucide-react'
-import type { Form } from '@/lib/types'
+import type { Form, TeamWithMembers } from '@/lib/types'
+import LeadDistribution from './LeadDistribution'
 
 interface Props {
   campaignId: string
   tenantId: string
+  campaignTeams: TeamWithMembers[]
   onBack?: () => void
   onClose: () => void
   onCreated: (form: Form) => void
@@ -25,9 +27,10 @@ function HtmlFrame({ html }: { html: string }) {
   )
 }
 
-export default function HtmlFormBuilder({ campaignId, tenantId, onBack, onClose, onCreated }: Props) {
+export default function HtmlFormBuilder({ campaignId, tenantId, campaignTeams, onBack, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
   const [html, setHtml] = useState('')
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [tab, setTab] = useState<'paste' | 'upload'>('paste')
   const [showPreview, setShowPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -50,7 +53,7 @@ export default function HtmlFormBuilder({ campaignId, tenantId, onBack, onClose,
     const supabase = createClient()
     const { data, error: err } = await supabase
       .from('forms')
-      .insert({ name, campaign_id: campaignId, tenant_id: tenantId, fields: [], html, published_at: new Date().toISOString() })
+      .insert({ name, campaign_id: campaignId, tenant_id: tenantId, fields: [], html, assignee_ids: assigneeIds, rr_index: 0, published_at: new Date().toISOString() })
       .select()
       .single()
     setSaving(false)
@@ -73,6 +76,11 @@ export default function HtmlFormBuilder({ campaignId, tenantId, onBack, onClose,
           <div>
             <label className="label">اسم النموذج *</label>
             <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="مثال: نموذج تمويل السيارات" />
+          </div>
+
+          <div>
+            <label className="label">توزيع العملاء</label>
+            <LeadDistribution campaignTeams={campaignTeams} onChange={setAssigneeIds} />
           </div>
 
           {/* Source tabs */}

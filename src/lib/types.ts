@@ -104,6 +104,13 @@ export interface KnowledgeItem {
   created_at: string
 }
 
+// A team plus its members — used for campaign team selection and lead distribution.
+export interface TeamWithMembers {
+  id: string
+  name: string
+  members: { id: string; name: string }[]
+}
+
 export interface Campaign {
   id: string
   tenant_id: string
@@ -117,6 +124,7 @@ export interface Campaign {
   files?: KnowledgeFile[]
   images?: string[]
   campaign_date?: string
+  team_ids?: string[] // teams working on this campaign (chosen at creation)
   tiktok_pixel_id?: string
   tiktok_access_token?: string
   meta_pixel_id?: string
@@ -183,6 +191,8 @@ export interface Form {
   fields: FormField[]
   design?: FormDesign
   html?: string // when set, form is rendered from raw HTML (sandboxed) instead of `fields`
+  assignee_ids?: string[] // ordered pool of profile ids for round-robin lead distribution
+  rr_index?: number // rotating counter — index of the next assignee
   published_at?: string
   created_at: string
 }
@@ -203,6 +213,7 @@ export interface Lead {
   assigned_to?: string // legacy: employee id (kept for backward-compat)
   assigned_sales_id?: string // profile id of the sales rep
   assigned_team_id?: string // team id
+  attachments?: KnowledgeFile[] // images/files uploaded to this lead
   notes?: string
   created_at: string
   updated_at: string

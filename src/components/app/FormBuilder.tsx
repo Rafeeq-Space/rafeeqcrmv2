@@ -3,12 +3,14 @@
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, GripVertical, X, Star, ImageIcon, Upload } from 'lucide-react'
-import type { Form, FormField, FormFieldType, FormDesign } from '@/lib/types'
+import type { Form, FormField, FormFieldType, FormDesign, TeamWithMembers } from '@/lib/types'
 import { DEFAULT_DESIGN, FONT_OPTIONS, GRADIENT_PRESETS, designStyles } from '@/lib/forms/design'
+import LeadDistribution from './LeadDistribution'
 
 interface Props {
   campaignId: string
   tenantId: string
+  campaignTeams: TeamWithMembers[]
   onBack?: () => void
   onClose: () => void
   onCreated: (form: Form) => void
@@ -45,9 +47,10 @@ function createField(): FormField {
   }
 }
 
-export default function FormBuilder({ campaignId, tenantId, onBack, onClose, onCreated }: Props) {
+export default function FormBuilder({ campaignId, tenantId, campaignTeams, onBack, onClose, onCreated }: Props) {
   const [formName, setFormName] = useState('')
   const [fields, setFields] = useState<FormField[]>([createField()])
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [design, setDesign] = useState<FormDesign>({ ...DEFAULT_DESIGN })
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'fields' | 'design' | 'preview'>('fields')
@@ -96,7 +99,7 @@ export default function FormBuilder({ campaignId, tenantId, onBack, onClose, onC
     const supabase = createClient()
     const { data, error } = await supabase
       .from('forms')
-      .insert({ name: formName, campaign_id: campaignId, tenant_id: tenantId, fields, design, published_at: new Date().toISOString() })
+      .insert({ name: formName, campaign_id: campaignId, tenant_id: tenantId, fields, design, assignee_ids: assigneeIds, rr_index: 0, published_at: new Date().toISOString() })
       .select()
       .single()
     setSaving(false)
@@ -138,6 +141,11 @@ export default function FormBuilder({ campaignId, tenantId, onBack, onClose, onC
               <div>
                 <label className="label">اسم النموذج</label>
                 <input className="input" placeholder="مثال: نموذج عملاء تيك توك" value={formName} onChange={e => setFormName(e.target.value)} />
+              </div>
+
+              <div>
+                <label className="label">توزيع العملاء</label>
+                <LeadDistribution campaignTeams={campaignTeams} onChange={setAssigneeIds} />
               </div>
 
               <div>

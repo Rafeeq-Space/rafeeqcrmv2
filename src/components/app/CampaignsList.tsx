@@ -8,7 +8,7 @@ import {
   Calendar, Tag, Layers, Wand2, ChevronLeft, ChevronDown,
   Code2, Palette, Trash2
 } from 'lucide-react'
-import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink } from '@/lib/types'
+import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink, TeamWithMembers } from '@/lib/types'
 import FormBuilder from './FormBuilder'
 import HtmlFormBuilder from './HtmlFormBuilder'
 
@@ -17,6 +17,7 @@ interface Props {
   forms: Form[]
   tenantId: string
   isAdmin?: boolean
+  teams?: TeamWithMembers[]
 }
 
 const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: string }[] = [
@@ -56,12 +57,15 @@ function campaignSources(c: Campaign) {
 
 // ─── Add Campaign Modal ───────────────────────────────────────────
 function AddCampaignModal({
-  tenantId, onClose, onCreated,
+  tenantId, teams, onClose, onCreated,
 }: {
   tenantId: string
+  teams: TeamWithMembers[]
   onClose: () => void
   onCreated: (c: Campaign) => void
 }) {
+  const [teamIds, setTeamIds] = useState<string[]>([])
+  const toggleTeam = (id: string) => setTeamIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -145,6 +149,7 @@ function AddCampaignModal({
       description: form.description || null,
       source: sources[0], // primary platform (kept for compatibility)
       sources,
+      team_ids: teamIds,
       campaign_date: form.campaign_date || null,
       tags,
       links,
@@ -203,6 +208,30 @@ function AddCampaignModal({
               <label className="label">تاريخ الحملة</label>
               <input type="date" dir="ltr" className="input text-start" value={form.campaign_date} onChange={e => setForm({ ...form, campaign_date: e.target.value })} />
             </div>
+          </div>
+
+          {/* Teams working on this campaign */}
+          <div>
+            <label className="label">الفِرَق العاملة على الحملة</label>
+            {teams.length === 0 ? (
+              <p className="text-xs text-muted2">لا توجد فِرَق بعد. أنشئ فريقاً أولاً من صفحة الفِرَق.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {teams.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => toggleTeam(t.id)}
+                    className={`py-2 px-3 rounded-lg text-xs font-semibold transition border ${
+                      teamIds.includes(t.id) ? 'bg-primary text-primary-fg border-transparent' : 'border-border text-muted hover:bg-surface2'
+                    }`}
+                  >
+                    {t.name} <span className="opacity-70">({t.members.length})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted2 mt-1.5">تُستخدم هذه الفِرَق لاحقاً لتوزيع العملاء على أعضائها من إعدادات النموذج.</p>
           </div>
 
           {/* Tags */}
@@ -574,7 +603,7 @@ function ChooseFormMethodModal({
 // ─── Main Component ───────────────────────────────────────────────
 type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' }
 
-export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false }: Props) {
+export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [] }: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
   const [forms, setForms] = useState(initialForms)
   const [showAddCampaign, setShowAddCampaign] = useState(false)
@@ -605,6 +634,13 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
   }
 
   const detailCampaign = campaigns.find(c => c.id === detailId) || null
+
+  // Teams (with members) chosen for a campaign — the pool the form can distribute to.
+  function campaignTeamsFor(campaignId: string): TeamWithMembers[] {
+    const c = campaigns.find(x => x.id === campaignId)
+    const ids = c?.team_ids || []
+    return teams.filter(t => ids.includes(t.id))
+  }
 
   return (
     <div>
@@ -681,6 +717,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
       {showAddCampaign && isAdmin && (
         <AddCampaignModal
           tenantId={tenantId}
+          teams={teams}
           onClose={() => setShowAddCampaign(false)}
           onCreated={c => setCampaigns(prev => [c, ...prev])}
         />
@@ -712,6 +749,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         <FormBuilder
           campaignId={formFlow.campaignId}
           tenantId={tenantId}
+          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
           onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
           onClose={() => setFormFlow(null)}
           onCreated={onFormCreated}
@@ -722,6 +760,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         <HtmlFormBuilder
           campaignId={formFlow.campaignId}
           tenantId={tenantId}
+          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
           onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
           onClose={() => setFormFlow(null)}
           onCreated={onFormCreated}

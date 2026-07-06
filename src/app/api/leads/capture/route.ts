@@ -28,6 +28,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // Round-robin distribution: if the form has an assignee pool, hand this lead
+    // to the next member in order and advance the form's rotating counter.
+    let assigned_sales_id: string | null = null
+    let assigned_team_id: string | null = null
+    if (form_id) {
+      const { data: form } = await supabase
+        .from('forms')
+        .select('assignee_ids, rr_index')
+        .eq('id', form_id)
+        .single()
+      const pool: string[] = Array.isArray(form?.assignee_ids) ? form!.assignee_ids : []
+      if (pool.length) {
+        const idx = ((form?.rr_index ?? 0) % pool.length + pool.length) % pool.length
+        assigned_sales_id = pool[idx]
+        // Advance the counter for the next submission.
+        await supabase.from('forms').update({ rr_index: idx + 1 }).eq('id', form_id)
+        // Resolve the member's team so the lead is scoped to the right team.
+        const { data: prof } = await supabase.from('profiles').select('team_id').eq('id', assigned_sales_id).single()
+        assigned_team_id = prof?.team_id || null
+      }
+    }
+
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
@@ -42,6 +64,8 @@ export async function POST(request: Request) {
         ttclid: ttclid || null,
         fbclid: fbclid || null,
         status: 'new',
+        assigned_sales_id,
+        assigned_team_id,
       })
       .select()
       .single()
