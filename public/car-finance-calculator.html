@@ -484,14 +484,6 @@
             </div>
           </div>
 
-          <div class="field" id="plateField" style="display:none">
-            <label>نوع اللوحة <span class="hint">(رسوم حكومية — الأهلي)</span></label>
-            <div class="segline" id="plate">
-              <label><input type="radio" name="plate" value="private" checked> خاص (٥٠٠)</label>
-              <label><input type="radio" name="plate" value="commercial"> تجاري (٦٥٠)</label>
-            </div>
-          </div>
-
           <div class="grid3">
             <div class="field">
               <label for="bankSalary">صافي الراتب</label>
@@ -732,7 +724,6 @@
     $('bankTitle').textContent = isRajhi ? 'حسبة البنك — الراجحي' : 'حسبة البنك — الأهلي';
     $('margin').style.display = isRajhi ? '' : 'none';
     $('marginFixed').style.display = isRajhi ? 'none' : 'block';
-    $('plateField').style.display = isRajhi ? 'none' : '';
     if(isRajhi){
       $('empHint').textContent = '(تحدّد الدفعة الأخيرة للمحوّل)';
       $('empYes').textContent = 'أكثر من سنة'; $('empNo').textContent = 'أقل من سنة';
@@ -777,7 +768,7 @@
     const n = months, years = n / 12;
     const insRate = (+$('insInput').value || 4.5) / 100; // نسبة التأمين من القائمة (تُضبط حسب العمر)
 
-    let baseInst, totalIns, monthlyIns, admin, govFees = 0;
+    let baseInst, totalIns, monthlyIns, admin;
     if(isRajhi){
       // الراجحي: رصيد متناقص + تأمين يتناقص ١٥٪ سنوياً + إداري ١٪+ضريبة
       const r = margin / 12;
@@ -787,16 +778,15 @@
       monthlyIns = totalIns / n;
       admin = Math.min(finance * 0.01 * 1.15, 5000);
     } else {
-      // الأهلي: نسبة ثابتة (Flat) + قسمة بسيطة + إداري ١٪ بدون ضريبة + رسوم حكومية
+      // الأهلي: نسبة ثابتة (Flat) + قسمة بسيطة + إداري ١٪ بدون ضريبة
       const profit = finance * margin * years;       // ربح ثابت
       totalIns = price * insRate * years;            // تأمين ثابت
       monthlyIns = totalIns / n;
       baseInst = (finance + profit - balloon) / n;
       admin = finance * 0.01;
-      govFees = (document.querySelector('input[name="plate"]:checked').value === 'commercial') ? 650 : 500;
     }
     const instIncl = baseInst + monthlyIns;
-    const upfront = down + admin + govFees;
+    const upfront = down + admin;
     const ratioSalary = salary > 0 ? instIncl / salary : 0;
     const empLabel = {approved:'معتمد', nonapproved:'غير معتمد', gov:'حكومي'}[employer];
     const tLabel = transfer === 'yes' ? 'محوّل' : 'غير محوّل';
@@ -858,7 +848,6 @@
         <div class="line sub"><span>التأمين الشهري (${(insRate*100)}٪)</span><span>${fmt(monthlyIns)}</span></div>
         <div class="line total"><span>القسط شامل التأمين</span><span>${fmt(instIncl)}</span></div>
         <div class="line sub"><span>رسوم إدارية (مرة واحدة)</span><span>${fmt(admin)}</span></div>
-        ${govFees ? `<div class="line sub"><span>رسوم حكومية (مرة واحدة)</span><span>${fmt(govFees)}</span></div>` : ''}
         <div class="line"><span>المدفوع مقدماً (دفعة + رسوم)</span><span>${fmt(upfront)}</span></div>
       </div>
       ${elig}${recNote}${cmp}`;
@@ -874,7 +863,7 @@
   }
   ['carPrice','bankSalary','bankDown'].forEach(id => $(id).addEventListener('input', bankCalc));
   $('bankAge').addEventListener('input', syncInsFromAge);
-  ['bank','transfer','employer','emp1yr','margin','plate','insInput'].forEach(id => $(id).addEventListener('change', bankCalc));
+  ['bank','transfer','employer','emp1yr','margin','insInput'].forEach(id => $(id).addEventListener('change', bankCalc));
   $('bankMonths').addEventListener('change', bankCalc);
   $('applyDown').addEventListener('click', () => { $('bankDown').value = $('applyDown').dataset.pct; bankCalc(); });
   show(0);

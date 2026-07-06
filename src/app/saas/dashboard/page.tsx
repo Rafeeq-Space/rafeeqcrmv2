@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import AdminClientsTable, { AddClientButton } from '@/components/admin/ClientsTable'
+import SuperAdminStats, { type TenantStat } from '@/components/admin/SuperAdminStats'
 
 export default async function AdminDashboardPage() {
   const serviceClient = createServiceClient(
@@ -22,14 +23,33 @@ export default async function AdminDashboardPage() {
   if (profile?.role !== 'super_admin') redirect('/saas/login')
 
   // Use service client to bypass RLS (super_admin has no tenant_id)
-  const { data: tenants } = await serviceClient
-    .from('tenants')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [{ data: tenants }, { data: campaignRows }, { data: leadRows }, { data: profileRows }] = await Promise.all([
+    serviceClient.from('tenants').select('*').order('created_at', { ascending: false }),
+    serviceClient.from('campaigns').select('tenant_id'),
+    serviceClient.from('leads').select('tenant_id, status, created_at'),
+    serviceClient.from('profiles').select('tenant_id, role'),
+  ])
 
-  const { count: totalLeads } = await serviceClient
-    .from('leads')
-    .select('id', { count: 'exact', head: true })
+  // Aggregate metrics per tenant.
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const stats: TenantStat[] = (tenants || []).map(t => {
+    const leads = (leadRows || []).filter(l => l.tenant_id === t.id)
+    const converted = leads.filter(l => l.status === 'converted').length
+    const lost = leads.filter(l => l.status === 'lost').length
+    const last30 = leads.filter(l => new Date(l.created_at).getTime() >= cutoff).length
+    return {
+      id: t.id,
+      name: t.name,
+      subdomain: t.subdomain,
+      campaigns: (campaignRows || []).filter(c => c.tenant_id === t.id).length,
+      leads: leads.length,
+      converted,
+      lost,
+      last30,
+      users: (profileRows || []).filter(p => p.tenant_id === t.id && p.role !== 'super_admin').length,
+      conversionRate: leads.length ? Math.round((converted / leads.length) * 100) : 0,
+    }
+  })
 
   return (
     <div className="min-h-screen">
@@ -48,23 +68,8 @@ export default async function AdminDashboardPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="card p-5">
-            <p className="text-sm text-muted">إجمالي العملاء</p>
-            <p className="text-3xl font-extrabold text-foreground mt-1">{tenants?.length || 0}</p>
-          </div>
-          <div className="card p-5">
-            <p className="text-sm text-muted">إجمالي العملاء المحتملين</p>
-            <p className="text-3xl font-extrabold text-foreground mt-1">{totalLeads || 0}</p>
-          </div>
-          <div className="card p-5">
-            <p className="text-sm text-muted">حالة النظام</p>
-            <p className="text-lg font-bold mt-1 flex items-center gap-2" style={{ color: 'var(--success)' }}>
-              <span className="w-2 h-2 rounded-full" style={{ background: 'var(--success)' }} /> يعمل
-            </p>
-          </div>
-        </div>
+        {/* Analytics across all clients */}
+        <SuperAdminStats rows={stats} />
 
         {/* Clients Table */}
         <div className="card overflow-hidden">
