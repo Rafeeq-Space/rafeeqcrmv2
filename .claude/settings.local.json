@@ -5,7 +5,13 @@
       "Bash(npm run *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Read(//Users/chakoos/Downloads/**)",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(python3 -m pip install --quiet openpyxl)",
+      "Bash(python3 -c \"import openpyxl; print\\('ok'\\)\")",
+      "Bash(python3)",
+      "Bash(curl -s https://salescalculator-kappa.vercel.app)"
     ]
   }
 }

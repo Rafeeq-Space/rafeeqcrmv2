@@ -81,8 +81,18 @@
   .field{margin-bottom:18px}
   .field>label{display:block;font-weight:700;font-size:.95rem;margin-bottom:8px}
   .hint{color:var(--muted);font-size:.8rem;font-weight:500}
-  input[type="number"],input[type="text"]{width:100%;padding:13px 16px;font-family:inherit;font-size:1.02rem;
+  input[type="number"],input[type="text"],select{width:100%;padding:13px 16px;font-family:inherit;font-size:1.02rem;
     font-weight:700;border:2px solid var(--line);border-radius:12px;background:#fbfdfc;transition:.15s;-moz-appearance:textfield}
+  select{cursor:pointer;appearance:none}
+  .grid3{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.grid3{grid-template-columns:1fr}}
+  .segline{display:inline-flex;gap:8px;flex-wrap:wrap}
+  .segline label{cursor:pointer;padding:10px 16px;border-radius:10px;border:2px solid var(--line);
+    background:#fbfdfc;font-weight:700;font-size:.88rem;transition:.15s;position:relative}
+  .segline input{position:absolute;opacity:0;inset:0;cursor:pointer}
+  .segline label:has(input:checked){border-color:var(--green);background:rgba(10,140,72,.1);color:var(--green)}
+  .bank-hero{display:flex;align-items:center;gap:6px;font-weight:800;color:#fff;
+    background:rgba(255,255,255,.12);padding:4px 12px;border-radius:999px;font-size:.85rem}
   input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   input:focus{outline:none;border-color:var(--green-light);background:#fff;box-shadow:0 0 0 4px rgba(10,140,72,.12)}
   .with-unit{position:relative}
@@ -204,7 +214,8 @@
     <div class="stp" data-i="1"><b>١</b><span>أول اتصال</span></div>
     <div class="stp" data-i="2"><b>٢</b><span>المستندات</span></div>
     <div class="stp" data-i="3"><b>٣</b><span>الشروط والمفاهيم</span></div>
-    <div class="stp" data-i="4"><b>٤</b><span>الحاسبة</span></div>
+    <div class="stp" data-i="4"><b>٤</b><span>الاستقطاع</span></div>
+    <div class="stp" data-i="5"><b>٥</b><span>حسبة البنك</span></div>
   </div>
 
   <!-- ===== HERO ===== -->
@@ -375,7 +386,7 @@
         <div class="card-head">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <h2>حاسبة الاستقطاع</h2>
-          <span class="num">٤ / ٤</span>
+          <span class="num">٤ / ٥</span>
         </div>
         <div class="card-body">
           <div class="field">
@@ -419,7 +430,10 @@
               <input type="number" id="visaLimit" min="0" step="500" placeholder="مثال: 20000" inputmode="numeric" /></div>
           </div>
 
-          <div class="nav"><button class="btn btn-ghost" onclick="prev()">→ رجوع للشروط</button></div>
+          <div class="nav">
+            <button class="btn btn-ghost" onclick="prev()">→ رجوع للشروط</button>
+            <button class="btn btn-primary spacer" onclick="next()">التالي: حسبة البنك ←</button>
+          </div>
         </div>
       </div>
 
@@ -435,6 +449,135 @@
     </div>
   </section>
 
+  <!-- ===== STEP 5: حسبة البنك (الراجحي) ===== -->
+  <section class="scene" id="s5">
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h2 id="bankTitle">حسبة البنك — الراجحي</h2>
+          <span class="num">٥ / ٥</span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <label>البنك</label>
+            <div class="segline" id="bank">
+              <label><input type="radio" name="bank" value="rajhi" checked> الراجحي</label>
+              <label><input type="radio" name="bank" value="ahli"> الأهلي</label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>نوع العميل</label>
+            <div class="segline" id="transfer">
+              <label><input type="radio" name="transfer" value="yes" checked> عميل محوّل</label>
+              <label><input type="radio" name="transfer" value="no"> عميل غير محوّل</label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>جهة العمل</label>
+            <div class="segline" id="employer">
+              <label><input type="radio" name="employer" value="approved" checked> معتمد</label>
+              <label><input type="radio" name="employer" value="nonapproved"> غير معتمد</label>
+              <label id="govOpt"><input type="radio" name="employer" value="gov"> حكومي</label>
+            </div>
+          </div>
+
+          <div class="field" id="plateField" style="display:none">
+            <label>نوع اللوحة <span class="hint">(رسوم حكومية — الأهلي)</span></label>
+            <div class="segline" id="plate">
+              <label><input type="radio" name="plate" value="private" checked> خاص (٥٠٠)</label>
+              <label><input type="radio" name="plate" value="commercial"> تجاري (٦٥٠)</label>
+            </div>
+          </div>
+
+          <div class="grid3">
+            <div class="field">
+              <label for="bankSalary">صافي الراتب</label>
+              <div class="with-unit"><span class="unit">ريال</span>
+                <input type="number" id="bankSalary" min="0" step="100" placeholder="مثال: 11200" inputmode="numeric" /></div>
+            </div>
+            <div class="field">
+              <label for="bankAge">العمر <span class="hint">(يحدّد التأمين تلقائياً)</span></label>
+              <input type="number" id="bankAge" min="18" placeholder="مثال: 34" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="insInput">نسبة التأمين % <span class="hint">(تُضبط حسب العمر — ويمكن تغييرها)</span></label>
+            <select id="insInput">
+              <option value="4">٤٪</option>
+              <option value="4.5" selected>٤.٥٪</option>
+              <option value="5">٥٪</option>
+              <option value="5.5">٥.٥٪</option>
+              <option value="6">٦٪</option>
+              <option value="6.5">٦.٥٪</option>
+              <option value="7">٧٪</option>
+              <option value="7.5">٧.٥٪</option>
+              <option value="8">٨٪</option>
+              <option value="8.5">٨.٥٪</option>
+            </select>
+          </div>
+
+          <div class="field" id="emp1yrField">
+            <label>مدة العمل <span class="hint" id="empHint">(تحدّد الدفعة الأخيرة للمحوّل)</span></label>
+            <div class="segline" id="emp1yr">
+              <label><input type="radio" name="emp1yr" value="yes" checked> <span id="empYes">أكثر من سنة</span></label>
+              <label><input type="radio" name="emp1yr" value="no"> <span id="empNo">أقل من سنة</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="carPrice">سعر السيارة</label>
+            <div class="with-unit"><span class="unit">ريال</span>
+              <input type="number" id="carPrice" min="0" step="1000" placeholder="مثال: 75000" inputmode="numeric" /></div>
+          </div>
+
+          <div class="grid3">
+            <div class="field">
+              <label for="bankMonths">مدة التمويل</label>
+              <select id="bankMonths">
+                <option value="12">١٢ شهر</option>
+                <option value="24">٢٤ شهر</option>
+                <option value="36">٣٦ شهر</option>
+                <option value="48">٤٨ شهر</option>
+                <option value="60" selected>٦٠ شهر</option>
+              </select>
+            </div>
+            <div class="field" id="marginField">
+              <label>هامش الربح</label>
+              <div class="segline" id="margin">
+                <label><input type="radio" name="margin" value="0.06" checked> ٦٪</label>
+                <label><input type="radio" name="margin" value="0.065"> ٦.٥٪</label>
+              </div>
+              <div class="hint" id="marginFixed" style="display:none;margin-top:4px"></div>
+            </div>
+          </div>
+
+          <div class="field" id="downField">
+            <label for="bankDown">الدفعة الأولى % <span class="hint">(تبدأ ٠ — زِدها حتى يناسب الاستقطاع، بدون سقف)</span></label>
+            <div class="with-unit"><span class="unit">٪</span>
+              <input type="number" id="bankDown" min="0" max="100" step="1" value="0" inputmode="numeric" /></div>
+            <button type="button" class="btn btn-ghost" id="applyDown" style="margin-top:10px;padding:9px 16px;font-size:.85rem;display:none">↧ طبّق الدفعة المطلوبة تلقائياً</button>
+          </div>
+
+          <div class="nav"><button class="btn btn-ghost" onclick="prev()">→ رجوع للاستقطاع</button></div>
+        </div>
+      </div>
+
+      <div class="card result">
+        <div class="card-head" style="background:linear-gradient(135deg,#0e1a14,#1e2f26)">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h2>نتيجة البنك</h2>
+        </div>
+        <div class="card-body" id="bankOut">
+          <div class="empty">أدخل سعر السيارة لعرض القسط الشهري.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="skiprow"><button class="btn-link" id="skipLink" onclick="goCalc()">تخطّي مباشرة إلى الحاسبة</button></div>
 </div>
 
@@ -443,19 +586,21 @@
   const fmt = n => Math.round(n).toLocaleString('en-US');
 
   /* ===== Journey navigation ===== */
-  const scenes = ['hero','s1','s2','s3','s4'];
+  const scenes = ['hero','s1','s2','s3','s4','s5'];
   let idx = 0;
+  let lastAvailable = 0;
   function show(i){
     idx = Math.max(0, Math.min(scenes.length-1, i));
     scenes.forEach((s,k)=>$(s).classList.toggle('active', k===idx));
-    // stepper: scene idx 1..4 map to steps 1..4
+    // stepper: scene idx 1..5 map to steps 1..5
     document.querySelectorAll('.stp').forEach(st=>{
       const step = +st.dataset.i;
       st.classList.toggle('active', step === idx);
       st.classList.toggle('done', step < idx);
     });
-    $('skipLink').style.display = (scenes[idx]==='s4' || scenes[idx]==='hero') ? 'none' : 'inline';
+    $('skipLink').style.display = (scenes[idx]==='s4' || scenes[idx]==='s5' || scenes[idx]==='hero') ? 'none' : 'inline';
     if(scenes[idx]==='s4') prefillSalary();
+    if(scenes[idx]==='s5'){ prefillBank(); bankCalc(); }
     window.scrollTo({top:0, behavior:'smooth'});
   }
   function next(){ show(idx+1); }
@@ -467,6 +612,12 @@
   function prefillSalary(){
     const ns = +$('netSalary').value || 0;
     if(ns > 0 && !$('salary').value){ $('salary').value = ns; calc(); }
+  }
+  function prefillBank(){
+    const s = +$('salary').value || +$('netSalary').value || 0;
+    if(s > 0 && !$('bankSalary').value) $('bankSalary').value = s;
+    const a = +$('custAge').value || 0;
+    if(a > 0 && !$('bankAge').value){ $('bankAge').value = a; $('insInput').value = (a <= 25) ? '6.5' : '4.5'; }
   }
 
   /* doc checklist visual state */
@@ -559,11 +710,173 @@
         <div class="line total ${available<=0?'neg':''}"><span>المتاح للتمويل الجديد</span><span>${fmt(available)}</span></div>
       </div>
       ${bothNote}${warn}`;
+    lastAvailable = Math.max(available, 0);
+  }
+
+  /* ===== Al Rajhi bank calculation ===== */
+  function rejectHTML(msg){ return `<div class="note warn" style="margin-top:0">❌ ${msg}</div>`; }
+
+  function bankCalc(){
+    const out = $('bankOut');
+    const bank = document.querySelector('input[name="bank"]:checked').value; // rajhi / ahli
+    const isRajhi = bank === 'rajhi';
+    const price    = +$('carPrice').value || 0;
+    const salary   = +$('bankSalary').value || 0;
+    const age      = +$('bankAge').value || 0;
+    const transfer = document.querySelector('input[name="transfer"]:checked').value; // yes / no
+    const employer = document.querySelector('input[name="employer"]:checked').value; // approved / nonapproved / gov
+    const empMet   = document.querySelector('input[name="emp1yr"]:checked').value === 'yes';
+    const months   = +$('bankMonths').value;
+
+    // ===== تكييف الواجهة حسب البنك =====
+    $('bankTitle').textContent = isRajhi ? 'حسبة البنك — الراجحي' : 'حسبة البنك — الأهلي';
+    $('margin').style.display = isRajhi ? '' : 'none';
+    $('marginFixed').style.display = isRajhi ? 'none' : 'block';
+    $('plateField').style.display = isRajhi ? 'none' : '';
+    if(isRajhi){
+      $('empHint').textContent = '(تحدّد الدفعة الأخيرة للمحوّل)';
+      $('empYes').textContent = 'أكثر من سنة'; $('empNo').textContent = 'أقل من سنة';
+      $('emp1yrField').style.opacity = transfer === 'yes' ? '1' : '.5';
+    } else {
+      $('empHint').textContent = '(شرط ٣ شهور للمعتمد وغير المعتمد)';
+      $('empYes').textContent = '٣ شهور فأكثر'; $('empNo').textContent = 'أقل من ٣ شهور';
+      $('emp1yrField').style.opacity = employer === 'gov' ? '.5' : '1';
+    }
+
+    // ===== معطيات البنك =====
+    let margin, balloonPct, minDownPct, minSalary;
+    if(isRajhi){
+      margin = +document.querySelector('input[name="margin"]:checked').value; // 6% / 6.5%
+      balloonPct = transfer === 'yes' ? (empMet ? 0.50 : 0.35) : 0.35;
+      minDownPct = 0;
+      minSalary = (transfer === 'yes' ? {approved:5000, nonapproved:7000, gov:3500}
+                                      : {approved:7000, nonapproved:7000, gov:7000})[employer];
+    } else { // الأهلي
+      margin = transfer === 'yes' ? 0.048 : 0.053;
+      balloonPct = transfer === 'yes' ? 0.35 : 0.30;
+      minDownPct = transfer === 'yes' ? 0.05 : 0.10;
+      minSalary = transfer === 'yes' ? 3500 : 4000;
+      $('marginFixed').textContent = `هامش ثابت: ${(margin*100)}٪`;
+    }
+
+    // الرفض (الراجحي فقط): غير محوّل + غير معتمد
+    if(isRajhi && transfer === 'no' && employer === 'nonapproved'){
+      out.innerHTML = rejectHTML('عميل غير محوّل وغير معتمد — التمويل مرفوض حسب سياسة الراجحي.');
+      return;
+    }
+    if(price <= 0){ out.innerHTML = '<div class="empty">أدخل سعر السيارة لعرض القسط الشهري.</div>'; return; }
+
+    // الدفعة الأولى: الحد الأدنى حسب البنك، والمندوب يزيدها بلا سقف
+    const userDownPct = Math.min(Math.max(+$('bankDown').value || 0, 0), 100) / 100;
+    const downPct = Math.max(userDownPct, minDownPct);
+    if(userDownPct < minDownPct) $('bankDown').value = Math.round(minDownPct * 100);
+
+    const balloon = price * balloonPct;
+    const down = price * downPct;
+    const finance = price - down;
+    const n = months, years = n / 12;
+    const insRate = (+$('insInput').value || 4.5) / 100; // نسبة التأمين من القائمة (تُضبط حسب العمر)
+
+    let baseInst, totalIns, monthlyIns, admin, govFees = 0;
+    if(isRajhi){
+      // الراجحي: رصيد متناقص + تأمين يتناقص ١٥٪ سنوياً + إداري ١٪+ضريبة
+      const r = margin / 12;
+      const annuity = (1 - Math.pow(1+r, -n)) / r;
+      baseInst = (finance - balloon * Math.pow(1+r, -n)) / annuity;
+      totalIns = (price * insRate) * (1 - Math.pow(0.85, years)) / 0.15;
+      monthlyIns = totalIns / n;
+      admin = Math.min(finance * 0.01 * 1.15, 5000);
+    } else {
+      // الأهلي: نسبة ثابتة (Flat) + قسمة بسيطة + إداري ١٪ بدون ضريبة + رسوم حكومية
+      const profit = finance * margin * years;       // ربح ثابت
+      totalIns = price * insRate * years;            // تأمين ثابت
+      monthlyIns = totalIns / n;
+      baseInst = (finance + profit - balloon) / n;
+      admin = finance * 0.01;
+      govFees = (document.querySelector('input[name="plate"]:checked').value === 'commercial') ? 650 : 500;
+    }
+    const instIncl = baseInst + monthlyIns;
+    const upfront = down + admin + govFees;
+    const ratioSalary = salary > 0 ? instIncl / salary : 0;
+    const empLabel = {approved:'معتمد', nonapproved:'غير معتمد', gov:'حكومي'}[employer];
+    const tLabel = transfer === 'yes' ? 'محوّل' : 'غير محوّل';
+
+    // ===== ملاحظات الأهلية =====
+    const warns = [];
+    if(salary > 0 && salary < minSalary) warns.push(`صافي الراتب ${fmt(salary)} أقل من الحد الأدنى ${fmt(minSalary)}`);
+    if(age > 0 && age < 18) warns.push('العمر أقل من ١٨ سنة');
+    if(!isRajhi && !empMet && employer !== 'gov') warns.push('مدة العمل أقل من ٣ شهور (مطلوبة للمعتمد/غير المعتمد)');
+    const elig = warns.length
+      ? `<div class="note warn">⚠️ تنبيهات (${empLabel} / ${tLabel}): ${warns.join('؛ ')} — قد يُرفض.</div>`
+      : `<div class="note">✅ مؤهّل مبدئياً (${empLabel} / ${tLabel}) — صافي الراتب ${fmt(salary)} ≥ ${fmt(minSalary)}.</div>`;
+
+    let cmp = '';
+    if(lastAvailable > 0){
+      cmp = instIncl <= lastAvailable
+        ? `<div class="note">🟢 القسط ${fmt(instIncl)} ضمن المتاح من الاستقطاع (${fmt(lastAvailable)}).</div>`
+        : `<div class="note warn">🔴 القسط ${fmt(instIncl)} يتجاوز المتاح من الاستقطاع (${fmt(lastAvailable)}).</div>`;
+    }
+
+    // رفع الدفعة الأولى (فوق الحد الأدنى للبنك) حتى يناسب القسط الاستقطاع
+    let recNote = '', recDownPct = null;
+    if(lastAvailable > 0 && instIncl > lastAvailable){
+      let minDownAmt;
+      if(isRajhi){
+        const r = margin / 12;
+        const annuity = (1 - Math.pow(1+r, -n)) / r;
+        minDownAmt = price - balloon*Math.pow(1+r,-n) - (lastAvailable - monthlyIns)*annuity;
+      } else {
+        // Flat: القسط = ((price−down)(1+margin×years) + totalIns − balloon) / n
+        minDownAmt = price - (lastAvailable*n - totalIns + balloon) / (1 + margin*years);
+      }
+      const maxSensibleDown = price * (1 - balloonPct); // مبلغ التمويل لا يقل عن الدفعة الأخيرة
+      if(minDownAmt <= maxSensibleDown + 1){
+        recDownPct = Math.max(Math.ceil(minDownAmt / price * 100), Math.round(minDownPct * 100));
+        const recAmt = price * recDownPct / 100;
+        recNote = `<div class="note gold">↧ ارفع الدفعة الأولى إلى <b>${fmt(recAmt)} ريال (${recDownPct}٪)</b> عشان يناسب الاستقطاع.</div>`;
+      } else {
+        recNote = `<div class="note warn">🔴 حتى بأقصى دفعة أولى منطقية القسط يتجاوز الاستقطاع — يحتاج سيارة أرخص أو مدة أطول.</div>`;
+      }
+    }
+    const applyBtn = $('applyDown');
+    if(recDownPct !== null && recDownPct > Math.round(downPct * 100)){
+      applyBtn.style.display = 'inline-flex'; applyBtn.dataset.pct = recDownPct;
+    } else { applyBtn.style.display = 'none'; }
+
+    out.innerHTML = `
+      <div class="gauge">
+        <div class="val">${fmt(instIncl)} <span class="cur">ريال/شهر</span></div>
+        <div class="cap">القسط الشهري شامل التأمين — ${isRajhi?'الراجحي':'الأهلي'}</div>
+      </div>
+      <div class="lines">
+        <div class="line"><span>نسبة القسط من الراتب</span><span>${salary>0?Math.round(ratioSalary*100)+'٪':'—'}</span></div>
+        <div class="line"><span>هامش الربح</span><span>${(margin*100)}٪</span></div>
+        <div class="line"><span>الدفعة الأولى (${Math.round(downPct*100)}٪)</span><span>${fmt(down)}</span></div>
+        <div class="line"><span>مبلغ التمويل</span><span>${fmt(finance)}</span></div>
+        <div class="line"><span>الدفعة الأخيرة (${Math.round(balloonPct*100)}٪)</span><span>${fmt(balloon)}</span></div>
+        <div class="line sub"><span>القسط الأساسي</span><span>${fmt(baseInst)}</span></div>
+        <div class="line sub"><span>التأمين الشهري (${(insRate*100)}٪)</span><span>${fmt(monthlyIns)}</span></div>
+        <div class="line total"><span>القسط شامل التأمين</span><span>${fmt(instIncl)}</span></div>
+        <div class="line sub"><span>رسوم إدارية (مرة واحدة)</span><span>${fmt(admin)}</span></div>
+        ${govFees ? `<div class="line sub"><span>رسوم حكومية (مرة واحدة)</span><span>${fmt(govFees)}</span></div>` : ''}
+        <div class="line"><span>المدفوع مقدماً (دفعة + رسوم)</span><span>${fmt(upfront)}</span></div>
+      </div>
+      ${elig}${recNote}${cmp}`;
   }
 
   ['salary','visaLimit','personalInst','realEstateInst'].forEach(id => $(id).addEventListener('input', calc));
   $('type').addEventListener('change', calc);
   ['hasPersonal','hasRealEstate'].forEach(id => $(id).addEventListener('change', calc));
+  function syncInsFromAge(){
+    const age = +$('bankAge').value || 0;
+    if(age > 0) $('insInput').value = (age <= 25) ? '6.5' : '4.5'; // التأمين حسب العمر
+    bankCalc();
+  }
+  ['carPrice','bankSalary','bankDown'].forEach(id => $(id).addEventListener('input', bankCalc));
+  $('bankAge').addEventListener('input', syncInsFromAge);
+  ['bank','transfer','employer','emp1yr','margin','plate','insInput'].forEach(id => $(id).addEventListener('change', bankCalc));
+  $('bankMonths').addEventListener('change', bankCalc);
+  $('applyDown').addEventListener('click', () => { $('bankDown').value = $('applyDown').dataset.pct; bankCalc(); });
   show(0);
   calc();
 </script>

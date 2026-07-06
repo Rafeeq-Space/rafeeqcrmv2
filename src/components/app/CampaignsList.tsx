@@ -6,7 +6,7 @@ import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
   Calendar, Tag, Layers, Wand2, ChevronLeft, ChevronDown,
-  Code2, Palette
+  Code2, Palette, Trash2
 } from 'lucide-react'
 import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink } from '@/lib/types'
 import FormBuilder from './FormBuilder'
@@ -321,7 +321,7 @@ function AddCampaignModal({
 
 // ─── Campaign Detail Modal ────────────────────────────────────────
 function CampaignDetailModal({
-  campaign, forms, isAdmin, getFormLink, copied, onCopyLink, onCreateForm, onClose,
+  campaign, forms, isAdmin, getFormLink, copied, onCopyLink, onCreateForm, onDeleteForm, onClose,
 }: {
   campaign: Campaign
   forms: Form[]
@@ -330,6 +330,7 @@ function CampaignDetailModal({
   copied: string | null
   onCopyLink: (id: string) => void
   onCreateForm: () => void
+  onDeleteForm: (id: string) => void
   onClose: () => void
 }) {
   const srcList = campaignSources(campaign)
@@ -457,6 +458,11 @@ function CampaignDetailModal({
                       <a href={getFormLink(form.id)} target="_blank" className="text-muted2 hover:text-foreground shrink-0" aria-label="فتح الرابط">
                         <ExternalLink size={16} />
                       </a>
+                      {isAdmin && (
+                        <button onClick={() => onDeleteForm(form.id)} className="text-muted2 hover:text-danger transition shrink-0" aria-label="حذف النموذج">
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Expanded details */}
@@ -590,6 +596,14 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
     setFormFlow(null)
   }
 
+  async function deleteForm(formId: string) {
+    if (!confirm('حذف هذا النموذج نهائياً؟ لن يعمل رابطه بعد الحذف.')) return
+    const supabase = createClient()
+    const { error } = await supabase.from('forms').delete().eq('id', formId)
+    if (error) { alert(`تعذّر حذف النموذج: ${error.message}`); return }
+    setForms(prev => prev.filter(f => f.id !== formId))
+  }
+
   const detailCampaign = campaigns.find(c => c.id === detailId) || null
 
   return (
@@ -681,6 +695,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
           copied={copied}
           onCopyLink={copyLink}
           onCreateForm={() => setFormFlow({ campaignId: detailCampaign.id, mode: 'choose' })}
+          onDeleteForm={deleteForm}
           onClose={() => setDetailId(null)}
         />
       )}
