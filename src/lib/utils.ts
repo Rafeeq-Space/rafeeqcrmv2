@@ -43,16 +43,30 @@ export const SOURCE_LABELS: Record<string, string> = {
 }
 
 // Pull a display name / phone out of a lead's free-form submitted data.
-const NAME_KEYS = ['name', 'full_name', 'fullname', 'الاسم', 'الاسم الكامل', 'اسم']
-const PHONE_KEYS = ['phone', 'tel', 'mobile', 'phone_number', 'رقم الهاتف', 'رقم الجوال', 'الهاتف', 'الجوال', 'رقم_الهاتف', 'رقم التليفون']
-const EMAIL_KEYS = ['email', 'e-mail', 'mail', 'البريد', 'البريد الإلكتروني', 'الايميل']
+// Field labels arrive as keys with spaces turned into underscores, so matching
+// normalizes underscores/dashes, unifies Arabic alef forms, and strips tatweel.
+const NAME_KEYS = ['name', 'full_name', 'fullname', 'your name', 'الاسم', 'الاسم الكامل', 'اسم', 'اسم العميل', 'الاسم الاول', 'اسمك']
+const PHONE_KEYS = ['phone', 'tel', 'mobile', 'phone_number', 'whatsapp', 'الهاتف', 'الجوال', 'جوال', 'موبايل', 'هاتف', 'تليفون', 'رقم الهاتف', 'رقم الجوال', 'رقم الواتساب', 'واتساب', 'رقم التواصل']
+const EMAIL_KEYS = ['email', 'e-mail', 'mail', 'البريد', 'البريد الالكتروني', 'الايميل', 'ايميل']
+
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[_\-]+/g, ' ')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ـ/g, '')
+    .replace(/\s+/g, ' ')
+}
 
 function pick(data: Record<string, string> | undefined, keys: string[]): string {
   if (!data) return ''
+  const nkeys = keys.map(norm)
   for (const [k, v] of Object.entries(data)) {
-    const nk = k.toLowerCase().trim()
-    if (keys.some(key => nk === key || nk.includes(key))) {
-      if (v) return String(v)
+    if (!v) continue
+    const nk = norm(k)
+    if (nkeys.some(key => nk === key || nk.includes(key) || key.includes(nk))) {
+      return String(v)
     }
   }
   return ''
