@@ -62,7 +62,7 @@ export default async function ClientAdminDashboardPage() {
       tenantId={tenantId}
       role={role}
       isAdmin={isAdmin}
-      allowedTabs={['overview', 'campaigns']}
+      allowedTabs={['overview']}
     />
   )
 }
