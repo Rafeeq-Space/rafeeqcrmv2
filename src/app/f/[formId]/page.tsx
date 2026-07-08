@@ -29,6 +29,9 @@ export default async function PublicFormPage({
     .single()
 
   if (!form) notFound()
+  // Google Sheet connections aren't visitor-facing forms — they have no
+  // fields/HTML of their own, so there's nothing to render publicly.
+  if (form.source_type === 'google_sheet') notFound()
 
   const trackingParams = {
     utm_source: sp.utm_source || form.campaigns?.source || '',

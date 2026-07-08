@@ -193,6 +193,9 @@ export interface Form {
   html?: string // when set, form is rendered from raw HTML (sandboxed) instead of `fields`
   assignee_ids?: string[] // ordered pool of profile ids for round-robin lead distribution
   rr_index?: number // rotating counter — index of the next assignee
+  source_type?: 'builder' | 'html' | 'google_sheet' // how leads reach this "form"
+  sheet_url?: string // reference link to the connected Google Sheet (google_sheet only)
+  sheet_webhook_secret?: string // shared secret the Apps Script sends to authenticate (google_sheet only)
   published_at?: string
   created_at: string
 }

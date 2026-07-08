@@ -6,11 +6,12 @@ import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
   Calendar, Tag, Layers, Wand2, ChevronLeft, ChevronDown,
-  Code2, Palette, Trash2
+  Code2, Palette, Trash2, Sheet, Settings
 } from 'lucide-react'
 import type { Campaign, Form, CampaignSource, KnowledgeFile, KnowledgeLink, TeamWithMembers } from '@/lib/types'
 import FormBuilder from './FormBuilder'
 import HtmlFormBuilder from './HtmlFormBuilder'
+import GoogleSheetForm, { SheetConnectionInfo } from './GoogleSheetForm'
 
 interface Props {
   campaigns: Campaign[]
@@ -350,7 +351,7 @@ function AddCampaignModal({
 
 // ─── Campaign Detail Modal ────────────────────────────────────────
 function CampaignDetailModal({
-  campaign, forms, isAdmin, getFormLink, copied, onCopyLink, onCreateForm, onDeleteForm, onClose,
+  campaign, forms, isAdmin, getFormLink, copied, onCopyLink, onCreateForm, onDeleteForm, onViewSheet, onClose,
 }: {
   campaign: Campaign
   forms: Form[]
@@ -360,6 +361,7 @@ function CampaignDetailModal({
   onCopyLink: (id: string) => void
   onCreateForm: () => void
   onDeleteForm: (id: string) => void
+  onViewSheet: (form: Form) => void
   onClose: () => void
 }) {
   const srcList = campaignSources(campaign)
@@ -462,31 +464,42 @@ function CampaignDetailModal({
               {forms.map(form => {
                 const isOpen = expandedFormId === form.id
                 const isHtml = !!form.html
+                const isSheet = form.source_type === 'google_sheet'
                 return (
                   <div key={form.id} className="bg-surface2 rounded-xl border border-border overflow-hidden">
                     {/* Row header */}
                     <div className="flex items-center gap-3 px-4 py-3">
                       <button
-                        onClick={() => setExpandedFormId(isOpen ? null : form.id)}
+                        onClick={() => isSheet ? onViewSheet(form) : setExpandedFormId(isOpen ? null : form.id)}
                         className="flex items-center gap-2 flex-1 min-w-0 text-start"
                       >
-                        {isOpen ? <ChevronDown size={16} className="text-muted2 shrink-0" /> : <ChevronLeft size={16} className="text-muted2 shrink-0" />}
+                        {isSheet
+                          ? <Sheet size={16} className="shrink-0" style={{ color: 'var(--success)' }} />
+                          : isOpen ? <ChevronDown size={16} className="text-muted2 shrink-0" /> : <ChevronLeft size={16} className="text-muted2 shrink-0" />}
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-foreground truncate">{form.name}</span>
                           <span className="block text-xs text-muted2 mt-0.5">
-                            {isHtml ? 'نموذج HTML مخصّص' : `${form.fields.length} حقل`}
+                            {isSheet ? 'مرتبط بـ Google Sheet' : isHtml ? 'نموذج HTML مخصّص' : `${form.fields.length} حقل`}
                           </span>
                         </span>
                       </button>
-                      <code className="text-xs text-muted bg-surface border border-border px-2 py-1 rounded-lg hidden md:block" dir="ltr">
-                        {getFormLink(form.id)}
-                      </code>
-                      <button onClick={() => onCopyLink(form.id)} className="text-muted2 hover:text-foreground transition shrink-0" aria-label="نسخ الرابط">
-                        {copied === form.id ? <CheckCircle size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
-                      </button>
-                      <a href={getFormLink(form.id)} target="_blank" className="text-muted2 hover:text-foreground shrink-0" aria-label="فتح الرابط">
-                        <ExternalLink size={16} />
-                      </a>
+                      {isSheet ? (
+                        <button onClick={() => onViewSheet(form)} className="text-muted2 hover:text-foreground transition shrink-0" aria-label="إعدادات الربط">
+                          <Settings size={16} />
+                        </button>
+                      ) : (
+                        <>
+                          <code className="text-xs text-muted bg-surface border border-border px-2 py-1 rounded-lg hidden md:block" dir="ltr">
+                            {getFormLink(form.id)}
+                          </code>
+                          <button onClick={() => onCopyLink(form.id)} className="text-muted2 hover:text-foreground transition shrink-0" aria-label="نسخ الرابط">
+                            {copied === form.id ? <CheckCircle size={16} style={{ color: 'var(--success)' }} /> : <Copy size={16} />}
+                          </button>
+                          <a href={getFormLink(form.id)} target="_blank" className="text-muted2 hover:text-foreground shrink-0" aria-label="فتح الرابط">
+                            <ExternalLink size={16} />
+                          </a>
+                        </>
+                      )}
                       {isAdmin && (
                         <button onClick={() => onDeleteForm(form.id)} className="text-muted2 hover:text-danger transition shrink-0" aria-label="حذف النموذج">
                           <Trash2 size={16} />
@@ -495,7 +508,7 @@ function CampaignDetailModal({
                     </div>
 
                     {/* Expanded details */}
-                    {isOpen && (
+                    {isOpen && !isSheet && (
                       <div className="border-t border-border px-4 py-4 space-y-3">
                         {isHtml ? (
                           <p className="flex items-center gap-2 text-sm text-muted2">
@@ -552,10 +565,11 @@ function CampaignDetailModal({
 
 // ─── Choose Form Method Modal ─────────────────────────────────────
 function ChooseFormMethodModal({
-  onAdvanced, onHtml, onClose,
+  onAdvanced, onHtml, onSheet, onClose,
 }: {
   onAdvanced: () => void
   onHtml: () => void
+  onSheet: () => void
   onClose: () => void
 }) {
   return (
@@ -594,6 +608,20 @@ function ChooseFormMethodModal({
             </div>
             <ChevronLeft size={18} className="text-muted2 shrink-0" />
           </button>
+
+          <button
+            onClick={onSheet}
+            className="w-full flex items-center gap-3 p-4 rounded-xl border border-border bg-surface2 hover:bg-surface3 hover:border-primary transition text-start"
+          >
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--success-soft)' }}>
+              <Sheet size={20} style={{ color: 'var(--success)' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground">ربط Google Sheet</p>
+              <p className="text-xs text-muted2 mt-0.5">اسحب العملاء تلقائياً وباستمرار من شيت جوجل إلى هذه الحملة.</p>
+            </div>
+            <ChevronLeft size={18} className="text-muted2 shrink-0" />
+          </button>
         </div>
       </div>
     </div>
@@ -601,7 +629,7 @@ function ChooseFormMethodModal({
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' }
+type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' | 'sheet' }
 
 export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [] }: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
@@ -610,6 +638,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
   const [formFlow, setFormFlow] = useState<FormFlow | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [sheetInfoForm, setSheetInfoForm] = useState<Form | null>(null)
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
   const getFormLink = (formId: string) => `https://${rootDomain}/f/${formId}`
@@ -733,6 +762,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
           onCopyLink={copyLink}
           onCreateForm={() => setFormFlow({ campaignId: detailCampaign.id, mode: 'choose' })}
           onDeleteForm={deleteForm}
+          onViewSheet={setSheetInfoForm}
           onClose={() => setDetailId(null)}
         />
       )}
@@ -741,6 +771,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         <ChooseFormMethodModal
           onAdvanced={() => setFormFlow({ ...formFlow, mode: 'advanced' })}
           onHtml={() => setFormFlow({ ...formFlow, mode: 'html' })}
+          onSheet={() => setFormFlow({ ...formFlow, mode: 'sheet' })}
           onClose={() => setFormFlow(null)}
         />
       )}
@@ -765,6 +796,21 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
           onClose={() => setFormFlow(null)}
           onCreated={onFormCreated}
         />
+      )}
+
+      {formFlow && isAdmin && formFlow.mode === 'sheet' && (
+        <GoogleSheetForm
+          campaignId={formFlow.campaignId}
+          tenantId={tenantId}
+          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
+          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
+          onClose={() => setFormFlow(null)}
+          onCreated={form => { onFormCreated(form); setSheetInfoForm(form) }}
+        />
+      )}
+
+      {sheetInfoForm && (
+        <SheetConnectionInfo form={sheetInfoForm} onClose={() => setSheetInfoForm(null)} />
       )}
     </div>
   )
