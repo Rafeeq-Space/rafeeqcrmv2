@@ -6,7 +6,8 @@ import {
   Plus, ExternalLink, Copy, Target, CheckCircle, X,
   Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
   Calendar, Tag, Layers, Wand2, ChevronLeft, ChevronDown,
-  Code2, Palette, Trash2, Sheet, Settings, Pencil
+  Code2, Palette, Trash2, Sheet, Settings, Pencil, Search,
+  Megaphone, SearchX,
 } from 'lucide-react'
 import type { Campaign, Form, CampaignSource, CampaignStatus, KnowledgeFile, KnowledgeLink, TeamWithMembers } from '@/lib/types'
 import FormBuilder from './FormBuilder'
@@ -32,6 +33,15 @@ const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: string }[] 
 
 const STATUS_LABELS: Record<string, string> = { active: 'نشطة', paused: 'متوقفة', draft: 'مسودة', ended: 'منتهية' }
 const STATUS_BADGE: Record<string, string> = { active: 'badge-green', paused: 'badge-yellow', draft: 'badge-muted', ended: 'badge-muted' }
+const STATUS_DOT: Record<string, string> = { active: 'var(--success)', paused: 'var(--warning)', draft: 'var(--muted-2)', ended: 'var(--muted-2)' }
+
+const STATUS_FILTERS: { value: 'all' | CampaignStatus; label: string }[] = [
+  { value: 'all', label: 'الكل' },
+  { value: 'active', label: 'نشطة' },
+  { value: 'paused', label: 'متوقفة' },
+  { value: 'draft', label: 'مسودة' },
+  { value: 'ended', label: 'منتهية' },
+]
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   text: 'نص', textarea: 'نص طويل', email: 'بريد إلكتروني', phone: 'هاتف',
@@ -974,6 +984,8 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
   const [copied, setCopied] = useState<string | null>(null)
   const [sheetInfoForm, setSheetInfoForm] = useState<Form | null>(null)
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | CampaignStatus>('all')
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
   const getFormLink = (formId: string) => `https://${rootDomain}/f/${formId}`
@@ -1006,10 +1018,30 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
     return teams.filter(t => ids.includes(t.id))
   }
 
+  // Quick counts for the summary strip.
+  const activeCount = campaigns.filter(c => c.status === 'active').length
+  const sheetsCount = forms.filter(f => f.source_type === 'google_sheet').length
+
+  const filteredCampaigns = campaigns.filter(c => {
+    if (statusFilter !== 'all' && c.status !== statusFilter) return false
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.description || '').toLowerCase().includes(q) ||
+      (c.tags || []).some(t => t.toLowerCase().includes(q))
+    )
+  })
+
+  const hasActiveFilters = search.trim() !== '' || statusFilter !== 'all'
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h2 className="text-lg font-bold text-foreground">الحملات</h2>
+        <div>
+          <h2 className="text-lg font-bold text-foreground">الحملات</h2>
+          <p className="text-sm text-muted mt-0.5">إدارة الحملات الإعلانية والنماذج المرتبطة بها</p>
+        </div>
         {isAdmin && (
           <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary">
             <Plus size={17} /> حملة جديدة
@@ -1017,8 +1049,77 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         )}
       </div>
 
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--primary-soft)' }}>
+            <Megaphone size={18} style={{ color: 'var(--primary)' }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-extrabold text-foreground">{campaigns.length}</p>
+            <p className="text-xs text-muted mt-0.5 truncate">إجمالي الحملات</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--success-soft)' }}>
+            <CheckCircle size={18} style={{ color: 'var(--success)' }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-extrabold text-foreground">{activeCount}</p>
+            <p className="text-xs text-muted mt-0.5 truncate">حملات نشطة</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--warning-soft)' }}>
+            <FileText size={18} style={{ color: 'var(--warning)' }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-extrabold text-foreground">{forms.length}</p>
+            <p className="text-xs text-muted mt-0.5 truncate">إجمالي النماذج</p>
+          </div>
+        </div>
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.12)' }}>
+            <Sheet size={18} style={{ color: 'var(--success)' }} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xl font-extrabold text-foreground">{sheetsCount}</p>
+            <p className="text-xs text-muted mt-0.5 truncate">شيتات مرتبطة</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Search + status filter */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-muted2 pointer-events-none" />
+          <input
+            className="input ps-9"
+            placeholder="ابحث باسم الحملة أو وسم..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {STATUS_FILTERS.map(f => {
+            const count = f.value === 'all' ? campaigns.length : campaigns.filter(c => c.status === f.value).length
+            return (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition border ${
+                  statusFilter === f.value ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-border text-muted hover:text-foreground hover:bg-surface2'
+                }`}
+              >
+                {f.label} ({count})
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {campaigns.map(campaign => {
+        {filteredCampaigns.map(campaign => {
           const srcList = campaignSources(campaign)
           const campaignForms = forms.filter(f => f.campaign_id === campaign.id)
           const date = formatDate(campaign.campaign_date)
@@ -1028,26 +1129,33 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
             <button
               key={campaign.id}
               onClick={() => setDetailId(campaign.id)}
-              className="card card-hover p-0 overflow-hidden text-start flex flex-col"
+              className="group card card-hover p-0 overflow-hidden text-start flex flex-col"
             >
-              {cover ? (
-                <div className="w-full aspect-video bg-surface2 overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cover} alt="" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="w-full aspect-video bg-surface2 flex items-center justify-center">
-                  <Target size={28} className="text-muted2" />
-                </div>
-              )}
+              <div className="relative w-full aspect-video bg-surface2 overflow-hidden">
+                {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cover} alt="" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Target size={28} className="text-muted2" />
+                  </div>
+                )}
+                <span
+                  className={`absolute top-2 end-2 badge ${STATUS_BADGE[campaign.status]} text-xs shadow-sm flex items-center gap-1.5`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: STATUS_DOT[campaign.status] }} />
+                  {STATUS_LABELS[campaign.status] || campaign.status}
+                </span>
+              </div>
 
               <div className="p-4 flex-1 flex flex-col">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  {srcList.map(s => <span key={s.value} className={`badge ${s.badge} text-xs`}>{s.label}</span>)}
-                  <span className={`badge ${STATUS_BADGE[campaign.status]} text-xs`}>{STATUS_LABELS[campaign.status] || campaign.status}</span>
-                </div>
+                {srcList.length > 0 && (
+                  <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                    {srcList.map(s => <span key={s.value} className={`badge ${s.badge} text-xs`}>{s.label}</span>)}
+                  </div>
+                )}
 
-                <h3 className="font-bold text-foreground leading-tight mb-1">{campaign.name}</h3>
+                <h3 className="font-bold text-foreground leading-tight mb-1 group-hover:text-primary transition">{campaign.name}</h3>
                 {campaign.description && (
                   <p className="text-sm text-muted line-clamp-2 mb-3">{campaign.description}</p>
                 )}
@@ -1071,9 +1179,27 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
           )
         })}
 
+        {filteredCampaigns.length === 0 && campaigns.length > 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center gap-3 text-center py-16 text-muted2 card">
+            <SearchX size={28} className="text-muted2" />
+            <p>لا توجد حملات مطابقة لبحثك أو الفلتر المُختار.</p>
+            {hasActiveFilters && (
+              <button onClick={() => { setSearch(''); setStatusFilter('all') }} className="btn btn-outline !py-1.5 !px-3 text-xs">
+                إعادة ضبط الفلاتر
+              </button>
+            )}
+          </div>
+        )}
+
         {campaigns.length === 0 && (
-          <div className="col-span-full text-center py-16 text-muted2 card">
-            {isAdmin ? 'لا توجد حملات بعد. أنشئ حملتك الأولى.' : 'لا توجد حملات بعد.'}
+          <div className="col-span-full flex flex-col items-center justify-center gap-3 text-center py-16 text-muted2 card">
+            <Megaphone size={28} className="text-muted2" />
+            <p>{isAdmin ? 'لا توجد حملات بعد. أنشئ حملتك الأولى.' : 'لا توجد حملات بعد.'}</p>
+            {isAdmin && (
+              <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary !py-1.5 !px-3 text-xs">
+                <Plus size={14} /> حملة جديدة
+              </button>
+            )}
           </div>
         )}
       </div>
