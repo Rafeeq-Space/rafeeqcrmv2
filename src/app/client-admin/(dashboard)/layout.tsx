@@ -19,7 +19,7 @@ export default async function ClientAdminLayout({ children }: { children: React.
   return (
     <div className="min-h-screen">
       <ClientAdminNav profile={profile} />
-      <main className="ms-0 lg:ms-72 min-h-screen pt-16 lg:pt-0 p-4 md:p-6 lg:p-8">
+      <main className="ms-0 lg:ms-72 min-h-screen p-4 pt-20 md:p-6 md:pt-20 lg:p-8">
         {children}
       </main>
     </div>
