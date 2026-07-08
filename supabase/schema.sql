@@ -124,6 +124,9 @@ create table ad_connections (
   name text not null,
   pixel_id text not null,
   access_token text not null,
+  -- TikTok Instant Form lead webhook (see tiktok_webhook_events below).
+  webhook_secret text,
+  default_campaign_id uuid references campaigns(id) on delete set null,
   created_at timestamptz default now()
 );
 
@@ -135,6 +138,23 @@ create table campaign_ad_connections (
   created_at timestamptz default now(),
   primary key (campaign_id, ad_connection_id)
 );
+
+-- Raw + processed deliveries from TikTok's Lead Generation webhook (Instant
+-- Form leads). Every delivery is stored verbatim in raw_payload regardless
+-- of whether it could be parsed into a lead, so nothing is silently lost.
+create table tiktok_webhook_events (
+  id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  connection_id uuid references ad_connections(id) on delete cascade not null,
+  external_lead_id text,
+  raw_payload jsonb not null,
+  lead_id uuid references leads(id) on delete set null,
+  status text not null default 'received' check (status in ('received', 'imported', 'skipped_duplicate', 'skipped_unparsed')),
+  created_at timestamptz default now()
+);
+
+create unique index uniq_tiktok_webhook_lead on tiktok_webhook_events(connection_id, external_lead_id) where external_lead_id is not null;
+create index idx_tiktok_webhook_events_connection on tiktok_webhook_events(connection_id);
 
 -- UPDATED_AT trigger for leads
 create or replace function update_updated_at()
@@ -162,6 +182,7 @@ alter table leads enable row level security;
 alter table lead_events enable row level security;
 alter table ad_connections enable row level security;
 alter table campaign_ad_connections enable row level security;
+alter table tiktok_webhook_events enable row level security;
 
 -- Helper function: get tenant_id for current user
 create or replace function auth_tenant_id()
@@ -193,6 +214,7 @@ create policy "tenant_leads" on leads for all using (tenant_id = auth_tenant_id(
 create policy "tenant_lead_events" on lead_events for all using (tenant_id = auth_tenant_id() or is_admin());
 create policy "tenant_ad_connections" on ad_connections for all using (tenant_id = auth_tenant_id() or is_admin());
 create policy "tenant_campaign_ad_connections" on campaign_ad_connections for all using (tenant_id = auth_tenant_id() or is_admin());
+create policy "tenant_tiktok_webhook_events" on tiktok_webhook_events for all using (tenant_id = auth_tenant_id() or is_admin());
 
 -- Public insert for lead capture (no auth required for form submissions)
 create policy "public_form_insert" on leads for insert with check (true);

@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
 import { adminSupabase } from '@/lib/supabase/admin'
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
   const auth = await requireClientAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
 
-  const { platform, name, pixel_id, access_token } = await request.json()
+  const { platform, name, pixel_id, access_token, default_campaign_id } = await request.json()
   if (!platform || !PLATFORMS.includes(platform)) {
     return NextResponse.json({ error: 'منصة غير صالحة' }, { status: 400 })
   }
@@ -20,7 +21,17 @@ export async function POST(request: Request) {
   const supabase = adminSupabase()
   const { data, error } = await supabase
     .from('ad_connections')
-    .insert({ tenant_id: auth.tenantId, platform, name, pixel_id, access_token })
+    .insert({
+      tenant_id: auth.tenantId,
+      platform,
+      name,
+      pixel_id,
+      access_token,
+      default_campaign_id: default_campaign_id || null,
+      // Only used by TikTok's Instant Form lead webhook, but generated for
+      // every connection so it's ready if enabled later.
+      webhook_secret: crypto.randomBytes(16).toString('hex'),
+    })
     .select()
     .single()
 

@@ -15,11 +15,10 @@ export default async function AdConnectionsPage() {
   const tenantId = profile.tenant_id || ''
 
   const supa = adminSupabase()
-  const { data: connections } = await supa
-    .from('ad_connections')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false })
+  const [{ data: connections }, { data: campaigns }] = await Promise.all([
+    supa.from('ad_connections').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+    supa.from('campaigns').select('id, name').eq('tenant_id', tenantId).order('name'),
+  ])
 
-  return <AdConnectionsManager tenantId={tenantId} connections={connections || []} />
+  return <AdConnectionsManager tenantId={tenantId} connections={connections || []} campaigns={campaigns || []} />
 }

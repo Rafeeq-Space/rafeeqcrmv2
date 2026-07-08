@@ -17,6 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.name !== undefined) updates.name = body.name
   if (body.pixel_id !== undefined) updates.pixel_id = body.pixel_id
   if (body.access_token !== undefined) updates.access_token = body.access_token
+  if (body.default_campaign_id !== undefined) updates.default_campaign_id = body.default_campaign_id || null
 
   const { data, error } = await supabase.from('ad_connections').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

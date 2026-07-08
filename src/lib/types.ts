@@ -16,6 +16,11 @@ export interface AdConnection {
   name: string
   pixel_id: string
   access_token: string
+  // TikTok Instant Form lead sync (webhook-based) — see tiktok_webhook_events.
+  // webhook_secret is generated server-side on creation; default_campaign_id
+  // is which CRM campaign new Instant Form leads from this account attach to.
+  webhook_secret?: string
+  default_campaign_id?: string | null
   created_at: string
 }
 

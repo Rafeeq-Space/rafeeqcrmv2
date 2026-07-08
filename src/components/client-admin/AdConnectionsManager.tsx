@@ -1,12 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, X, Radio, KeyRound } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-react'
 import type { AdConnection, AdPlatform } from '@/lib/types'
+
+interface CampaignOption { id: string; name: string }
 
 interface Props {
   tenantId: string
   connections: AdConnection[]
+  campaigns: CampaignOption[]
 }
 
 const PLATFORM_LABELS: Record<AdPlatform, string> = {
@@ -32,10 +35,11 @@ function maskToken(token: string) {
 
 // ─── Add / Edit modal ──────────────────────────────────────────────
 function ConnectionModal({
-  connection, defaultPlatform, onClose, onSaved,
+  connection, defaultPlatform, campaigns, onClose, onSaved,
 }: {
   connection?: AdConnection | null
   defaultPlatform: AdPlatform
+  campaigns: CampaignOption[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -45,6 +49,7 @@ function ConnectionModal({
     name: connection?.name || '',
     pixel_id: connection?.pixel_id || '',
     access_token: connection?.access_token || '',
+    default_campaign_id: connection?.default_campaign_id || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -58,7 +63,12 @@ function ConnectionModal({
         ? await fetch(`/api/client-admin/ad-connections/${connection!.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: form.name, pixel_id: form.pixel_id, access_token: form.access_token }),
+            body: JSON.stringify({
+              name: form.name,
+              pixel_id: form.pixel_id,
+              access_token: form.access_token,
+              default_campaign_id: form.default_campaign_id || null,
+            }),
           })
         : await fetch('/api/client-admin/ad-connections', {
             method: 'POST',
@@ -113,6 +123,20 @@ function ConnectionModal({
               placeholder={editing ? 'اتركه كما هو أو أدخل توكن جديد' : ''} />
           </div>
 
+          {form.platform === 'tiktok' && (
+            <div>
+              <label className="label">الحملة الافتراضية لليدز Instant Form</label>
+              <select className="input" value={form.default_campaign_id}
+                onChange={e => setForm({ ...form, default_campaign_id: e.target.value })}>
+                <option value="">بدون حملة (غير محدد)</option>
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <p className="text-xs text-muted2 mt-1">
+                أي ليد جديد يصل عبر رابط الويبهوك من نموذج تيك توك الداخلي (Instant Form) سيُنسب تلقائيًا لهذه الحملة.
+              </p>
+            </div>
+          )}
+
           {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
@@ -126,8 +150,43 @@ function ConnectionModal({
   )
 }
 
+// Copyable read-only field for the per-connection TikTok webhook URL —
+// this is the URL an admin pastes into TikTok Developer Portal > Webhooks
+// so Instant Form leads get pushed here automatically.
+function WebhookUrlField({ connection, campaigns }: { connection: AdConnection; campaigns: CampaignOption[] }) {
+  const [copied, setCopied] = useState(false)
+  if (!connection.webhook_secret) return null
+  const url = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/leads/tiktok-webhook/${connection.id}/${connection.webhook_secret}`
+    : ''
+  const campaignName = campaigns.find(c => c.id === connection.default_campaign_id)?.name
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch { /* clipboard unavailable — ignore */ }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-xs text-muted2 mb-1">رابط استقبال ليدز Instant Form (للصقه في TikTok Developer Portal → Webhooks):</p>
+      <div className="flex items-center gap-1.5">
+        <input dir="ltr" readOnly value={url} className="input text-xs py-1.5 flex-1" onFocus={e => e.target.select()} />
+        <button onClick={copy} type="button" className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg shrink-0" title="نسخ">
+          {copied ? <Check size={15} /> : <Copy size={15} />}
+        </button>
+      </div>
+      <p className="text-xs text-muted2 mt-1">
+        الحملة الافتراضية: <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span>
+      </p>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────
-export default function AdConnectionsManager({ connections }: Props) {
+export default function AdConnectionsManager({ connections, campaigns }: Props) {
   const [activeTab, setActiveTab] = useState<AdPlatform>('tiktok')
   const [showModal, setShowModal] = useState(false)
   const [editConn, setEditConn] = useState<AdConnection | null>(null)
@@ -186,6 +245,7 @@ export default function AdConnectionsManager({ connections }: Props) {
               <p className="text-sm text-muted2 mt-0.5 flex items-center gap-1" dir="ltr">
                 <KeyRound size={13} /> {maskToken(conn.access_token)}
               </p>
+              {conn.platform === 'tiktok' && <WebhookUrlField connection={conn} campaigns={campaigns} />}
               <div className="flex items-center gap-1 justify-end mt-4 pt-3 border-t border-border">
                 <button onClick={() => { setEditConn(conn); setShowModal(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
                   <Pencil size={15} />
@@ -207,6 +267,7 @@ export default function AdConnectionsManager({ connections }: Props) {
         <ConnectionModal
           connection={editConn}
           defaultPlatform={activeTab}
+          campaigns={campaigns}
           onClose={() => { setShowModal(false); setEditConn(null) }}
           onSaved={refresh}
         />
