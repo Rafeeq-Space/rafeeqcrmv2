@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>رحلة تمويل السيارة — دليل المندوب</title>
+<title>حاسبة تمويل السيارة — الاستقطاع وحسبة البنك</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
@@ -189,7 +189,6 @@
   .spacer{margin-inline-start:auto}
 
   footer{margin-top:24px;color:rgba(255,255,255,.6);font-size:.8rem;font-weight:500;text-align:center}
-  .skiprow{text-align:center;margin-top:14px}
 </style>
 </head>
 <body>
@@ -200,8 +199,8 @@
       <svg viewBox="0 0 24 24" fill="none" width="32" height="32"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11m-14 0h14m-14 0a2 2 0 0 0-2 2v3h2m14-5a2 2 0 0 1 2 2v3h-2m-2 0H7m10 0v2m-10-2v2M6.5 14.5h.01M17.5 14.5h.01" stroke="#0e1a14" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
     <div>
-      <h1>رحلة تمويل السيارة</h1>
-      <p>دليل المندوب — من أول اتصال حتى حساب الاستقطاع</p>
+      <h1>حاسبة تمويل السيارة</h1>
+      <p>الاستقطاع وحسبة البنك</p>
     </div>
     <div class="flag-strip">
       <svg viewBox="0 0 24 16"><rect width="24" height="16" rx="2" fill="#006C35"/><rect x="4" y="10.5" width="16" height="1.6" rx=".8" fill="#fff"/><rect x="9" y="4" width="6" height="4" rx="1" fill="#fff"/></svg>
@@ -211,186 +210,22 @@
 
   <!-- Stepper -->
   <div class="stepper" id="stepper">
-    <div class="stp" data-i="1"><b>١</b><span>أول اتصال</span></div>
-    <div class="stp" data-i="2"><b>٢</b><span>المستندات</span></div>
-    <div class="stp" data-i="3"><b>٣</b><span>الشروط والمفاهيم</span></div>
-    <div class="stp" data-i="4"><b>٤</b><span>الاستقطاع</span></div>
-    <div class="stp" data-i="5"><b>٥</b><span>حسبة البنك</span></div>
+    <div class="stp" data-i="0"><b>١</b><span>الاستقطاع</span></div>
+    <div class="stp" data-i="1"><b>٢</b><span>حسبة البنك</span></div>
   </div>
 
-  <!-- ===== HERO ===== -->
-  <section class="scene active" id="hero">
-    <div class="hero">
-      <div class="car">
-        <svg viewBox="0 0 24 24" fill="none" width="52" height="52"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11m-14 0h14m-14 0a2 2 0 0 0-2 2v3h2m14-5a2 2 0 0 1 2 2v3h-2m-2 0H7m10 0v2m-10-2v2M6.5 14.5h.01M17.5 14.5h.01" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <h2>ابدأ رحلة العميل</h2>
-      <p>هذا الدليل يمشّيك خطوة بخطوة من لحظة أول اتصال بالعميل، مروراً بالمستندات المطلوبة وشروط الأهلية، حتى تصل لحساب الاستقطاع والقدرة التمويلية.</p>
-      <div class="flow">
-        <span>١ · أول اتصال</span>
-        <span>٢ · المستندات</span>
-        <span>٣ · الشروط والمفاهيم</span>
-        <span>٤ · الحاسبة</span>
-      </div>
-      <div class="nav" style="justify-content:center">
-        <button class="btn btn-primary" onclick="next()">ابدأ الرحلة ←</button>
-        <button class="btn btn-ghost" onclick="goCalc()">تخطّي للحاسبة مباشرة</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== STEP 1: أول اتصال ===== -->
-  <section class="scene" id="s1">
-    <div class="card">
-      <div class="card-head">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M15.5 3.5a5 5 0 0 1 5 5M14.5 6.5a2 2 0 0 1 2 2M4.5 5.5c0 8 6 14 14 14l.5-3.5-4-1.5-2 2c-2.5-1.2-4.8-3.5-6-6l2-2-1.5-4L4.5 5.5Z" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <h2>أول اتصال — المعلومات الأولية</h2>
-        <span class="num">١ / ٤</span>
-      </div>
-      <div class="card-body">
-        <p class="hint" style="margin-bottom:18px">اسأل العميل هذي الأسئلة في المكالمة الأولى وعبّي الإجابات:</p>
-
-        <div class="field">
-          <label>١) اسم العميل</label>
-          <input type="text" id="custName" placeholder="الاسم الكامل" />
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <label>٢) السن</label>
-            <input type="number" id="custAge" min="18" placeholder="مثال: 34" inputmode="numeric" />
-            <div class="hint">تأكد أنه ضمن حدود العمر المسموحة للتمويل.</div>
-          </div>
-          <div class="field">
-            <label>٣) صافي الراتب</label>
-            <div class="with-unit"><span class="unit">ريال</span>
-              <input type="number" id="netSalary" min="0" step="100" placeholder="مثال: 11200" inputmode="numeric" /></div>
-            <div class="hint">يُنقل تلقائياً إلى الحاسبة في الخطوة الأخيرة.</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>٤) هل عليه تعسّرات أو مخالفات؟</label>
-          <div class="yn">
-            <label class="n"><input type="radio" name="default" value="yes" onchange="toggleCond('condDefault',true)"> نعم</label>
-            <label class="y"><input type="radio" name="default" value="no" onchange="toggleCond('condDefault',false)"> لا</label>
-          </div>
-          <div class="cond" id="condDefault">
-            <div class="note warn">⚠️ وجود تعسّر/مخالفة في سمة قد يؤخّر أو يرفض الطلب — تحقّق قبل ما تكمّل.</div>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>٥) رخصة قيادة وهوية سارية؟</label>
-          <div class="yn">
-            <label class="y"><input type="radio" name="idok" value="yes" onchange="toggleCond('condId',false)"> نعم</label>
-            <label class="n"><input type="radio" name="idok" value="no" onchange="toggleCond('condId',true)"> لا</label>
-          </div>
-          <div class="cond" id="condId">
-            <div class="note gold">💡 لو الرخصة أو الهوية غير سارية — أقنع العميل يجيب <b>متقدّم بديل</b> (شخص آخر مستوفٍ للشروط).</div>
-          </div>
-        </div>
-
-        <div class="nav">
-          <button class="btn btn-ghost" onclick="prev()">→ رجوع</button>
-          <button class="btn btn-primary spacer" onclick="next()">التالي: المستندات ←</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== STEP 2: المستندات ===== -->
-  <section class="scene" id="s2">
-    <div class="card">
-      <div class="card-head">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M8 3h6l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2ZM14 3v4h4M8 13h8M8 17h5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <h2>المستندات المطلوبة</h2>
-        <span class="num">٢ / ٤</span>
-      </div>
-      <div class="card-body">
-        <p class="hint" style="margin-bottom:18px">حدّد المستندات اللي جمعتها من العميل:</p>
-        <div class="check-row" id="docs">
-          <div class="check"><label class="top"><input type="checkbox"> ٦) تعريف راتب<span class="ico">📄</span></label>
-            <div class="desc">شهادة تعريف بالراتب حديثة من جهة العمل.</div></div>
-
-          <div class="check"><label class="top"><input type="checkbox"> ٧) طباعة التأمينات (GOSI) <span class="tagline">للقطاع الخاص فقط</span><span class="ico">🖨️</span></label>
-            <div class="desc">طباعة التأمينات الاجتماعية — تكون لآخر ٣ شهور. (خاصة بموظفي القطاع الخاص).</div></div>
-
-          <div class="check"><label class="top"><input type="checkbox"> ٨) كشف حساب بنكي<span class="ico">🏦</span></label>
-            <div class="desc">كشف حساب آخر ٣ شهور (أو شهر عادي حسب الحالة).</div></div>
-
-          <div class="check"><label class="top"><input type="checkbox"> صورة الهوية + رخصة القيادة<span class="ico">🪪</span></label>
-            <div class="desc">يجب أن تكون سارية المفعول.</div></div>
-        </div>
-
-        <div class="note gold">💡 <b>ملاحظة بنوك:</b> بنك الراجحي وبنك الإنماء يطلبون <b>خطاب تثبيت بديل</b> — جهّزه مسبقاً لعملاء هذي البنوك.</div>
-
-        <div class="nav">
-          <button class="btn btn-ghost" onclick="prev()">→ رجوع</button>
-          <button class="btn btn-primary spacer" onclick="next()">التالي: الشروط ←</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== STEP 3: الشروط والمفاهيم ===== -->
-  <section class="scene" id="s3">
-    <div class="card">
-      <div class="card-head">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <h2>الشروط والمفاهيم</h2>
-        <span class="num">٣ / ٤</span>
-      </div>
-      <div class="card-body">
-        <div class="field">
-          <label>١٠) شرط الأهلية</label>
-          <ul class="cond-list">
-            <li>✅ <span>مضى على العميل <b>٣ شهور في الوظيفة</b> على الأقل، أو استلم <b>٣ رواتب</b>.</span></li>
-          </ul>
-        </div>
-
-        <div class="field" style="margin-top:8px">
-          <label>١١) الفرق بين عميل محوّل وعميل غير محوّل</label>
-          <div class="cmp">
-            <div class="box a">
-              <h3>✅ عميل محوّل</h3>
-              <ul>
-                <li>راتبه محوّل على البنك المموّل (توطين الراتب).</li>
-                <li>إجراءات أسهل وخيارات تمويل أوسع.</li>
-                <li>غالباً نسبة موافقة أعلى.</li>
-              </ul>
-            </div>
-            <div class="box b">
-              <h3>➖ عميل غير محوّل</h3>
-              <ul>
-                <li>راتبه على بنك آخر (غير المموّل).</li>
-                <li>قد يحتاج تحويل الراتب أو ضمانات إضافية.</li>
-                <li>خيارات ومنتجات مختلفة.</li>
-              </ul>
-            </div>
-          </div>
-          <div class="note">✍️ <span>هذي شرح مبدئي — عدّل التفاصيل حسب سياسة شركتكم والبنوك اللي تتعاملون معها.</span></div>
-        </div>
-
-        <div class="nav">
-          <button class="btn btn-ghost" onclick="prev()">→ رجوع</button>
-          <button class="btn btn-primary spacer" onclick="next()">التالي: الحاسبة ←</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== STEP 4: الحاسبة ===== -->
-  <section class="scene" id="s4">
+  <!-- ===== STEP 3: الحاسبة ===== -->
+  <section class="scene active" id="s4">
     <div class="grid2">
       <div class="card">
         <div class="card-head">
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <h2>حاسبة الاستقطاع</h2>
-          <span class="num">٤ / ٥</span>
+          <span class="num">١ / ٢</span>
         </div>
         <div class="card-body">
           <div class="field">
-            <label for="salary">الراتب الشهري</label>
+            <label for="salary">الراتب الشهري <span class="hint">(بدون حد أقصى — المبلغ الصافي بالريال)</span></label>
             <div class="with-unit"><span class="unit">ريال</span>
               <input type="number" id="salary" min="0" step="100" placeholder="مثال: 11200" inputmode="numeric" /></div>
           </div>
@@ -399,9 +234,9 @@
             <label>من غير التزامات <span class="hint">— تُطبَّق نسبتها فقط إذا ما كان على العميل أي التزام</span></label>
             <div class="seg" id="type">
               <label><input type="radio" name="etype" value="bank" checked />
-                <span class="seg-in"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>موظف بنك <small class="hint">٣٣٪</small></span></label>
+                <span class="seg-in"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>بنك <small class="hint">٣٣٪</small></span></label>
               <label><input type="radio" name="etype" value="company" />
-                <span class="seg-in"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 21V9h4a1 1 0 0 1 1 1v11M4 21h17M7 8h1M11 8h1M7 12h1M11 12h1M7 16h1M11 16h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>موظف شركة <small class="hint">٤٥٪</small></span></label>
+                <span class="seg-in"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 21V9h4a1 1 0 0 1 1 1v11M4 21h17M7 8h1M11 8h1M7 12h1M11 12h1M7 16h1M11 16h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>شركة <small class="hint">٤٥٪</small></span></label>
               <label><input type="radio" name="etype" value="retiree" />
                 <span class="seg-in"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM6 22l1.5-7M18 22l-1.5-7M8 15h8l-.7-4.2A3 3 0 0 0 12.4 8h-.8a3 3 0 0 0-2.9 2.8L8 15Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>متقاعد <small class="hint">٢٥٪</small></span></label>
             </div>
@@ -425,13 +260,12 @@
           </div>
 
           <div class="field">
-            <label for="visaLimit">حد بطاقة الفيزا / الائتمان <span class="hint">(اختياري — تُحسب ٥٪ من الحد)</span></label>
+            <label for="visaLimit">حد بطاقة الفيزا / الائتمان <span class="hint">(اختياري، بدون حد أقصى — تُحسب ٥٪ من الحد)</span></label>
             <div class="with-unit"><span class="unit">ريال</span>
               <input type="number" id="visaLimit" min="0" step="500" placeholder="مثال: 20000" inputmode="numeric" /></div>
           </div>
 
           <div class="nav">
-            <button class="btn btn-ghost" onclick="prev()">→ رجوع للشروط</button>
             <button class="btn btn-primary spacer" onclick="next()">التالي: حسبة البنك ←</button>
           </div>
         </div>
@@ -456,7 +290,7 @@
         <div class="card-head">
           <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M4 10h16M5 10l7-6 7 6M6 10v11M18 10v11M10 10v11M14 10v11" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <h2 id="bankTitle">حسبة البنك — الراجحي</h2>
-          <span class="num">٥ / ٥</span>
+          <span class="num">٢ / ٢</span>
         </div>
         <div class="card-body">
           <div class="field">
@@ -464,6 +298,13 @@
             <div class="segline" id="bank">
               <label><input type="radio" name="bank" value="rajhi" checked> الراجحي</label>
               <label><input type="radio" name="bank" value="ahli"> الأهلي</label>
+              <label><input type="radio" name="bank" value="albilad"> البلاد</label>
+              <label><input type="radio" name="bank" value="anb"> العربي الوطني</label>
+              <label><input type="radio" name="bank" value="emirates"> الإمارات</label>
+              <label><input type="radio" name="bank" value="riyad"> الرياض</label>
+              <label><input type="radio" name="bank" value="sab"> ساب</label>
+              <label><input type="radio" name="bank" value="saib"> الاستثمار</label>
+              <label><input type="radio" name="bank" value="alawwal"> الأول</label>
             </div>
           </div>
 
@@ -486,30 +327,21 @@
 
           <div class="grid3">
             <div class="field">
-              <label for="bankSalary">صافي الراتب</label>
+              <label for="bankSalary">صافي الراتب <span class="hint">(بدون حد أقصى)</span></label>
               <div class="with-unit"><span class="unit">ريال</span>
                 <input type="number" id="bankSalary" min="0" step="100" placeholder="مثال: 11200" inputmode="numeric" /></div>
             </div>
             <div class="field">
-              <label for="bankAge">العمر <span class="hint">(يحدّد التأمين تلقائياً)</span></label>
+              <label for="bankAge">العمر <span class="hint">(١٨ سنة فأعلى — يحدّد التأمين تلقائياً)</span></label>
               <input type="number" id="bankAge" min="18" placeholder="مثال: 34" inputmode="numeric" />
             </div>
           </div>
 
           <div class="field">
-            <label for="insInput">نسبة التأمين % <span class="hint">(تُضبط حسب العمر — ويمكن تغييرها)</span></label>
-            <select id="insInput">
-              <option value="4">٤٪</option>
-              <option value="4.5" selected>٤.٥٪</option>
-              <option value="5">٥٪</option>
-              <option value="5.5">٥.٥٪</option>
-              <option value="6">٦٪</option>
-              <option value="6.5">٦.٥٪</option>
-              <option value="7">٧٪</option>
-              <option value="7.5">٧.٥٪</option>
-              <option value="8">٨٪</option>
-              <option value="8.5">٨.٥٪</option>
-            </select>
+            <label for="insInput">تأمين السنة الأولى <span class="hint">(ريال — أي مبلغ؛ افتراضي ٥٪ من السعر لكل الأعمار، اكتب رقم عرض التأمين الحقيقي لو متوفر)</span></label>
+            <div class="with-unit"><span class="unit">ريال</span>
+              <input type="number" id="insInput" step="50" min="0" placeholder="مثال: 5000" inputmode="numeric" /></div>
+            <div class="hint" id="insEquivNote" style="margin-top:6px"></div>
           </div>
 
           <div class="field" id="emp1yrField">
@@ -521,14 +353,20 @@
           </div>
 
           <div class="field">
-            <label for="carPrice">سعر السيارة</label>
+            <label for="balloonSel">الدفعة الأخيرة % <span class="hint">(النطاق المعتاد ٢٠٪–٦٠٪ — قيمة مبدئية حسب البنك، اختَر أو اكتب أي نسبة)</span></label>
+            <input type="number" id="balloonSel" list="balloonSelList" step="0.5" min="0" max="100" inputmode="decimal" />
+            <datalist id="balloonSelList"></datalist>
+          </div>
+
+          <div class="field">
+            <label for="carPrice">سعر السيارة <span class="hint">(بدون حد أقصى — شامل الضريبة)</span></label>
             <div class="with-unit"><span class="unit">ريال</span>
               <input type="number" id="carPrice" min="0" step="1000" placeholder="مثال: 75000" inputmode="numeric" /></div>
           </div>
 
           <div class="grid3">
             <div class="field">
-              <label for="bankMonths">مدة التمويل</label>
+              <label for="bankMonths">مدة التمويل <span class="hint">(١٢–٦٠ شهر)</span></label>
               <select id="bankMonths">
                 <option value="12">١٢ شهر</option>
                 <option value="24">٢٤ شهر</option>
@@ -537,20 +375,18 @@
                 <option value="60" selected>٦٠ شهر</option>
               </select>
             </div>
-            <div class="field" id="marginField">
-              <label>هامش الربح</label>
-              <div class="segline" id="margin">
-                <label><input type="radio" name="margin" value="0.06" checked> ٦٪</label>
-                <label><input type="radio" name="margin" value="0.065"> ٦.٥٪</label>
-              </div>
-              <div class="hint" id="marginFixed" style="display:none;margin-top:4px"></div>
+            <div class="field">
+              <label for="marginSel">هامش الربح % <span class="hint">(النطاق المعتاد ٢٪–١٢٪ — قيمة مبدئية حسب البنك، اختَر أو اكتب أي نسبة)</span></label>
+              <input type="number" id="marginSel" list="marginSelList" step="0.5" min="0" inputmode="decimal" />
+              <datalist id="marginSelList"></datalist>
             </div>
           </div>
 
           <div class="field" id="downField">
-            <label for="bankDown">الدفعة الأولى % <span class="hint">(تبدأ ٠ — زِدها حتى يناسب الاستقطاع، بدون سقف)</span></label>
+            <label for="bankDown">الدفعة الأولى % <span class="hint">(بدون حد أدنى ملزم ولا سقف — يمكن أن تكون أقل من افتراضي البنك)</span></label>
             <div class="with-unit"><span class="unit">٪</span>
               <input type="number" id="bankDown" min="0" max="100" step="1" value="0" inputmode="numeric" /></div>
+            <div class="hint" id="downDefaultNote" style="margin-top:6px"></div>
             <button type="button" class="btn btn-ghost" id="applyDown" style="margin-top:10px;padding:9px 16px;font-size:.85rem;display:none">↧ طبّق الدفعة المطلوبة تلقائياً</button>
           </div>
 
@@ -570,68 +406,53 @@
     </div>
   </section>
 
-  <div class="skiprow"><button class="btn-link" id="skipLink" onclick="goCalc()">تخطّي مباشرة إلى الحاسبة</button></div>
 </div>
 
 <script>
   const $ = id => document.getElementById(id);
   const fmt = n => Math.round(n).toLocaleString('en-US');
 
-  /* ===== Journey navigation ===== */
-  const scenes = ['hero','s1','s2','s3','s4','s5'];
+
+  /* ===== Journey navigation (٢ خطوة: الاستقطاع ثم حسبة البنك) ===== */
+  const scenes = ['s4','s5'];
   let idx = 0;
   let lastAvailable = 0;
   function show(i){
     idx = Math.max(0, Math.min(scenes.length-1, i));
     scenes.forEach((s,k)=>$(s).classList.toggle('active', k===idx));
-    // stepper: scene idx 1..5 map to steps 1..5
     document.querySelectorAll('.stp').forEach(st=>{
       const step = +st.dataset.i;
       st.classList.toggle('active', step === idx);
       st.classList.toggle('done', step < idx);
     });
-    $('skipLink').style.display = (scenes[idx]==='s4' || scenes[idx]==='s5' || scenes[idx]==='hero') ? 'none' : 'inline';
-    if(scenes[idx]==='s4') prefillSalary();
     if(scenes[idx]==='s5'){ prefillBank(); bankCalc(); }
     window.scrollTo({top:0, behavior:'smooth'});
   }
   function next(){ show(idx+1); }
   function prev(){ show(idx-1); }
-  function goCalc(){ show(scenes.indexOf('s4')); }
   document.querySelectorAll('.stp').forEach(st=> st.addEventListener('click', ()=> show(+st.dataset.i)));
 
-  function toggleCond(id, on){ $(id).classList.toggle('show', on); }
-  function prefillSalary(){
-    const ns = +$('netSalary').value || 0;
-    if(ns > 0 && !$('salary').value){ $('salary').value = ns; calc(); }
-  }
   function prefillBank(){
-    const s = +$('salary').value || +$('netSalary').value || 0;
+    const s = +$('salary').value || 0;
     if(s > 0 && !$('bankSalary').value) $('bankSalary').value = s;
-    const a = +$('custAge').value || 0;
-    if(a > 0 && !$('bankAge').value){ $('bankAge').value = a; $('insInput').value = (a <= 25) ? '6.5' : '4.5'; }
   }
-
-  /* doc checklist visual state */
-  document.querySelectorAll('#docs .check .top input').forEach(cb=>{
-    cb.addEventListener('change', ()=> cb.closest('.check').classList.toggle('on', cb.checked));
-  });
 
   /* ===== Deduction logic ===== */
   function ratioInfo(salary, type, hasP, hasR){
     // الراتب أكبر من ٢٥,٠٠٠ → نسبة ثابتة ٧٠٪ في كل الحالات (تغلب كل القواعد)
     if(salary > 25000)
       return {r:0.70, why:'الراتب أكبر من ٢٥,٠٠٠ — نسبة ثابتة ٧٠٪ لكل الحالات', tag:'٧٠٪ راتب مرتفع'};
-    // استثناء المتقاعد: عند وجود أي التزام تكون نسبته ٤٥٪ ثابتة
-    if(type === 'retiree' && (hasP || hasR))
-      return {r:0.45, why:'متقاعد مع التزام — نسبة ثابتة ٤٥٪', tag:'متقاعد ٤٥٪'};
+    // القاعدة الذهبية: العقاري يغلب — للجميع بما فيهم المتقاعد (حتى لو معه شخصي)
     if(hasR){
       return salary < 15000
         ? {r:0.55, why:'التزام عقاري — الراتب أقل من ١٥,٠٠٠', tag:'عقاري ٥٥٪'}
         : {r:0.65, why:'التزام عقاري — الراتب ١٥,٠٠٠ فأعلى', tag:'عقاري ٦٥٪'};
     }
+    // استثناء المتقاعد: مع التزام شخصي فقط (بدون عقاري) → ٤٥٪
+    if(type === 'retiree' && hasP)
+      return {r:0.45, why:'متقاعد مع التزام شخصي — ٤٥٪', tag:'متقاعد ٤٥٪'};
     if(hasP) return {r:0.45, why:'التزام شخصي (تنطبق على الكل)', tag:'شخصي ٤٥٪'};
-    const base = {bank:{r:0.33,l:'موظف بنك'}, company:{r:0.45,l:'موظف شركة'}, retiree:{r:0.25,l:'متقاعد'}}[type];
+    const base = {bank:{r:0.33,l:'بنك'}, company:{r:0.45,l:'شركة'}, retiree:{r:0.25,l:'متقاعد'}}[type];
     return {r:base.r, why:`بدون التزامات — ${base.l}`, tag:`${Math.round(base.r*100)}٪`};
   }
 
@@ -658,25 +479,29 @@
     const rInst = hasR ? (+$('realEstateInst').value || 0) : 0;
     const visaLimit = +$('visaLimit').value || 0;
     const visa = visaLimit * 0.05;
+    const hasVisa = visaLimit > 0;      // الفيزا تُعتبر التزام شخصي
+    const hasPeff = hasP || hasVisa;    // التزام شخصي فعلي (قرض شخصي أو فيزا)
 
     $('c-personal').classList.toggle('on', hasP);
     $('c-realestate').classList.toggle('on', hasR);
-    const hasCommit = hasP || hasR;
+    const hasCommit = hasPeff || hasR;
     $('noCommitField').classList.toggle('dim', hasCommit);
     if(hasCommit){
-      $('commitNote').innerHTML = (type === 'retiree')
-        ? '🔒 متقاعد مع التزام ← طُبّقت نسبة <b>٤٥٪</b> (نِسب "بدون التزامات" لا تنطبق، لكن يبقى مهم أنه متقاعد).'
-        : '🔒 غير متقاعد (بنك/شركة) مع التزام ← النسبة تُؤخذ من الالتزام (شخصي ٤٥٪ / عقاري ٥٥–٦٥٪)، وفئة البنك/الشركة لا تؤثّر.';
+      $('commitNote').innerHTML = hasR
+        ? '🔒 يوجد التزام عقاري ← تُطبّق نسبة <b>العقاري (٥٥–٦٥٪)</b> — القاعدة الذهبية: العقاري يغلب (حتى للمتقاعد ومع وجود شخصي).'
+        : (type === 'retiree'
+          ? '🔒 متقاعد مع التزام شخصي/فيزا ← طُبّقت نسبة <b>٤٥٪</b>.'
+          : '🔒 التزام شخصي/فيزا ← النسبة <b>٤٥٪</b>، وفئة البنك/الشركة لا تؤثّر.');
     }
 
     const out = $('out');
     if(salary <= 0){ out.innerHTML = '<div class="empty">أدخل الراتب لعرض قدرة العميل التمويلية.</div>'; return; }
 
-    const {r, why, tag} = ratioInfo(salary, type, hasP, hasR);
+    const {r, why, tag} = ratioInfo(salary, type, hasPeff, hasR);
     const ceiling = salary * r;
     const commitments = pInst + rInst + visa;
     const available = ceiling - commitments;
-    const bothNote = (hasP && hasR)
+    const bothNote = (hasPeff && hasR)
       ? '<div class="note">⚖️ العميل عنده التزام عقاري وشخصي معاً — طُبّقت نسبة <b>العقاري</b> حسب القاعدة.</div>' : '';
 
     let rows = '';
@@ -710,8 +535,12 @@
 
   function bankCalc(){
     const out = $('bankOut');
-    const bank = document.querySelector('input[name="bank"]:checked').value; // rajhi / ahli
+    const bank = document.querySelector('input[name="bank"]:checked').value;
     const isRajhi = bank === 'rajhi';
+    const isAhli  = bank === 'ahli';
+    const isNonFin = ['sab','saib','alawwal'].includes(bank);             // لا تموّل سيارات
+    const BANKLABEL = {rajhi:'الراجحي',ahli:'الأهلي',albilad:'البلاد',anb:'العربي الوطني',
+      emirates:'الإمارات',riyad:'الرياض',sab:'ساب',saib:'الاستثمار',alawwal:'الأول'}[bank];
     const price    = +$('carPrice').value || 0;
     const salary   = +$('bankSalary').value || 0;
     const age      = +$('bankAge').value || 0;
@@ -721,33 +550,41 @@
     const months   = +$('bankMonths').value;
 
     // ===== تكييف الواجهة حسب البنك =====
-    $('bankTitle').textContent = isRajhi ? 'حسبة البنك — الراجحي' : 'حسبة البنك — الأهلي';
-    $('margin').style.display = isRajhi ? '' : 'none';
-    $('marginFixed').style.display = isRajhi ? 'none' : 'block';
+    $('bankTitle').textContent = 'حسبة البنك — ' + BANKLABEL;
+    $('employer').closest('.field').style.display = (isRajhi || isAhli) ? '' : 'none'; // جهة العمل للراجحي/الأهلي فقط
+    $('emp1yrField').style.display = isNonFin ? 'none' : '';
     if(isRajhi){
       $('empHint').textContent = '(تحدّد الدفعة الأخيرة للمحوّل)';
       $('empYes').textContent = 'أكثر من سنة'; $('empNo').textContent = 'أقل من سنة';
       $('emp1yrField').style.opacity = transfer === 'yes' ? '1' : '.5';
     } else {
-      $('empHint').textContent = '(شرط ٣ شهور للمعتمد وغير المعتمد)';
+      $('empHint').textContent = '(شرط ٣ شهور)';
       $('empYes').textContent = '٣ شهور فأكثر'; $('empNo').textContent = 'أقل من ٣ شهور';
-      $('emp1yrField').style.opacity = employer === 'gov' ? '.5' : '1';
+      $('emp1yrField').style.opacity = '1';
+    }
+    // ===== بنوك لا تقدّم تمويل سيارات =====
+    if(isNonFin){
+      out.innerHTML = `<div class="note warn" style="margin-top:0">🚫 بنك ${BANKLABEL} لا يقدّم تمويل سيارات.</div>`;
+      return;
     }
 
-    // ===== معطيات البنك =====
-    let margin, balloonPct, minDownPct, minSalary;
+    // ===== الهامش والدفعة الأخيرة: من القوائم مباشرة (قيمة مبدئية حسب البنك، قابلة للتغيير) =====
+    const margin = (+$('marginSel').value || 6) / 100;
+    const balloonPct = (+$('balloonSel').value || 35) / 100;
+    let minDownPct, minSalary;
     if(isRajhi){
-      margin = +document.querySelector('input[name="margin"]:checked').value; // 6% / 6.5%
-      balloonPct = transfer === 'yes' ? (empMet ? 0.50 : 0.35) : 0.35;
       minDownPct = 0;
       minSalary = (transfer === 'yes' ? {approved:5000, nonapproved:7000, gov:3500}
                                       : {approved:7000, nonapproved:7000, gov:7000})[employer];
-    } else { // الأهلي
-      margin = transfer === 'yes' ? 0.048 : 0.053;
-      balloonPct = transfer === 'yes' ? 0.35 : 0.30;
+    } else if(isAhli){
       minDownPct = transfer === 'yes' ? 0.05 : 0.10;
       minSalary = transfer === 'yes' ? 3500 : 4000;
-      $('marginFixed').textContent = `هامش ثابت: ${(margin*100)}٪`;
+    } else if(bank === 'riyad'){
+      minDownPct = 0.50;
+      minSalary = transfer === 'yes' ? 5000 : 7000;
+    } else { // البلاد/العربي الوطني/الإمارات
+      minDownPct = 0;
+      minSalary = transfer === 'yes' ? 3500 : 5000;
     }
 
     // الرفض (الراجحي فقط): غير محوّل + غير معتمد
@@ -757,48 +594,56 @@
     }
     if(price <= 0){ out.innerHTML = '<div class="empty">أدخل سعر السيارة لعرض القسط الشهري.</div>'; return; }
 
-    // الدفعة الأولى: الحد الأدنى حسب البنك، والمندوب يزيدها بلا سقف
-    const userDownPct = Math.min(Math.max(+$('bankDown').value || 0, 0), 100) / 100;
-    const downPct = Math.max(userDownPct, minDownPct);
-    if(userDownPct < minDownPct) $('bankDown').value = Math.round(minDownPct * 100);
+    // الدفعة الأولى: بدون حد أدنى ملزم — المندوب حر يزيدها أو ينزّلها تحت افتراضي البنك
+    const downPct = Math.min(Math.max(+$('bankDown').value || 0, 0), 100) / 100;
 
     const balloon = price * balloonPct;
     const down = price * downPct;
     const finance = price - down;
     const n = months, years = n / 12;
-    const insRate = (+$('insInput').value || 4.5) / 100; // نسبة التأمين من القائمة (تُضبط حسب العمر)
+    const year1Ins = +$('insInput').value || 0; // تأمين السنة الأولى بالريال — يُحدَّث تلقائياً عند تغيير السعر/البنك/العمر
+    if(year1Ins > 0 && price > 0){
+      const equivPct = (year1Ins/price*100).toFixed(1);
+      $('insEquivNote').textContent = isRajhi
+        ? `التأمين الحالي ${fmt(year1Ins)} ريال ≈ ${equivPct}٪ من سعر السيارة. الافتراضي ثابت ٥٪ لكل الأعمار (النطاق المعتاد ٤.٥٪–٦.٥٪ للرجوع إليه إذا احتجت) — غيّر الرقم يدوياً كما تريد.`
+        : `التأمين الحالي ${fmt(year1Ins)} ريال ≈ ${equivPct}٪ من سعر السيارة — غيّر الرقم لو عندك نسبة محددة تريدها.`;
+    } else {
+      $('insEquivNote').textContent = '';
+    }
 
-    let baseInst, totalIns, monthlyIns, admin;
+    let baseInst, totalIns, monthlyIns, admin, totalProfit;
     if(isRajhi){
-      // الراجحي: رصيد متناقص + تأمين يتناقص ١٥٪ سنوياً + إداري ١٪+ضريبة
+      // الراجحي: رصيد متناقص + تأمين يتناقص ١٥٪ سنوياً (نفس طريقة الإكسل) + إداري ١٪+ضريبة
       const r = margin / 12;
       const annuity = (1 - Math.pow(1+r, -n)) / r;
       baseInst = (finance - balloon * Math.pow(1+r, -n)) / annuity;
-      totalIns = (price * insRate) * (1 - Math.pow(0.85, years)) / 0.15;
+      totalIns = year1Ins * (1 - Math.pow(0.85, years)) / 0.15;
       monthlyIns = totalIns / n;
       admin = Math.min(finance * 0.01 * 1.15, 5000);
+      totalProfit = baseInst * n - (finance - balloon); // إجمالي الربح المتضمن في الأقساط
     } else {
-      // الأهلي: نسبة ثابتة (Flat) + قسمة بسيطة + إداري ١٪ بدون ضريبة
-      const profit = finance * margin * years;       // ربح ثابت
-      totalIns = price * insRate * years;            // تأمين ثابت
+      // الأهلي/باقي البنوك: نسبة ثابتة (Flat) + قسمة بسيطة + إداري ١٪ بدون ضريبة + تأمين سنوي ثابت (بدون تناقص)
+      totalProfit = finance * margin * years;         // ربح ثابت
+      totalIns = year1Ins * years;                    // تأمين ثابت كل سنة
       monthlyIns = totalIns / n;
-      baseInst = (finance + profit - balloon) / n;
+      baseInst = (finance + totalProfit - balloon) / n;
       admin = finance * 0.01;
     }
     const instIncl = baseInst + monthlyIns;
-    const upfront = down + admin;
+    const upfront = down + totalIns + admin; // عرض فقط: يشمل التأمين ورسوم الإدارة
     const ratioSalary = salary > 0 ? instIncl / salary : 0;
     const empLabel = {approved:'معتمد', nonapproved:'غير معتمد', gov:'حكومي'}[employer];
     const tLabel = transfer === 'yes' ? 'محوّل' : 'غير محوّل';
+    const catLabel = (isRajhi || isAhli) ? `${empLabel} / ${tLabel}` : tLabel;
 
     // ===== ملاحظات الأهلية =====
     const warns = [];
     if(salary > 0 && salary < minSalary) warns.push(`صافي الراتب ${fmt(salary)} أقل من الحد الأدنى ${fmt(minSalary)}`);
     if(age > 0 && age < 18) warns.push('العمر أقل من ١٨ سنة');
-    if(!isRajhi && !empMet && employer !== 'gov') warns.push('مدة العمل أقل من ٣ شهور (مطلوبة للمعتمد/غير المعتمد)');
+    if(!isRajhi && !empMet && !(isAhli && employer === 'gov')) warns.push('مدة العمل أقل من ٣ شهور');
     const elig = warns.length
-      ? `<div class="note warn">⚠️ تنبيهات (${empLabel} / ${tLabel}): ${warns.join('؛ ')} — قد يُرفض.</div>`
-      : `<div class="note">✅ مؤهّل مبدئياً (${empLabel} / ${tLabel}) — صافي الراتب ${fmt(salary)} ≥ ${fmt(minSalary)}.</div>`;
+      ? `<div class="note warn">⚠️ تنبيهات (${catLabel}): ${warns.join('؛ ')} — قد يُرفض.</div>`
+      : `<div class="note">✅ مؤهّل مبدئياً (${catLabel}) — صافي الراتب ${fmt(salary)} ≥ ${fmt(minSalary)}.</div>`;
 
     let cmp = '';
     if(lastAvailable > 0){
@@ -836,7 +681,7 @@
     out.innerHTML = `
       <div class="gauge">
         <div class="val">${fmt(instIncl)} <span class="cur">ريال/شهر</span></div>
-        <div class="cap">القسط الشهري شامل التأمين — ${isRajhi?'الراجحي':'الأهلي'}</div>
+        <div class="cap">القسط الشهري شامل التأمين — ${BANKLABEL}</div>
       </div>
       <div class="lines">
         <div class="line"><span>نسبة القسط من الراتب</span><span>${salary>0?Math.round(ratioSalary*100)+'٪':'—'}</span></div>
@@ -845,10 +690,11 @@
         <div class="line"><span>مبلغ التمويل</span><span>${fmt(finance)}</span></div>
         <div class="line"><span>الدفعة الأخيرة (${Math.round(balloonPct*100)}٪)</span><span>${fmt(balloon)}</span></div>
         <div class="line sub"><span>القسط الأساسي</span><span>${fmt(baseInst)}</span></div>
-        <div class="line sub"><span>التأمين الشهري (${(insRate*100)}٪)</span><span>${fmt(monthlyIns)}</span></div>
+        <div class="line sub"><span>تأمين السنة الأولى</span><span>${fmt(year1Ins)}</span></div>
+        <div class="line sub"><span>التأمين الشهري</span><span>${fmt(monthlyIns)}</span></div>
         <div class="line total"><span>القسط شامل التأمين</span><span>${fmt(instIncl)}</span></div>
         <div class="line sub"><span>رسوم إدارية (مرة واحدة)</span><span>${fmt(admin)}</span></div>
-        <div class="line"><span>المدفوع مقدماً (دفعة + رسوم)</span><span>${fmt(upfront)}</span></div>
+        <div class="line"><span>المدفوع مقدماً (دفعة + تأمين + رسوم)</span><span>${fmt(upfront)}</span></div>
       </div>
       ${elig}${recNote}${cmp}`;
   }
@@ -856,16 +702,56 @@
   ['salary','visaLimit','personalInst','realEstateInst'].forEach(id => $(id).addEventListener('input', calc));
   $('type').addEventListener('change', calc);
   ['hasPersonal','hasRealEstate'].forEach(id => $(id).addEventListener('change', calc));
-  function syncInsFromAge(){
+  // نسبة تقديرية لاقتراح مبلغ تأمين السنة الأولى فقط (تحوّل لريال بضربها في سعر السيارة) — الأهلي ٥٪ ثابتة دايماً، الراجحي ٥٪ افتراضي قبل إدخال العمر ثم يتغيّر حسب العمر (٦.٥٪/٤.٥٪)، وباقي البنوك حسب العمر فقط
+  function defaultInsuranceRatePct(bank){
+    if(bank === 'ahli') return 5;
     const age = +$('bankAge').value || 0;
-    if(age > 0) $('insInput').value = (age <= 25) ? '6.5' : '4.5'; // التأمين حسب العمر
+    if(age > 0) return age <= 25 ? 6.5 : 4.5;
+    return bank === 'rajhi' ? 5 : null;
+  }
+  let downManuallySet = false; // يمنع الكتابة فوق دفعة أولى غيّرها المندوب يدوياً
+  function applyDefaultInsuranceAmount(){
+    // يُحسب تلقائياً من سعر السيارة في كل مرة (بدون قفل) — التعديل اليدوي يبقى فقط للحسبة الحالية
+    const bank = document.querySelector('input[name="bank"]:checked').value;
+    const price = +$('carPrice').value || 0;
+    const ratePct = defaultInsuranceRatePct(bank);
+    if(ratePct === null || price <= 0) return;
+    $('insInput').value = Math.round(price * ratePct / 100);
+  }
+  // هامش الربح ٢–١٢٪ والدفعة الأخيرة ٢٠–٦٠٪: قوائم اقتراحات (datalist) بفرق ٠.٥ — والحقل حر لأي رقم يكتبه المندوب
+  function populateMarginBalloonOptions(){
+    const mList = $('marginSelList'), bList = $('balloonSelList');
+    for(let i=4;i<=24;i++){ const v=i/2; const o=document.createElement('option'); o.value=v; o.textContent=v+'٪'; mList.appendChild(o); }
+    for(let i=40;i<=120;i++){ const v=i/2; const o=document.createElement('option'); o.value=v; o.textContent=v+'٪'; bList.appendChild(o); }
+  }
+  let lastBank = null;
+  function syncMarginBalloonDefaults(){
+    const bank = document.querySelector('input[name="bank"]:checked').value;
+    if(bank !== lastBank){ downManuallySet = false; lastBank = bank; } // بنك جديد = دفعة أولى جديدة (والتأمين يُحسب تلقائياً دايماً)
+    const transfer = document.querySelector('input[name="transfer"]:checked').value;
+    const empMet = document.querySelector('input[name="emp1yr"]:checked').value === 'yes';
+    let m, b, dp;
+    if(bank === 'rajhi'){ m = 6; b = transfer === 'yes' ? (empMet ? 50 : 35) : 35; dp = 0; }
+    else if(bank === 'ahli'){ m = transfer === 'yes' ? 4.5 : 5.7; b = transfer === 'yes' ? 35 : 30; dp = transfer === 'yes' ? 5 : 10; }
+    else if(bank === 'riyad'){ m = transfer === 'yes' ? 4.5 : 5.2; b = 50; dp = 50; }
+    else { m = transfer === 'yes' ? 4.5 : 5.2; b = 40; dp = 0; } // البلاد/العربي الوطني/الإمارات
+    $('marginSel').value = m; $('balloonSel').value = b;
+    if(!downManuallySet) $('bankDown').value = dp;
+    $('downDefaultNote').textContent = `الافتراضي لهذا البنك: ${dp}٪ — يمكنك تغييره لأي نسبة حتى لو أقل.`;
+    applyDefaultInsuranceAmount();
     bankCalc();
   }
-  ['carPrice','bankSalary','bankDown'].forEach(id => $(id).addEventListener('input', bankCalc));
-  $('bankAge').addEventListener('input', syncInsFromAge);
-  ['bank','transfer','employer','emp1yr','margin','insInput'].forEach(id => $(id).addEventListener('change', bankCalc));
+  $('bankSalary').addEventListener('input', bankCalc);
+  ['carPrice','bankAge'].forEach(id => $(id).addEventListener('input', () => { applyDefaultInsuranceAmount(); bankCalc(); }));
+  $('bankDown').addEventListener('input', () => { downManuallySet = true; bankCalc(); });
+  ['bank','transfer','emp1yr'].forEach(id => $(id).addEventListener('change', syncMarginBalloonDefaults));
+  $('employer').addEventListener('change', bankCalc);
+  $('insInput').addEventListener('input', bankCalc);
+  ['marginSel','balloonSel'].forEach(id => $(id).addEventListener('input', bankCalc));
   $('bankMonths').addEventListener('change', bankCalc);
-  $('applyDown').addEventListener('click', () => { $('bankDown').value = $('applyDown').dataset.pct; bankCalc(); });
+  $('applyDown').addEventListener('click', () => { $('bankDown').value = $('applyDown').dataset.pct; downManuallySet = true; bankCalc(); });
+  populateMarginBalloonOptions();
+  syncMarginBalloonDefaults();
   show(0);
   calc();
 </script>
