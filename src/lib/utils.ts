@@ -40,6 +40,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   google: 'Google',
   website: 'موقع إلكتروني',
   other: 'أخرى',
+  google_sheet: 'Google Sheets',
 }
 
 // Pull a display name / phone out of a lead's free-form submitted data.
