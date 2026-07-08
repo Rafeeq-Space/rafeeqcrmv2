@@ -1,5 +1,5 @@
-import { createClient as createAdminClient } from '@supabase/supabase-js'
 import type { Lead } from '@/lib/types'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 export interface Viewer {
   id: string
@@ -8,13 +8,7 @@ export interface Viewer {
   teamId: string | null
 }
 
-export function adminSupabase() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+export { adminSupabase }
 
 const LEAD_SELECT =
   '*, campaigns(id, name, source), assigned_sales:profiles!assigned_sales_id(id, full_name), assigned_team:teams!assigned_team_id(id, name, manager_id)'

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireTeamManager } from '@/lib/auth/requireTeamManager'
 
 // POST — create a new team member (auth account + profile) under the tenant.
@@ -19,11 +19,7 @@ export async function POST(request: Request) {
 
   const finalTeamId: string | null = team_id || null
 
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const adminSupabase = createAdminSupabase()
 
   const { data: authData, error: authError } = await adminSupabase.auth.admin.createUser({
     email,

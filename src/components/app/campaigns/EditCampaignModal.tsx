@@ -3,19 +3,21 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Campaign, TeamWithMembers } from '@/lib/types'
+import type { AdConnection, Campaign, TeamWithMembers } from '@/lib/types'
 import { CAMPAIGN_STATUS_ORDER, STATUS_LABELS } from './constants'
 import { useCampaignForm } from './useCampaignForm'
 import CampaignFormFields from './CampaignFormFields'
 
 // Same fields as creation, pre-filled with the campaign's current values —
-// lets an admin add/change platforms (e.g. add TikTok later) and pixel
-// credentials after the campaign already exists.
+// lets an admin add/change platforms (e.g. add TikTok later) and the linked
+// ad accounts after the campaign already exists.
 export default function EditCampaignModal({
-  campaign, teams, onClose, onUpdated,
+  campaign, teams, adConnections, initialConnectionIds, onClose, onUpdated,
 }: {
   campaign: Campaign
   teams: TeamWithMembers[]
+  adConnections: AdConnection[]
+  initialConnectionIds: string[]
   onClose: () => void
   onUpdated: (c: Campaign) => void
 }) {
@@ -26,16 +28,13 @@ export default function EditCampaignModal({
     files: campaign.files || [],
     images: campaign.images || [],
     teamIds: campaign.team_ids || [],
+    connectionIds: initialConnectionIds,
   })
   const [form, setForm] = useState({
     name: campaign.name,
     description: campaign.description || '',
     campaign_date: campaign.campaign_date || '',
     status: campaign.status,
-    tiktok_pixel_id: campaign.tiktok_pixel_id || '',
-    tiktok_access_token: campaign.tiktok_access_token || '',
-    meta_pixel_id: campaign.meta_pixel_id || '',
-    meta_access_token: campaign.meta_access_token || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -61,16 +60,22 @@ export default function EditCampaignModal({
         links: state.links,
         files: state.files,
         images: state.images,
-        tiktok_pixel_id: form.tiktok_pixel_id || null,
-        tiktok_access_token: form.tiktok_access_token || null,
-        meta_pixel_id: form.meta_pixel_id || null,
-        meta_access_token: form.meta_access_token || null,
       })
       .eq('id', campaign.id)
       .select()
       .single()
+    if (err) { setSaving(false); setError(`تعذّر حفظ التعديلات: ${err.message}`); return }
+
+    // Replace the campaign's linked ad accounts with the newly selected set
+    // (non-sensitive join rows — safe to write directly from the browser).
+    await supabase.from('campaign_ad_connections').delete().eq('campaign_id', campaign.id)
+    if (state.connectionIds.length > 0) {
+      await supabase.from('campaign_ad_connections').insert(
+        state.connectionIds.map(id => ({ campaign_id: campaign.id, ad_connection_id: id, tenant_id: campaign.tenant_id }))
+      )
+    }
+
     setSaving(false)
-    if (err) { setError(`تعذّر حفظ التعديلات: ${err.message}`); return }
     if (data) onUpdated(data)
     onClose()
   }
@@ -98,8 +103,7 @@ export default function EditCampaignModal({
             teams={teams}
             campaignDate={form.campaign_date}
             onCampaignDateChange={v => setForm({ ...form, campaign_date: v })}
-            pixelValues={form}
-            onPixelChange={(key, value) => setForm({ ...form, [key]: value })}
+            adConnections={adConnections}
           >
             <div>
               <label className="label">حالة الحملة</label>

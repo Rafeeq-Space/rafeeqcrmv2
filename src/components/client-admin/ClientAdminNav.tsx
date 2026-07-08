@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, BookOpen, Users, Target, Contact,
-  LogOut, Sparkles, Menu, X
+  LogOut, Sparkles, Menu, X, Radio
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -49,9 +49,17 @@ const navItems = [
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
   },
+  {
+    href: '/client-admin/ad-connections',
+    label: 'الحسابات الإعلانية',
+    desc: 'حسابات المنصات الإعلانية المرتبطة بحملاتك',
+    icon: Radio,
+    adminOnly: true,
+  },
 ]
 
 export default function ClientAdminNav({ profile }: Props) {
+  const visibleNavItems = navItems.filter(item => !item.adminOnly || profile?.role === 'client_admin')
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -68,7 +76,7 @@ export default function ClientAdminNav({ profile }: Props) {
     return (
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">الإدارة</p>
-        {navItems.map(({ href, label, desc, icon: Icon }) => {
+        {visibleNavItems.map(({ href, label, desc, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
             <Link

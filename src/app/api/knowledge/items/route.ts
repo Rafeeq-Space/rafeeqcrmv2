@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 // POST — create a knowledge item. Admins publish directly (approved);
 // everyone else submits a pending request awaiting admin approval.
@@ -22,12 +22,6 @@ export async function POST(request: Request) {
 
   const status = profile.role === 'client_admin' ? 'approved' : 'pending'
 
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-
   const payload: Record<string, unknown> = {
     tenant_id: profile.tenant_id,
     title,
@@ -43,7 +37,7 @@ export async function POST(request: Request) {
   if (category_id) payload.category_id = category_id
   if (section_id) payload.section_id = section_id
 
-  const { data, error } = await adminSupabase.from('knowledge_items').insert(payload).select().single()
+  const { data, error } = await adminSupabase().from('knowledge_items').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ success: true, item: data, status })

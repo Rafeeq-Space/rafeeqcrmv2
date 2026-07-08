@@ -11,6 +11,7 @@ interface InitialValues {
   files?: KnowledgeFile[]
   images?: string[]
   teamIds?: string[]
+  connectionIds?: string[]
 }
 
 // Everything the "create campaign" and "edit campaign" forms have in common:
@@ -26,6 +27,11 @@ export function useCampaignForm(uploadScope: string, initial: InitialValues = {}
   const toggleSource = (v: CampaignSource) => setSources(prev => prev.includes(v) ? prev.filter(s => s !== v) : [...prev, v])
   const isTikTok = sources.includes('tiktok')
   const isMeta = sources.includes('facebook') || sources.includes('instagram')
+
+  // Ad accounts (from the tenant's saved "wallet" of connections) chosen to
+  // receive conversion events for this campaign — see ad_connections table.
+  const [connectionIds, setConnectionIds] = useState<string[]>(initial.connectionIds || [])
+  const toggleConnection = (id: string) => setConnectionIds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
 
   const [tags, setTags] = useState<string[]>(initial.tags || [])
   const [tagInput, setTagInput] = useState('')
@@ -98,6 +104,7 @@ export function useCampaignForm(uploadScope: string, initial: InitialValues = {}
   return {
     teamIds, toggleTeam,
     sources, toggleSource, isTikTok, isMeta,
+    connectionIds, toggleConnection,
     tags, tagInput, setTagInput, addTag, removeTag,
     links, linkForm, setLinkForm, addLink, removeLink,
     files, images, uploading, handleFiles, handleImages, removeFile, removeImage,

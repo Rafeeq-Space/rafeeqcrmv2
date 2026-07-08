@@ -53,7 +53,6 @@ export default function LeadsTable({ leads: initialLeads, employees }: Props) {
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, notes } : l))
   }
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
   return (
     <div>
       {/* Filters */}
@@ -91,15 +90,15 @@ export default function LeadsTable({ leads: initialLeads, employees }: Props) {
                   className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition"
                 >
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-foreground">{(lead.data as any)?.name || (lead.data as any)?.full_name || (lead.data as any)?.['الاسم'] || 'غير معروف'}</p>
-                    <p className="text-xs text-muted2" dir="ltr">{(lead.data as any)?.email || (lead.data as any)?.phone || ''}</p>
+                    <p className="font-semibold text-foreground">{lead.data?.name || lead.data?.full_name || lead.data?.['الاسم'] || 'غير معروف'}</p>
+                    <p className="text-xs text-muted2" dir="ltr">{lead.data?.email || lead.data?.phone || ''}</p>
                   </td>
                   <td className="px-4 py-3 text-muted text-xs">{SOURCE_LABELS[lead.source || ''] || lead.source || 'مباشر'}</td>
-                  <td className="px-4 py-3 text-muted text-xs">{(lead as any).campaigns?.name || '—'}</td>
+                  <td className="px-4 py-3 text-muted text-xs">{lead.campaigns?.name || '—'}</td>
                   <td className="px-4 py-3">
                     <span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span>
                   </td>
-                  <td className="px-4 py-3 text-muted text-xs">{(lead as any).employees?.full_name || '—'}</td>
+                  <td className="px-4 py-3 text-muted text-xs">{lead.employees?.full_name || '—'}</td>
                   <td className="px-4 py-3 text-muted2 text-xs">{new Date(lead.created_at).toLocaleDateString('ar-EG')}</td>
                 </tr>
               ))}

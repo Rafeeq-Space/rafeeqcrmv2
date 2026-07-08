@@ -1,18 +1,14 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { statusFromLabel } from '@/lib/utils'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 // Receives a status change made *inside the Google Sheet* (the admin picks a
 // new value from the "الحالة" dropdown column) and applies it to the matching
 // lead — mirroring exactly what happens when a status is changed from the CRM
 // UI (updates leads.status, logs a timeline activity, fires the pixel event).
 export async function POST(request: Request, { params }: { params: Promise<{ formId: string }> }) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = adminSupabase()
 
   try {
     const { formId } = await params

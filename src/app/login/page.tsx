@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase } from '@/lib/supabase/admin'
 import LoginForm from './LoginForm'
 
 interface Props {
@@ -11,11 +11,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
   // If subdomain is provided via query param (localhost dev), verify it exists
   if (subdomain) {
-    const supabase = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    const supabase = adminSupabase()
     const { data: tenant } = await supabase
       .from('tenants')
       .select('name, subdomain')

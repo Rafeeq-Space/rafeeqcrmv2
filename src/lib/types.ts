@@ -1,8 +1,23 @@
 export type TenantStatus = 'active' | 'inactive'
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost'
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'ended'
-export type CampaignSource = 'tiktok' | 'facebook' | 'instagram' | 'google' | 'website' | 'other'
+export type CampaignSource = 'tiktok' | 'facebook' | 'instagram' | 'snapchat' | 'google' | 'website' | 'other'
 export type KnowledgeCategory = 'faq' | 'product' | 'service' | 'general'
+
+// A saved, reusable ad-platform account (pixel + access token) that a tenant
+// creates once and links to any number of campaigns — see `ad_connections`
+// and the `campaign_ad_connections` join table.
+export type AdPlatform = 'tiktok' | 'facebook' | 'snapchat'
+
+export interface AdConnection {
+  id: string
+  tenant_id: string
+  platform: AdPlatform
+  name: string
+  pixel_id: string
+  access_token: string
+  created_at: string
+}
 
 export interface KnowledgeCategoryDynamic {
   id: string

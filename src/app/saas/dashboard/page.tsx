@@ -1,14 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { adminSupabase as createServiceClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import AdminClientsTable, { AddClientButton } from '@/components/admin/ClientsTable'
 import SuperAdminStats, { type TenantStat } from '@/components/admin/SuperAdminStats'
 
 export default async function AdminDashboardPage() {
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const serviceClient = createServiceClient()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

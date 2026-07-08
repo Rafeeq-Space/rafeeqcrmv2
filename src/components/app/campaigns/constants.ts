@@ -8,6 +8,7 @@ export const SOURCE_OPTIONS: { value: CampaignSource; label: string; badge: stri
   { value: 'tiktok', label: 'تيك توك', badge: 'badge-muted' },
   { value: 'facebook', label: 'فيسبوك', badge: 'badge-blue' },
   { value: 'instagram', label: 'إنستغرام', badge: 'badge-purple' },
+  { value: 'snapchat', label: 'سناب شات', badge: 'badge-yellow' },
   { value: 'google', label: 'جوجل', badge: 'badge-red' },
   { value: 'website', label: 'موقع إلكتروني', badge: 'badge-green' },
   { value: 'other', label: 'أخرى', badge: 'badge-muted' },

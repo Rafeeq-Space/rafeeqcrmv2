@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
-
-function adminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // POST — create a team (client_admin only).
 export async function POST(request: Request) {
@@ -18,7 +10,7 @@ export async function POST(request: Request) {
   const { name, description } = await request.json()
   if (!name) return NextResponse.json({ error: 'اسم الفريق مطلوب' }, { status: 400 })
 
-  const supabase = adminClient()
+  const supabase = createAdminSupabase()
   const { data, error } = await supabase
     .from('teams')
     .insert({ name, description: description || null, tenant_id: auth.tenantId })

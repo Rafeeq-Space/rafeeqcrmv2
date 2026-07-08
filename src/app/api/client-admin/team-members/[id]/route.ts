@@ -1,17 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireTeamManager } from '@/lib/auth/requireTeamManager'
 
-function adminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
-
 // Verify the target member is in the caller's tenant (and team, for managers).
-async function canManage(auth: Awaited<ReturnType<typeof requireTeamManager>>, targetId: string, supabase: ReturnType<typeof adminClient>) {
+async function canManage(auth: Awaited<ReturnType<typeof requireTeamManager>>, targetId: string, supabase: ReturnType<typeof createAdminSupabase>) {
   if (!auth) return null
   const { data: target } = await supabase
     .from('profiles')
@@ -29,7 +21,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = createAdminSupabase()
   const target = await canManage(auth, id, supabase)
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
@@ -85,7 +77,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = createAdminSupabase()
   const target = await canManage(auth, id, supabase)
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 

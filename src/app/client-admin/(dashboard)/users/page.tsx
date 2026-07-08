@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import UsersManager from '@/components/client-admin/UsersManager'
 
 export default async function ClientAdminUsersPage() {
@@ -9,11 +9,7 @@ export default async function ClientAdminUsersPage() {
   const tenantId = profile?.tenant_id || ''
 
   // Use service role to bypass RLS — client_admin needs to see all tenant profiles
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const adminSupabase = createAdminSupabase()
 
   const { data: users } = await adminSupabase
     .from('profiles')

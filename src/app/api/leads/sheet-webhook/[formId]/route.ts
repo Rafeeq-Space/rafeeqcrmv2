@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { leadPhone, leadEmail } from '@/lib/utils'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 // Digits-only comparison so "05xxxxxxxx", "+9665xxxxxxxx" and "5xxxxxxxx"
 // (with spaces/dashes) are recognized as the same number.
@@ -16,11 +16,7 @@ function digitsOnly(s: string): string {
 // timeline). Each "Google Sheet connection" is stored as a row in `forms`
 // with source_type = 'google_sheet'; the sheet's own secret authenticates it.
 export async function POST(request: Request, { params }: { params: Promise<{ formId: string }> }) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = adminSupabase()
 
   try {
     const { formId } = await params

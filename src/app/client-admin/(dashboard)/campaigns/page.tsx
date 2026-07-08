@@ -15,6 +15,8 @@ export default async function ClientAdminCampaignsPage() {
     { data: employees },
     { data: teamRows },
     { data: memberRows },
+    { data: adConnections },
+    { data: campaignAdConnectionRows },
   ] = await Promise.all([
     supabase.from('campaigns').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supabase.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
@@ -22,6 +24,8 @@ export default async function ClientAdminCampaignsPage() {
     supabase.from('employees').select('*').eq('tenant_id', tenantId),
     supabase.from('teams').select('id, name').eq('tenant_id', tenantId).order('name'),
     supabase.from('profiles').select('id, full_name, team_id').eq('tenant_id', tenantId),
+    supabase.from('ad_connections').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+    supabase.from('campaign_ad_connections').select('campaign_id, ad_connection_id').eq('tenant_id', tenantId),
   ])
 
   // Teams with their members — used for campaign team selection and form lead-distribution.
@@ -30,6 +34,13 @@ export default async function ClientAdminCampaignsPage() {
     name: t.name,
     members: (memberRows || []).filter(m => m.team_id === t.id).map(m => ({ id: m.id, name: m.full_name })),
   }))
+
+  // campaign_id -> [ad_connection_id, ...] — which saved ad accounts each campaign notifies.
+  const campaignConnectionMap: Record<string, string[]> = {}
+  for (const row of campaignAdConnectionRows || []) {
+    if (!campaignConnectionMap[row.campaign_id]) campaignConnectionMap[row.campaign_id] = []
+    campaignConnectionMap[row.campaign_id].push(row.ad_connection_id)
+  }
 
   // Show campaigns tab by default
   return (
@@ -43,6 +54,8 @@ export default async function ClientAdminCampaignsPage() {
       defaultTab="campaigns"
       allowedTabs={['campaigns']}
       isAdmin={isAdmin}
+      adConnections={adConnections || []}
+      campaignConnectionMap={campaignConnectionMap}
     />
   )
 }

@@ -7,7 +7,7 @@ import {
   Target, FileText, Users, TrendingUp, Users2, UserCheck,
   CheckCircle2, Clock, XCircle, Megaphone,
 } from 'lucide-react'
-import type { Campaign, Form, Lead, Employee, TeamWithMembers } from '@/lib/types'
+import type { AdConnection, Campaign, Form, Lead, Employee, TeamWithMembers } from '@/lib/types'
 import { LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
 import { computeLeadStats } from '@/lib/leads/stats'
 import CampaignsList from './CampaignsList'
@@ -29,6 +29,8 @@ interface Props {
   members?: Option[]
   teamsCount?: number
   employeesCount?: number
+  adConnections?: AdConnection[]
+  campaignConnectionMap?: Record<string, string[]>
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -52,6 +54,7 @@ const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأ
 export default function DashboardView({
   campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs,
   isAdmin = true, role = 'client_admin', teams = [], members = [], teamsCount, employeesCount,
+  adConnections = [], campaignConnectionMap = {},
 }: Props) {
   const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
   const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
@@ -296,7 +299,15 @@ export default function DashboardView({
       )}
 
       {activeTab === 'campaigns' && (
-        <CampaignsList campaigns={campaigns} forms={forms} tenantId={tenantId} isAdmin={isAdmin} teams={teams} />
+        <CampaignsList
+          campaigns={campaigns}
+          forms={forms}
+          tenantId={tenantId}
+          isAdmin={isAdmin}
+          teams={teams}
+          adConnections={adConnections}
+          campaignConnectionMap={campaignConnectionMap}
+        />
       )}
 
       {activeTab === 'leads' && (

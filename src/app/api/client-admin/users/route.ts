@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
 
 export async function POST(request: Request) {
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const adminSupabase = createAdminSupabase()
 
   const auth = await requireClientAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })

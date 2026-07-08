@@ -115,6 +115,27 @@ create table lead_events (
   sent_at timestamptz default now()
 );
 
+-- AD CONNECTIONS (reusable, named ad-platform accounts — pixel + access token —
+-- saved once per tenant and linked to any number of campaigns)
+create table ad_connections (
+  id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  platform text not null check (platform in ('tiktok', 'facebook', 'snapchat')),
+  name text not null,
+  pixel_id text not null,
+  access_token text not null,
+  created_at timestamptz default now()
+);
+
+-- Which ad connections a campaign should send conversion events to (many-to-many)
+create table campaign_ad_connections (
+  campaign_id uuid references campaigns(id) on delete cascade not null,
+  ad_connection_id uuid references ad_connections(id) on delete cascade not null,
+  tenant_id uuid references tenants(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  primary key (campaign_id, ad_connection_id)
+);
+
 -- UPDATED_AT trigger for leads
 create or replace function update_updated_at()
 returns trigger as $$
@@ -139,6 +160,8 @@ alter table campaigns enable row level security;
 alter table forms enable row level security;
 alter table leads enable row level security;
 alter table lead_events enable row level security;
+alter table ad_connections enable row level security;
+alter table campaign_ad_connections enable row level security;
 
 -- Helper function: get tenant_id for current user
 create or replace function auth_tenant_id()
@@ -168,6 +191,8 @@ create policy "tenant_campaigns" on campaigns for all using (tenant_id = auth_te
 create policy "tenant_forms" on forms for all using (tenant_id = auth_tenant_id() or is_admin());
 create policy "tenant_leads" on leads for all using (tenant_id = auth_tenant_id() or is_admin());
 create policy "tenant_lead_events" on lead_events for all using (tenant_id = auth_tenant_id() or is_admin());
+create policy "tenant_ad_connections" on ad_connections for all using (tenant_id = auth_tenant_id() or is_admin());
+create policy "tenant_campaign_ad_connections" on campaign_ad_connections for all using (tenant_id = auth_tenant_id() or is_admin());
 
 -- Public insert for lead capture (no auth required for form submissions)
 create policy "public_form_insert" on leads for insert with check (true);

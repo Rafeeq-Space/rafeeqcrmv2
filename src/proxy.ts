@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 async function tenantExists(subdomain: string): Promise<boolean> {
   try {
-    const supabase = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    )
+    const supabase = adminSupabase()
     const { data } = await supabase
       .from('tenants')
       .select('id')

@@ -3,15 +3,16 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { Campaign, TeamWithMembers } from '@/lib/types'
+import type { AdConnection, Campaign, TeamWithMembers } from '@/lib/types'
 import { useCampaignForm } from './useCampaignForm'
 import CampaignFormFields from './CampaignFormFields'
 
 export default function AddCampaignModal({
-  tenantId, teams, onClose, onCreated,
+  tenantId, teams, adConnections, onClose, onCreated,
 }: {
   tenantId: string
   teams: TeamWithMembers[]
+  adConnections: AdConnection[]
   onClose: () => void
   onCreated: (c: Campaign) => void
 }) {
@@ -20,10 +21,6 @@ export default function AddCampaignModal({
     name: '',
     description: '',
     campaign_date: '',
-    tiktok_pixel_id: '',
-    tiktok_access_token: '',
-    meta_pixel_id: '',
-    meta_access_token: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -44,12 +41,17 @@ export default function AddCampaignModal({
       links: state.links,
       files: state.files,
       images: state.images,
-      tiktok_pixel_id: form.tiktok_pixel_id || null,
-      tiktok_access_token: form.tiktok_access_token || null,
-      meta_pixel_id: form.meta_pixel_id || null,
-      meta_access_token: form.meta_access_token || null,
       tenant_id: tenantId,
     }).select().single()
+
+    // Link the chosen ad accounts to the new campaign (non-sensitive join
+    // rows — safe to write directly from the browser, like `campaigns` itself).
+    if (data && state.connectionIds.length > 0) {
+      await supabase.from('campaign_ad_connections').insert(
+        state.connectionIds.map(id => ({ campaign_id: data.id, ad_connection_id: id, tenant_id: tenantId }))
+      )
+    }
+
     if (data) onCreated(data)
     setSaving(false)
     onClose()
@@ -78,8 +80,7 @@ export default function AddCampaignModal({
             teams={teams}
             campaignDate={form.campaign_date}
             onCampaignDateChange={v => setForm({ ...form, campaign_date: v })}
-            pixelValues={form}
-            onPixelChange={(key, value) => setForm({ ...form, [key]: value })}
+            adConnections={adConnections}
           />
 
           <div className="flex gap-3 pt-1">

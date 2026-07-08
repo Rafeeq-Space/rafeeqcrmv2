@@ -1,26 +1,20 @@
 'use client'
 
 import {
-  Plus, X, Link as LinkIcon, Image as ImageIcon, FileText, Paperclip,
+  Plus, X, Link as LinkIcon, Image as ImageIcon, FileText, Paperclip, Radio,
 } from 'lucide-react'
-import type { TeamWithMembers } from '@/lib/types'
+import type { AdConnection, TeamWithMembers } from '@/lib/types'
 import { SOURCE_OPTIONS } from './constants'
 import type { CampaignFormState } from './useCampaignForm'
 
-interface PixelValues {
-  tiktok_pixel_id: string
-  tiktok_access_token: string
-  meta_pixel_id: string
-  meta_access_token: string
-}
+const PLATFORM_LABELS: Record<string, string> = { tiktok: 'تيك توك', facebook: 'فيسبوك', snapchat: 'سناب شات' }
 
 interface Props {
   state: CampaignFormState
   teams: TeamWithMembers[]
   campaignDate: string
   onCampaignDateChange: (v: string) => void
-  pixelValues: PixelValues
-  onPixelChange: (key: keyof PixelValues, value: string) => void
+  adConnections: AdConnection[]
   // Rendered right after the platforms/date row and before team selection —
   // used by EditCampaignModal to slot in its status selector, which the
   // create form doesn't have.
@@ -28,19 +22,28 @@ interface Props {
 }
 
 // Shared body of the "create campaign" / "edit campaign" forms: platform +
-// date, team assignment, tags, links, files, images, and pixel credentials.
+// date, team assignment, tags, links, files, images, and linked ad accounts.
 // Both modals render this exact same block so they can't drift apart.
 export default function CampaignFormFields({
-  state, teams, campaignDate, onCampaignDateChange, pixelValues, onPixelChange, children,
+  state, teams, campaignDate, onCampaignDateChange, adConnections, children,
 }: Props) {
   const {
     sources, toggleSource, isTikTok, isMeta,
     teamIds, toggleTeam,
+    connectionIds, toggleConnection,
     tags, tagInput, setTagInput, addTag, removeTag,
     links, linkForm, setLinkForm, addLink, removeLink,
     files, images, uploading, handleFiles, handleImages, removeFile, removeImage,
     fileRef, imageRef,
   } = state
+
+  const isSnapchat = sources.includes('snapchat')
+  // Only offer connections whose platform is actually selected for this campaign.
+  const relevantConnections = adConnections.filter(c =>
+    (c.platform === 'tiktok' && isTikTok) ||
+    (c.platform === 'facebook' && isMeta) ||
+    (c.platform === 'snapchat' && isSnapchat)
+  )
 
   return (
     <>
@@ -183,20 +186,36 @@ export default function CampaignFormFields({
         </div>
       </div>
 
-      {/* Pixel settings */}
-      {isTikTok && (
-        <div className="space-y-3 p-3 bg-surface2 rounded-xl border border-border">
-          <p className="text-xs font-bold text-muted2">إعدادات بكسل تيك توك</p>
-          <input placeholder="TikTok Pixel ID" dir="ltr" className="input text-start" value={pixelValues.tiktok_pixel_id} onChange={e => onPixelChange('tiktok_pixel_id', e.target.value)} />
-          <input placeholder="TikTok Access Token" dir="ltr" className="input text-start" value={pixelValues.tiktok_access_token} onChange={e => onPixelChange('tiktok_access_token', e.target.value)} />
-        </div>
-      )}
-
-      {isMeta && (
-        <div className="space-y-3 p-3 bg-surface2 rounded-xl border border-border">
-          <p className="text-xs font-bold text-muted2">إعدادات بكسل ميتا</p>
-          <input placeholder="Meta Pixel ID" dir="ltr" className="input text-start" value={pixelValues.meta_pixel_id} onChange={e => onPixelChange('meta_pixel_id', e.target.value)} />
-          <input placeholder="Meta Access Token" dir="ltr" className="input text-start" value={pixelValues.meta_access_token} onChange={e => onPixelChange('meta_access_token', e.target.value)} />
+      {/* Ad accounts — pick which saved connections should receive conversion events */}
+      {(isTikTok || isMeta || isSnapchat) && (
+        <div>
+          <label className="label">الحسابات الإعلانية المرتبطة</label>
+          {relevantConnections.length === 0 ? (
+            <p className="text-xs text-muted2">
+              لا توجد حسابات إعلانية محفوظة للمنصات المختارة بعد. أضِف حساباً من صفحة{' '}
+              <span className="font-semibold text-foreground">الحسابات الإعلانية</span> أولاً.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {relevantConnections.map(conn => (
+                <button
+                  key={conn.id}
+                  type="button"
+                  onClick={() => toggleConnection(conn.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-start transition ${
+                    connectionIds.includes(conn.id) ? 'border-primary bg-primary-soft' : 'border-border hover:bg-surface2'
+                  }`}
+                >
+                  <Radio size={16} className="shrink-0" style={{ color: connectionIds.includes(conn.id) ? 'var(--primary)' : 'var(--muted-2)' }} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-foreground truncate">{conn.name}</span>
+                    <span className="block text-xs text-muted2">{PLATFORM_LABELS[conn.platform] || conn.platform}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted2 mt-1.5">عند وصول عميل محتمل من هذه الحملة، سيُرسل النظام إشعاراً تلقائياً لكل حساب تختاره هنا.</p>
         </div>
       )}
     </>

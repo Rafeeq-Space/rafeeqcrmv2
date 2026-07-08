@@ -6,7 +6,7 @@ import {
   Plus, CheckCircle, Calendar, Layers, Link as LinkIcon, Paperclip,
   Image as ImageIcon, FileText, Sheet, Target, Search, Megaphone, SearchX,
 } from 'lucide-react'
-import type { Campaign, Form, CampaignStatus, TeamWithMembers } from '@/lib/types'
+import type { AdConnection, Campaign, Form, CampaignStatus, TeamWithMembers } from '@/lib/types'
 import FormBuilder from './FormBuilder'
 import HtmlFormBuilder from './HtmlFormBuilder'
 import GoogleSheetForm, { SheetConnectionInfo } from './GoogleSheetForm'
@@ -22,11 +22,16 @@ interface Props {
   tenantId: string
   isAdmin?: boolean
   teams?: TeamWithMembers[]
+  adConnections?: AdConnection[]
+  campaignConnectionMap?: Record<string, string[]>
 }
 
 type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' | 'sheet' }
 
-export default function CampaignsList({ campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [] }: Props) {
+export default function CampaignsList({
+  campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [],
+  adConnections = [], campaignConnectionMap = {},
+}: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
   const [forms, setForms] = useState(initialForms)
   const [showAddCampaign, setShowAddCampaign] = useState(false)
@@ -259,6 +264,7 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         <AddCampaignModal
           tenantId={tenantId}
           teams={teams}
+          adConnections={adConnections}
           onClose={() => setShowAddCampaign(false)}
           onCreated={c => setCampaigns(prev => [c, ...prev])}
         />
@@ -284,6 +290,8 @@ export default function CampaignsList({ campaigns: initialCampaigns, forms: init
         <EditCampaignModal
           campaign={editCampaign}
           teams={teams}
+          adConnections={adConnections}
+          initialConnectionIds={campaignConnectionMap[editCampaign.id] || []}
           onClose={() => setEditCampaign(null)}
           onUpdated={c => setCampaigns(prev => prev.map(x => x.id === c.id ? c : x))}
         />

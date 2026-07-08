@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
-
-function adminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
 
 // PATCH — update team (name/description) or assign a sales manager (client_admin only).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +8,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = createAdminSupabase()
 
   // Confirm team belongs to tenant.
   const { data: team } = await supabase.from('teams').select('id, tenant_id, manager_id').eq('id', id).single()
@@ -76,7 +68,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = createAdminSupabase()
   const { data: team } = await supabase.from('teams').select('id, tenant_id, manager_id').eq('id', id).single()
   if (!team || team.tenant_id !== auth.tenantId) {
     return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })

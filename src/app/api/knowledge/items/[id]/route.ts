@@ -1,35 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-
-async function requireKnowledgeAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, tenant_id')
-    .eq('id', user.id)
-    .single()
-  if (profile?.role !== 'client_admin' || !profile.tenant_id) return null
-  return { userId: user.id, tenantId: profile.tenant_id as string }
-}
-
-function adminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 // PATCH — approve a pending request or edit an item's data (admin only).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireKnowledgeAdmin()
+  const auth = await requireClientAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = adminSupabase()
   const { data: item } = await supabase.from('knowledge_items').select('id, tenant_id').eq('id', id).single()
   if (!item || item.tenant_id !== auth.tenantId) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
@@ -52,11 +31,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 // DELETE — delete an item or reject a pending request (admin only).
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireKnowledgeAdmin()
+  const auth = await requireClientAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
   const { id } = await params
 
-  const supabase = adminClient()
+  const supabase = adminSupabase()
   const { data: item } = await supabase.from('knowledge_items').select('id, tenant_id').eq('id', id).single()
   if (!item || item.tenant_id !== auth.tenantId) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 

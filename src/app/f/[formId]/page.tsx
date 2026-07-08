@@ -1,4 +1,4 @@
-import { createClient as createServerClient } from '@supabase/supabase-js'
+import { adminSupabase as createServerClient } from '@/lib/supabase/admin'
 import PublicForm from '@/components/PublicForm'
 import HtmlFormView from '@/components/HtmlFormView'
 import { notFound } from 'next/navigation'
@@ -13,11 +13,7 @@ export default async function PublicFormPage({
   // Read with the service role (server-side only) so the public page bypasses
   // the tenant RLS on `forms`. Only safe campaign fields are selected — never
   // the pixel access tokens, which must not reach the browser.
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = createServerClient()
 
   const { formId } = await params
   const sp = await searchParams

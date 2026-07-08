@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
 import type { UserRole } from '@/lib/types'
 
@@ -16,11 +16,7 @@ export default async function ClientAdminTeamsPage() {
   const role = (profile?.role || 'client_user') as UserRole
 
   // Service role to read all tenant members regardless of RLS.
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const adminSupabase = createAdminSupabase()
 
   const { data: teams } = await adminSupabase
     .from('teams')

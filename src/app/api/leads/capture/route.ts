@@ -1,21 +1,15 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
+import { adminSupabase } from '@/lib/supabase/admin'
 
 export async function POST(request: Request) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const supabase = adminSupabase()
 
   try {
     const body = await request.json()
     const {
       form_id,
-      campaign_id,
-      tenant_id,
       data,
       source,
       utm_source,
@@ -25,8 +19,20 @@ export async function POST(request: Request) {
       fbclid,
     } = body
 
-    if (!tenant_id || !data) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!form_id || !data) {
+      return NextResponse.json({ error: 'بيانات ناقصة' }, { status: 400 })
+    }
+
+    // Look up the form's real tenant/campaign instead of trusting the client-submitted
+    // values — a forged request could otherwise attribute a lead to any tenant it likes.
+    const { data: form } = await supabase
+      .from('forms')
+      .select('id, tenant_id, campaign_id')
+      .eq('id', form_id)
+      .single()
+
+    if (!form) {
+      return NextResponse.json({ error: 'النموذج غير موجود' }, { status: 404 })
     }
 
     // Round-robin distribution: if the form has an assignee pool, hand this lead
@@ -37,8 +43,8 @@ export async function POST(request: Request) {
       .from('leads')
       .insert({
         form_id,
-        campaign_id,
-        tenant_id,
+        campaign_id: form.campaign_id,
+        tenant_id: form.tenant_id,
         data,
         source: source || utm_source || 'direct',
         utm_source,
@@ -63,7 +69,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, lead }, { status: 201 })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error'
+    const message = err instanceof Error ? err.message : 'حدث خطأ بالخادم'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

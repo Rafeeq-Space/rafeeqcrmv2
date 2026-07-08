@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import KnowledgeBase from '@/components/app/KnowledgeBase'
 import { ensureGeneralTaxonomy } from '@/lib/knowledge'
 
@@ -9,11 +9,7 @@ export default async function KnowledgePage() {
   const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user!.id).single()
   const tenantId = profile?.tenant_id || ''
 
-  const adminSupabase = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const adminSupabase = createAdminSupabase()
 
   const { categoryId: defaultCategoryId, sectionId: defaultSectionId } = await ensureGeneralTaxonomy(adminSupabase, tenantId)
 
