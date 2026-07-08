@@ -41,6 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
 
     const body = await request.json().catch(() => null)
     const row: Record<string, string> | undefined = body?.row
+    const rowIndex: number | null = Number.isFinite(body?.rowIndex) ? Number(body.rowIndex) : null
     if (!row || typeof row !== 'object' || Array.isArray(row)) {
       return NextResponse.json({ error: 'Missing row data' }, { status: 400 })
     }
@@ -51,17 +52,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
     }
 
     // Deduplicate against leads already captured from this same sheet, by
-    // phone (preferred) or email — so re-runs / re-edits of the sheet don't
-    // create duplicate leads or re-trigger round-robin assignment.
+    // sheet row (most reliable), phone, or email — so re-runs / re-edits of
+    // the sheet don't create duplicate leads or re-trigger round-robin assignment.
     const phone = digitsOnly(leadPhone(row))
     const email = leadEmail(row).trim().toLowerCase()
-    if (phone || email) {
+    {
       const { data: existing } = await supabase
         .from('leads')
-        .select('id, data')
+        .select('id, data, sheet_row')
         .eq('form_id', formId)
         .limit(1000)
       const dup = (existing || []).some(l => {
+        if (rowIndex != null && l.sheet_row === rowIndex) return true
         const d = l.data as Record<string, string>
         if (phone && digitsOnly(leadPhone(d)) === phone) return true
         if (email && leadEmail(d).trim().toLowerCase() === email) return true
@@ -83,6 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         data: row,
         source: 'google_sheet',
         status: 'new',
+        sheet_row: rowIndex,
         assigned_sales_id,
         assigned_team_id,
       })

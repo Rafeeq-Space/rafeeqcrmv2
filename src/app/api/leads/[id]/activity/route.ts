@@ -2,7 +2,35 @@ import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
+import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
+
+// If this lead came from a connected Google Sheet, push the new status into
+// the sheet's own "الحالة" column via its Apps Script Web App endpoint.
+// Fire-and-forget — never blocks or fails the CRM-side status change.
+async function pushStatusToSheet(supa: ReturnType<typeof adminSupabase>, lead: Lead, to: string) {
+  if (!lead.form_id || lead.sheet_row == null) return
+  const { data: form } = await supa
+    .from('forms')
+    .select('source_type, sheet_writeback_url, sheet_webhook_secret')
+    .eq('id', lead.form_id)
+    .single()
+  if (!form || form.source_type !== 'google_sheet' || !form.sheet_writeback_url) return
+
+  try {
+    await fetch(form.sheet_writeback_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rowIndex: lead.sheet_row,
+        status: LEAD_STATUS_LABELS[to] || to,
+        secret: form.sheet_webhook_secret,
+      }),
+    })
+  } catch (err) {
+    console.error('pushStatusToSheet failed', err)
+  }
+}
 
 // Records an activity on a lead (status change, call result, or comment/mention).
 // - status_change: also updates leads.status and fires the platform pixel event.
@@ -53,6 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     record.to_status = to
     await supa.from('leads').update({ status: to, updated_at: new Date().toISOString() }).eq('id', leadId)
     syncLeadEvent({ leadId, status: to }).catch(console.error)
+    pushStatusToSheet(supa, lead as Lead, to).catch(console.error)
   } else if (type === 'call') {
     const result = body.call_result
     if (!result || !['answered', 'no_answer'].includes(result)) {

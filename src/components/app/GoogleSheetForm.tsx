@@ -8,35 +8,112 @@ import LeadDistribution from './LeadDistribution'
 
 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
 
-function appsScript(webhookUrl: string, secret: string) {
-  return `function setupTrigger() {
+// STATUS_LABELS must match LEAD_STATUS_LABELS in src/lib/utils.ts exactly.
+const STATUS_LABELS = ['جديد', 'تم التواصل', 'مؤهل', 'تم التحويل', 'خسارة']
+
+function appsScript(webhookUrl: string, statusWebhookUrl: string, secret: string) {
+  const statusList = STATUS_LABELS.map(s => `'${s}'`).join(', ')
+  return `var STATUS_COL_NAME = 'الحالة';
+var STATUSES = [${statusList}];
+var WEBHOOK_URL = '${webhookUrl}';
+var STATUS_WEBHOOK_URL = '${statusWebhookUrl}';
+var SECRET = '${secret}';
+
+function setupTrigger() {
   ScriptApp.newTrigger('onSheetChange')
     .forSpreadsheet(SpreadsheetApp.getActive())
     .onChange()
     .create();
+  ensureStatusColumn();
 }
 
+// Finds (or creates) the "الحالة" column and restricts it to a dropdown
+// with the 5 exact status labels, so it can never contain a typo.
+function ensureStatusColumn() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var lastCol = sheet.getLastColumn();
+  var headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var col = headers.indexOf(STATUS_COL_NAME) + 1;
+  if (col === 0) {
+    col = lastCol + 1;
+    sheet.getRange(1, col).setValue(STATUS_COL_NAME);
+  }
+  var lastRow = Math.max(sheet.getLastRow(), 2);
+  var rule = SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).setAllowInvalid(false).build();
+  sheet.getRange(2, col, lastRow - 1, 1).setDataValidation(rule);
+  return col;
+}
+
+// Fires on every edit/change to the sheet:
+// 1) sends brand-new rows to the CRM as leads (and stamps them "جديد").
+// 2) detects manual edits to the status dropdown and forwards them to the CRM.
 function onSheetChange() {
   var sheet = SpreadsheetApp.getActiveSheet();
   var lastRow = sheet.getLastRow();
-  var props = PropertiesService.getScriptProperties();
-  var sentRow = parseInt(props.getProperty('lastSentRow') || '1', 10);
-  if (lastRow <= sentRow || sheet.getLastColumn() === 0) return;
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 1 || lastCol === 0) return;
 
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  for (var r = sentRow + 1; r <= lastRow; r++) {
-    var values = sheet.getRange(r, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var row = {};
-    headers.forEach(function (h, i) { row[h] = values[i]; });
-    UrlFetchApp.fetch('${webhookUrl}', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'x-webhook-secret': '${secret}' },
-      payload: JSON.stringify({ row: row }),
-      muteHttpExceptions: true
-    });
+  var props = PropertiesService.getScriptProperties();
+  var statusCol = ensureStatusColumn();
+  var sentRow = parseInt(props.getProperty('lastSentRow') || '1', 10);
+
+  if (lastRow > sentRow) {
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    for (var r = sentRow + 1; r <= lastRow; r++) {
+      var values = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
+      var row = {};
+      headers.forEach(function (h, i) { if (h !== STATUS_COL_NAME) row[h] = values[i]; });
+      UrlFetchApp.fetch(WEBHOOK_URL, {
+        method: 'post',
+        contentType: 'application/json',
+        headers: { 'x-webhook-secret': SECRET },
+        payload: JSON.stringify({ row: row, rowIndex: r }),
+        muteHttpExceptions: true
+      });
+      sheet.getRange(r, statusCol).setValue(STATUSES[0]);
+      props.setProperty('st_' + r, STATUSES[0]);
+    }
+    props.setProperty('lastSentRow', String(lastRow));
   }
-  props.setProperty('lastSentRow', String(lastRow));
+
+  var checkRows = Math.min(lastRow, sentRow);
+  if (checkRows >= 2) {
+    var statusValues = sheet.getRange(2, statusCol, checkRows - 1, 1).getValues();
+    for (var i = 0; i < statusValues.length; i++) {
+      var r2 = i + 2;
+      var val = String(statusValues[i][0] || '').trim();
+      if (!val) continue;
+      var known = props.getProperty('st_' + r2);
+      if (val !== known) {
+        UrlFetchApp.fetch(STATUS_WEBHOOK_URL, {
+          method: 'post',
+          contentType: 'application/json',
+          headers: { 'x-webhook-secret': SECRET },
+          payload: JSON.stringify({ rowIndex: r2, status: val }),
+          muteHttpExceptions: true
+        });
+        props.setProperty('st_' + r2, val);
+      }
+    }
+  }
+}
+
+// Web App entry point — called by the CRM when a lead's status changes there,
+// so it can be mirrored back into this sheet. Deploy this script as a Web App
+// (Execute as: Me, Who has access: Anyone) and paste the /exec URL in the CRM.
+function doPost(e) {
+  var body = JSON.parse(e.postData.contents);
+  if (body.secret !== SECRET) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'unauthorized' }));
+  }
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var statusCol = ensureStatusColumn();
+  var row = parseInt(body.rowIndex, 10);
+  if (row >= 2 && body.status) {
+    sheet.getRange(row, statusCol).setValue(body.status);
+    PropertiesService.getScriptProperties().setProperty('st_' + row, String(body.status));
+  }
+  return ContentService.createTextOutput(JSON.stringify({ success: true }));
 }`
 }
 
@@ -49,15 +126,36 @@ function genSecret(): string {
 // Shown right after creating the connection, and reopenable later from the
 // forms list, so the admin can always get back the webhook URL / secret / script.
 export function SheetConnectionInfo({ form, onClose }: { form: Form; onClose: () => void }) {
-  const [copied, setCopied] = useState<'url' | 'secret' | 'script' | null>(null)
-  const webhookUrl = `https://${rootDomain}/api/leads/sheet-webhook/${form.id}`
-  const secret = form.sheet_webhook_secret || ''
-  const script = appsScript(webhookUrl, secret)
+  const [copied, setCopied] = useState<'url' | 'secret' | 'script' | 'status' | null>(null)
+  const [writebackUrl, setWritebackUrl] = useState(form.sheet_writeback_url || '')
+  const [savingWriteback, setSavingWriteback] = useState(false)
+  const [writebackSaved, setWritebackSaved] = useState(false)
+  const [writebackError, setWritebackError] = useState('')
 
-  async function copy(text: string, key: 'url' | 'secret' | 'script') {
+  const webhookUrl = `https://${rootDomain}/api/leads/sheet-webhook/${form.id}`
+  const statusWebhookUrl = `https://${rootDomain}/api/leads/sheet-webhook/${form.id}/status`
+  const secret = form.sheet_webhook_secret || ''
+  const script = appsScript(webhookUrl, statusWebhookUrl, secret)
+
+  async function copy(text: string, key: 'url' | 'secret' | 'script' | 'status') {
     await navigator.clipboard.writeText(text)
     setCopied(key)
     setTimeout(() => setCopied(null), 2000)
+  }
+
+  async function saveWriteback() {
+    setSavingWriteback(true)
+    setWritebackError('')
+    setWritebackSaved(false)
+    const supabase = createClient()
+    const { error: err } = await supabase
+      .from('forms')
+      .update({ sheet_writeback_url: writebackUrl.trim() || null })
+      .eq('id', form.id)
+    setSavingWriteback(false)
+    if (err) { setWritebackError(`تعذّر الحفظ: ${err.message}`); return }
+    setWritebackSaved(true)
+    setTimeout(() => setWritebackSaved(false), 2000)
   }
 
   return (
@@ -74,6 +172,7 @@ export function SheetConnectionInfo({ form, onClose }: { form: Form; onClose: ()
         <div className="space-y-4 text-sm">
           <div className="rounded-xl bg-surface2 border border-border p-3 text-xs text-muted leading-relaxed">
             كل صف جديد يُضاف إلى الشيت سيدخل تلقائياً كـ Lead جديد في هذه الحملة، ويُوزَّع على الأعضاء المختارين بالتساوي.
+            كما تتم إضافة عمود <b>"الحالة"</b> تلقائياً (قائمة منسدلة بخيارات ثابتة)، وتتزامن حالة العميل بين الـ CRM والشيت في الاتجاهين.
             نفّذ الخطوات التالية مرة واحدة فقط داخل الشيت.
           </div>
 
@@ -90,12 +189,24 @@ export function SheetConnectionInfo({ form, onClose }: { form: Form; onClose: ()
 
           <div>
             <p className="label mb-1.5">٢. من قائمة الدوال أعلى المحرر اختر <code dir="ltr">setupTrigger</code> ثم اضغط تشغيل (Run)، ووافق على الأذونات المطلوبة مرة واحدة.</p>
-            <p className="text-xs text-muted2">من هذه اللحظة، أي صف جديد يُضاف للشيت (يدوياً أو عبر Google Form) سيُرسَل تلقائياً كـ Lead.</p>
+            <p className="text-xs text-muted2">من هذه اللحظة، أي صف جديد يُضاف للشيت (يدوياً أو عبر Google Form) سيُرسَل تلقائياً كـ Lead، وسيُضاف عمود "الحالة" مع القائمة المنسدلة.</p>
+          </div>
+
+          <div>
+            <p className="label mb-1.5">٣. لتفعيل مزامنة الحالة من الشيت إلى الـ CRM: في نفس المحرر اضغط Deploy ← New deployment ← اختر النوع Web app ← اضبط Execute as: Me و Who has access: Anyone ← اضغط Deploy ووافق على الأذونات، ثم انسخ رابط الـ Web app (ينتهي بـ /exec) والصقه في الحقل أدناه واحفظه:</p>
+            <div className="flex items-center gap-1.5">
+              <input dir="ltr" className="input text-start flex-1 text-xs" value={writebackUrl} onChange={e => setWritebackUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
+              <button onClick={saveWriteback} disabled={savingWriteback} className="btn btn-primary !py-2 !px-3 text-xs shrink-0">
+                {savingWriteback ? '...' : writebackSaved ? <CheckCircle size={15} /> : 'حفظ'}
+              </button>
+            </div>
+            {writebackError && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{writebackError}</p>}
+            <p className="text-xs text-muted2 mt-1">بدون هذه الخطوة: يبقى إنشاء الـ Leads من الشيت يعمل بشكل طبيعي، لكن تغيير الحالة من داخل الـ CRM لن ينعكس في الشيت (والعكس يبقى يعمل).</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
             <div>
-              <p className="label mb-1">رابط الـ Webhook</p>
+              <p className="label mb-1">رابط الـ Webhook (استقبال الصفوف)</p>
               <div className="flex items-center gap-1.5">
                 <code dir="ltr" className="flex-1 text-xs bg-surface2 border border-border px-2 py-2 rounded-lg truncate">{webhookUrl}</code>
                 <button onClick={() => copy(webhookUrl, 'url')} className="text-muted2 hover:text-foreground shrink-0">
@@ -109,6 +220,15 @@ export function SheetConnectionInfo({ form, onClose }: { form: Form; onClose: ()
                 <code dir="ltr" className="flex-1 text-xs bg-surface2 border border-border px-2 py-2 rounded-lg truncate">{secret}</code>
                 <button onClick={() => copy(secret, 'secret')} className="text-muted2 hover:text-foreground shrink-0">
                   {copied === 'secret' ? <CheckCircle size={15} style={{ color: 'var(--success)' }} /> : <Copy size={15} />}
+                </button>
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="label mb-1">رابط webhook الحالة (Sheet ← CRM)</p>
+              <div className="flex items-center gap-1.5">
+                <code dir="ltr" className="flex-1 text-xs bg-surface2 border border-border px-2 py-2 rounded-lg truncate">{statusWebhookUrl}</code>
+                <button onClick={() => copy(statusWebhookUrl, 'status')} className="text-muted2 hover:text-foreground shrink-0">
+                  {copied === 'status' ? <CheckCircle size={15} style={{ color: 'var(--success)' }} /> : <Copy size={15} />}
                 </button>
               </div>
             </div>

@@ -25,6 +25,16 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   lost: 'خسارة',
 }
 
+// Reverse of LEAD_STATUS_LABELS — used to interpret a status value typed
+// (or picked from a dropdown) inside a connected Google Sheet.
+export function statusFromLabel(label: string): string | null {
+  const t = (label || '').trim()
+  for (const [status, l] of Object.entries(LEAD_STATUS_LABELS)) {
+    if (l === t) return status
+  }
+  return null
+}
+
 export const LEAD_STATUS_COLORS: Record<string, string> = {
   new: 'badge-blue',
   contacted: 'badge-yellow',

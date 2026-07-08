@@ -196,6 +196,7 @@ export interface Form {
   source_type?: 'builder' | 'html' | 'google_sheet' // how leads reach this "form"
   sheet_url?: string // reference link to the connected Google Sheet (google_sheet only)
   sheet_webhook_secret?: string // shared secret the Apps Script sends to authenticate (google_sheet only)
+  sheet_writeback_url?: string // Apps Script Web App URL used to push status changes back into the sheet
   published_at?: string
   created_at: string
 }
@@ -218,6 +219,7 @@ export interface Lead {
   assigned_team_id?: string // team id
   attachments?: KnowledgeFile[] // images/files uploaded to this lead
   notes?: string
+  sheet_row?: number // row number in the connected Google Sheet (google_sheet leads only)
   created_at: string
   updated_at: string
   campaigns?: Campaign
