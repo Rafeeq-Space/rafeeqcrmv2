@@ -140,9 +140,7 @@ export default function ClientAdminNav({ profile }: Props) {
     if (mini) {
       return (
         <div className="px-3 py-5 border-b border-border flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
-            <Sparkles size={20} style={{ color: 'var(--primary)' }} />
-          </div>
+          <Sparkles size={22} className="shrink-0" style={{ color: 'var(--primary)' }} />
           {showToggle && <CollapseToggle />}
         </div>
       )
@@ -150,9 +148,7 @@ export default function ClientAdminNav({ profile }: Props) {
     return (
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
-            <Sparkles size={20} style={{ color: 'var(--primary)' }} />
-          </div>
+          <Sparkles size={22} className="shrink-0" style={{ color: 'var(--primary)' }} />
           <div className="min-w-0">
             <h2 className="font-extrabold text-foreground truncate leading-tight">
               {profile?.tenants?.name || 'رفيق CRM'}
@@ -209,9 +205,7 @@ export default function ClientAdminNav({ profile }: Props) {
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary-soft flex items-center justify-center">
-            <Sparkles size={16} style={{ color: 'var(--primary)' }} />
-          </div>
+          <Sparkles size={18} style={{ color: 'var(--primary)' }} />
           <span className="font-extrabold text-foreground text-sm">{profile?.tenants?.name || 'رفيق CRM'}</span>
         </div>
         <button onClick={() => setMobileOpen(v => !v)} className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition">
