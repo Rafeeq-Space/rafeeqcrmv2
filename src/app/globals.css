@@ -7,28 +7,28 @@
    Design tokens — dark by default. Primary = light blue (sky).
    ════════════════════════════════════════════════════════════ */
 :root {
-  --background: #0a0e17;
-  --surface: #111827;
-  --surface-2: #1a2336;
-  --surface-3: #222e45;
-  --border: #25314c;
-  --border-strong: #34456a;
-  --foreground: #e8eef9;
-  --muted: #8ba0c0;
-  --muted-2: #5d6f8f;
+  --background: #080809;
+  --surface: #111214;
+  --surface-2: #18191d;
+  --surface-3: #1f2025;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --foreground: #f5efe8;
+  --muted: #a4a09b;
+  --muted-2: #6f6a67;
 
-  --primary: #38bdf8;
-  --primary-strong: #0ea5e9;
-  --primary-soft: rgba(56, 189, 248, 0.12);
-  --primary-fg: #02131f;
-  --ring: rgba(56, 189, 248, 0.35);
+  --primary: #fb8a74;
+  --primary-strong: #ff9b83;
+  --primary-soft: rgba(251, 138, 116, 0.14);
+  --primary-fg: #24110d;
+  --ring: rgba(251, 138, 116, 0.35);
 
-  --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.14);
+  --success: #65d38c;
+  --success-soft: rgba(101, 211, 140, 0.14);
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.14);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.14);
+  --danger: #ef6363;
+  --danger-soft: rgba(239, 99, 99, 0.14);
   --purple: #a78bfa;
   --purple-soft: rgba(167, 139, 250, 0.14);
 
@@ -48,11 +48,11 @@
   --muted: #5a6b85;
   --muted-2: #8a99b3;
 
-  --primary: #0ea5e9;
-  --primary-strong: #0284c7;
-  --primary-soft: rgba(14, 165, 233, 0.1);
+  --primary: #cf6d59;
+  --primary-strong: #be5946;
+  --primary-soft: rgba(207, 109, 89, 0.1);
   --primary-fg: #ffffff;
-  --ring: rgba(14, 165, 233, 0.3);
+  --ring: rgba(207, 109, 89, 0.3);
 
   --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
   --shadow-md: 0 8px 24px -10px rgba(15, 27, 45, 0.18);
@@ -106,8 +106,8 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(900px 500px at 100% 0%, rgba(56, 189, 248, 0.07), transparent 60%),
-    radial-gradient(700px 500px at 0% 100%, rgba(167, 139, 250, 0.05), transparent 55%);
+    radial-gradient(900px 500px at 100% 0%, rgba(251, 138, 116, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, rgba(255, 155, 131, 0.05), transparent 55%);
   pointer-events: none;
 }
 

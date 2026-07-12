@@ -16,10 +16,10 @@ export interface TenantStat {
 }
 
 const STAT_COLORS: Record<string, string> = {
-  blue: 'var(--primary)', purple: 'var(--purple)', sky: '#0ea5e9', green: 'var(--success)', danger: 'var(--danger)', warning: 'var(--warning)',
+  blue: 'var(--primary)', purple: 'var(--purple)', sky: '#ff9b83', green: 'var(--success)', danger: 'var(--danger)', warning: 'var(--warning)',
 }
 const STAT_SOFT: Record<string, string> = {
-  blue: 'var(--primary-soft)', purple: 'var(--purple-soft)', sky: 'rgba(14,165,233,0.12)', green: 'var(--success-soft)', danger: 'var(--danger-soft)', warning: 'var(--warning-soft)',
+  blue: 'var(--primary-soft)', purple: 'var(--purple-soft)', sky: 'rgba(255,155,131,0.12)', green: 'var(--success-soft)', danger: 'var(--danger-soft)', warning: 'var(--warning-soft)',
 }
 
 export default function SuperAdminStats({ rows }: { rows: TenantStat[] }) {

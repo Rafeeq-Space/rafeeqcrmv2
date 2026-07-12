@@ -34,13 +34,13 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  new: '#38bdf8', contacted: '#fbbf24', qualified: '#a78bfa', converted: '#34d399', lost: '#f87171',
+  new: '#fb8a74', contacted: '#fbbf24', qualified: '#a78bfa', converted: '#65d38c', lost: '#ef6363',
 }
 const STAT_COLORS: Record<string, string> = {
-  blue: 'var(--primary)', purple: 'var(--purple)', warning: 'var(--warning)', green: 'var(--success)', danger: 'var(--danger)', sky: '#0ea5e9',
+  blue: 'var(--primary)', purple: 'var(--purple)', warning: 'var(--warning)', green: 'var(--success)', danger: 'var(--danger)', sky: '#ff9b83',
 }
 const STAT_SOFT: Record<string, string> = {
-  blue: 'var(--primary-soft)', purple: 'var(--purple-soft)', warning: 'var(--warning-soft)', green: 'var(--success-soft)', danger: 'var(--danger-soft)', sky: 'rgba(14,165,233,0.12)',
+  blue: 'var(--primary-soft)', purple: 'var(--purple-soft)', warning: 'var(--warning-soft)', green: 'var(--success-soft)', danger: 'var(--danger-soft)', sky: 'rgba(255,155,131,0.12)',
 }
 
 const TABS = [
