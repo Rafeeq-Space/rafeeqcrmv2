@@ -16,11 +16,20 @@ export interface AdConnection {
   name: string
   pixel_id: string
   access_token: string
-  // TikTok Instant Form lead sync (webhook-based) — see tiktok_webhook_events.
-  // webhook_secret is generated server-side on creation; default_campaign_id
-  // is which CRM campaign new Instant Form leads from this account attach to.
+  // Native Instant/Lead-form webhook import (see ad_lead_webhook_events).
+  // webhook_secret builds this connection's own secret webhook URL (tiktok,
+  // snapchat); default_campaign_id is which CRM campaign new leads from this
+  // account attach to.
   webhook_secret?: string
   default_campaign_id?: string | null
+  page_id?: string | null // facebook: Page ID that owns the lead form(s)
+  form_id?: string | null // snapchat: the specific Lead Generation form
+  snap_integration_id?: string | null
+  snap_hmac_secret?: string | null
+  // tiktok: optional test-events code from TikTok Events Manager. When set,
+  // conversion events are sent to the pixel's "Test events" tab (live) instead
+  // of the real event stream — used to verify the integration during setup.
+  tiktok_test_event_code?: string | null
   created_at: string
 }
 

@@ -99,20 +99,25 @@ export async function syncLeadEvent(params: {
 
       const tiktokEvent = eventType || STATUS_TO_TIKTOK_EVENT[leadStatus] || 'Lead'
       const tiktokPayload = {
-        pixel_code: conn.pixel_id,
-        event: tiktokEvent,
-        event_time: eventTime,
-        context: {
-          user: {
-            ttclid: lead.ttclid,
-            ...(lead.data?.email && { email: [hashValue(lead.data.email)] }),
-            ...(lead.data?.phone && { phone_number: [hashValue(lead.data.phone)] }),
+        event_source: 'web',
+        event_source_id: conn.pixel_id,
+        data: [
+          {
+            event: tiktokEvent,
+            event_time: eventTime,
+            event_id: `${lead.id}_${eventTime}`,
+            user: {
+              ttclid: lead.ttclid,
+              ...(lead.data?.email && { email: hashValue(lead.data.email) }),
+              ...(lead.data?.phone && { phone: hashValue(lead.data.phone) }),
+            },
+            properties: {
+              lead_id: lead.id,
+              status: leadStatus,
+            },
           },
-        },
-        properties: {
-          lead_id: lead.id,
-          status: leadStatus,
-        },
+        ],
+        ...(conn.tiktok_test_event_code && { test_event_code: conn.tiktok_test_event_code }),
       }
 
       try {
