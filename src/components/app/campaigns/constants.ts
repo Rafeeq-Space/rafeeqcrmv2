@@ -35,13 +35,41 @@ export const FIELD_TYPE_LABELS: Record<string, string> = {
   file: 'رفع ملف', rating: 'تقييم بالنجوم', heading: 'عنوان / فاصل',
 }
 
-export function formatDate(d?: string) {
-  if (!d) return null
+// Format a single YYYY-MM-DD date in Arabic.
+function formatOneDay(d: string) {
   try {
     return new Date(d).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })
   } catch {
     return d
   }
+}
+
+// The campaign date may be a single day ("YYYY-MM-DD"), a month ("YYYY-MM"),
+// or a range ("from~to"). Render each shape in readable Arabic.
+export function formatDate(d?: string) {
+  if (!d) return null
+
+  // Range: "from~to" (either side may be empty).
+  if (d.includes('~')) {
+    const [from, to] = d.split('~')
+    const f = from ? formatOneDay(from) : ''
+    const t = to ? formatOneDay(to) : ''
+    if (f && t) return `من ${f} إلى ${t}`
+    if (f) return `من ${f}`
+    if (t) return `حتى ${t}`
+    return null
+  }
+
+  // Month only: "YYYY-MM".
+  if (/^\d{4}-\d{2}$/.test(d)) {
+    try {
+      return new Date(`${d}-01`).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' })
+    } catch {
+      return d
+    }
+  }
+
+  return formatOneDay(d)
 }
 
 // All platform options for a campaign — prefers the multi-select `sources`,

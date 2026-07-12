@@ -49,8 +49,12 @@ export function useCampaignForm(uploadScope: string, initial: InitialValues = {}
   const [linkForm, setLinkForm] = useState({ label: '', url: '' })
   function addLink(e: React.FormEvent) {
     e.preventDefault()
-    if (!linkForm.url) return
-    setLinks(prev => [...prev, { label: linkForm.label || linkForm.url, url: linkForm.url }])
+    const raw = linkForm.url.trim()
+    if (!raw) return
+    // Let the user paste a copied link as-is: if it has no scheme, assume https
+    // so the stored href actually resolves instead of being treated as relative.
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    setLinks(prev => [...prev, { label: linkForm.label.trim() || url, url }])
     setLinkForm({ label: '', url: '' })
   }
   function removeLink(i: number) {

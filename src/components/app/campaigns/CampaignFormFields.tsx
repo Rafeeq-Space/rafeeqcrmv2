@@ -6,6 +6,7 @@ import {
 import type { AdConnection, TeamWithMembers } from '@/lib/types'
 import { SOURCE_OPTIONS } from './constants'
 import type { CampaignFormState } from './useCampaignForm'
+import CampaignDateField from './CampaignDateField'
 
 const PLATFORM_LABELS: Record<string, string> = { tiktok: 'تيك توك', facebook: 'فيسبوك', snapchat: 'سناب شات' }
 
@@ -67,10 +68,7 @@ export default function CampaignFormFields({
             ))}
           </div>
         </div>
-        <div>
-          <label className="label">تاريخ الحملة</label>
-          <input type="date" dir="ltr" className="input text-start" value={campaignDate} onChange={e => onCampaignDateChange(e.target.value)} />
-        </div>
+        <CampaignDateField value={campaignDate} onChange={onCampaignDateChange} />
       </div>
 
       {children}
@@ -136,8 +134,8 @@ export default function CampaignFormFields({
             </div>
           ))}
           <div className="flex gap-2">
-            <input className="input flex-1" placeholder="نص الرابط" value={linkForm.label} onChange={e => setLinkForm({ ...linkForm, label: e.target.value })} />
-            <input className="input flex-1" placeholder="https://..." dir="ltr" value={linkForm.url} onChange={e => setLinkForm({ ...linkForm, url: e.target.value })} />
+            <input className="input flex-1" placeholder="نص الرابط (اختياري)" value={linkForm.label} onChange={e => setLinkForm({ ...linkForm, label: e.target.value })} />
+            <input className="input flex-1" placeholder="الصق الرابط هنا" dir="ltr" value={linkForm.url} onChange={e => setLinkForm({ ...linkForm, url: e.target.value })} />
             <button type="button" onClick={addLink} className="btn btn-outline !py-2 !px-3"><Plus size={16} /></button>
           </div>
         </div>
