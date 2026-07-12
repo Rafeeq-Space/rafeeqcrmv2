@@ -132,6 +132,7 @@ create table ad_connections (
   snap_integration_id text, -- snapchat: id returned by Snap's webhook-integration API
   snap_hmac_secret text, -- snapchat: secret returned by Snap, used to verify inbound signatures
   tiktok_test_event_code text, -- tiktok: optional Events Manager test code; routes events to the "Test events" tab during setup
+  meta_test_event_code text, -- facebook: optional Events Manager test code; routes events to the "Test events" tab during setup
   created_at timestamptz default now()
 );
 

@@ -30,6 +30,10 @@ export interface AdConnection {
   // conversion events are sent to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.
   tiktok_test_event_code?: string | null
+  // facebook: optional test-events code from Meta Events Manager. When set,
+  // conversion events are routed to the pixel's "Test events" tab (live) instead
+  // of the real event stream — used to verify the integration during setup.
+  meta_test_event_code?: string | null
   created_at: string
 }
 

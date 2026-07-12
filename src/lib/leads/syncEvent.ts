@@ -171,6 +171,7 @@ export async function syncLeadEvent(params: {
             },
           },
         ],
+        ...(conn.meta_test_event_code && { test_event_code: conn.meta_test_event_code }),
       }
 
       try {
