@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Plus, CheckCircle, Calendar, Layers, Link as LinkIcon, Paperclip,
-  Image as ImageIcon, FileText, Sheet, Target, Search, Megaphone, SearchX,
+  Plus, Calendar, Layers, Link as LinkIcon, Paperclip,
+  Image as ImageIcon, Target, Search, Megaphone, SearchX,
 } from 'lucide-react'
 import type { AdConnection, Campaign, Form, CampaignStatus, TeamWithMembers } from '@/lib/types'
 import FormBuilder from './FormBuilder'
@@ -74,9 +74,6 @@ export default function CampaignsList({
     return teams.filter(t => ids.includes(t.id))
   }
 
-  // Quick counts for the summary strip.
-  const activeCount = campaigns.filter(c => c.status === 'active').length
-  const sheetsCount = forms.filter(f => f.source_type === 'google_sheet').length
 
   const filteredCampaigns = campaigns.filter(c => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false
@@ -103,46 +100,6 @@ export default function CampaignsList({
             <Plus size={17} /> حملة جديدة
           </button>
         )}
-      </div>
-
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--primary-soft)' }}>
-            <Megaphone size={18} style={{ color: 'var(--primary)' }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xl font-extrabold text-foreground">{campaigns.length}</p>
-            <p className="text-xs text-muted mt-0.5 truncate">إجمالي الحملات</p>
-          </div>
-        </div>
-        <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--success-soft)' }}>
-            <CheckCircle size={18} style={{ color: 'var(--success)' }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xl font-extrabold text-foreground">{activeCount}</p>
-            <p className="text-xs text-muted mt-0.5 truncate">حملات نشطة</p>
-          </div>
-        </div>
-        <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--warning-soft)' }}>
-            <FileText size={18} style={{ color: 'var(--warning)' }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xl font-extrabold text-foreground">{forms.length}</p>
-            <p className="text-xs text-muted mt-0.5 truncate">إجمالي النماذج</p>
-          </div>
-        </div>
-        <div className="card p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.12)' }}>
-            <Sheet size={18} style={{ color: 'var(--success)' }} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xl font-extrabold text-foreground">{sheetsCount}</p>
-            <p className="text-xs text-muted mt-0.5 truncate">شيتات مرتبطة</p>
-          </div>
-        </div>
       </div>
 
       {/* Search + status filter */}
