@@ -20,6 +20,7 @@ interface Props {
   currentRole: UserRole
   currentTeamId?: string | null
   leadStats?: Record<string, TeamLeadStats>
+  memberLeadStats?: Record<string, TeamLeadStats>
   readOnly?: boolean
 }
 
@@ -57,8 +58,11 @@ function Avatar({ name, url, size = 36 }: { name: string; url?: string; size?: n
 }
 
 // ─── Member Modal (add / edit) ────────────────────────────────────
-// Job titles (descriptive only — NOT permissions).
-const JOB_TITLES = ['مندوب مبيعات', 'مدير مبيعات']
+// Permissions/role options (actual access level — NOT the descriptive job title).
+const ROLE_OPTIONS: { value: 'client_user' | 'client_sales_manager'; label: string }[] = [
+  { value: 'client_user', label: 'موظف مبيعات' },
+  { value: 'client_sales_manager', label: 'مدير مبيعات' },
+]
 
 function MemberModal({
   teams, member, lockedTeamId, onClose, onSaved,
@@ -76,6 +80,7 @@ function MemberModal({
     email: '',
     password: '',
     job_title: member?.job_title || '',
+    role: (member?.role === 'client_sales_manager' ? 'client_sales_manager' : 'client_user') as 'client_user' | 'client_sales_manager',
     countryCode: initialPhone.code,
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
@@ -95,6 +100,7 @@ function MemberModal({
         const payload: Record<string, unknown> = {
           full_name: form.full_name,
           job_title: form.job_title,
+          role: form.role,
           phone,
           team_id: form.team_id || null,
         }
@@ -113,6 +119,7 @@ function MemberModal({
             email: form.email,
             password: form.password,
             job_title: form.job_title,
+            role: form.role,
             phone,
             team_id: form.team_id || null,
           }),
@@ -159,13 +166,22 @@ function MemberModal({
 
           <div>
             <label className="label">المسمى الوظيفي</label>
-            <select
+            <input
               className="input"
               value={form.job_title}
               onChange={e => setForm({ ...form, job_title: e.target.value })}
+              placeholder="مثال: أخصائي مبيعات عقارية"
+            />
+          </div>
+
+          <div>
+            <label className="label">الصلاحيات</label>
+            <select
+              className="input"
+              value={form.role}
+              onChange={e => setForm({ ...form, role: e.target.value as 'client_user' | 'client_sales_manager' })}
             >
-              <option value="">-- اختر --</option>
-              {JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+              {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
 
@@ -206,7 +222,7 @@ function MemberModal({
 
 // ─── Team detail modal ────────────────────────────────────────────
 function TeamDetailModal({
-  team, members, canManageTeam, canEditMember, canRemoveMember, canFullyManage, onEditMember, onClose, onChanged,
+  team, members, canManageTeam, canEditMember, canRemoveMember, canFullyManage, onEditMember, onDeleteMember, onClose, onChanged,
 }: {
   team: Team
   members: TeamMember[]
@@ -215,6 +231,7 @@ function TeamDetailModal({
   canRemoveMember: (m: TeamMember) => boolean     // can remove member from team
   canFullyManage: boolean                         // admin only: suspend / delete account
   onEditMember: (m: TeamMember) => void           // open edit form for a member
+  onDeleteMember: (m: TeamMember) => void         // open the delete-with-reassign flow
   onClose: () => void
   onChanged: () => void
 }) {
@@ -258,12 +275,6 @@ function TeamDetailModal({
     onChanged()
   }
 
-  async function deleteMemberAccount(id: string) {
-    if (!confirm('حذف هذا الموظف نهائياً؟ سيُحذف حسابه بالكامل.')) return
-    await fetch(`/api/client-admin/team-members/${id}`, { method: 'DELETE' })
-    onChanged()
-  }
-
   async function saveManager(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -274,6 +285,15 @@ function TeamDetailModal({
     })
     setSaving(false)
     setAssigning(false)
+    onChanged()
+  }
+
+  async function deleteTeam() {
+    if (!confirm(`حذف فريق «${team.name}» نهائياً؟ لن يُحذف الموظفون، لكن سيُزالون من هذا الفريق.`)) return
+    setSaving(true)
+    await fetch(`/api/client-admin/teams/${team.id}`, { method: 'DELETE' })
+    setSaving(false)
+    onClose()
     onChanged()
   }
 
@@ -389,7 +409,7 @@ function TeamDetailModal({
                               <button onClick={() => toggleSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                 {m.suspended ? <PlayCircle size={15} /> : <PauseCircle size={15} />}
                               </button>
-                              <button onClick={() => deleteMemberAccount(m.id)} className="text-muted2 hover:text-danger transition p-1" title="حذف الحساب نهائياً">
+                              <button onClick={() => onDeleteMember(m)} className="text-muted2 hover:text-danger transition p-1" title="حذف الحساب نهائياً">
                                 <Trash2 size={14} />
                               </button>
                             </>
@@ -405,6 +425,129 @@ function TeamDetailModal({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Danger zone — delete the whole team (admin only) */}
+        {canManageTeam && (
+          <div className="mt-5 pt-4 border-t border-border flex items-center justify-between gap-3">
+            <p className="text-xs text-muted2">حذف الفريق لا يحذف الموظفين، بل يزيلهم من الفريق فقط.</p>
+            <button onClick={deleteTeam} disabled={saving} className="btn btn-danger gap-2 shrink-0">
+              <Trash2 size={15} /> حذف الفريق
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete Member Modal (with lead reassignment) ─────────────────
+// When deleting a member, the admin may hand their leads to another rep.
+// They choose the receiving rep and which lead groups to move (open / pending).
+function DeleteMemberModal({
+  member, members, stats, onClose, onDeleted,
+}: {
+  member: TeamMember
+  members: TeamMember[]
+  stats: TeamLeadStats                // open / pending counts for this member
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const others = members.filter(m => m.id !== member.id && !m.suspended)
+  const hasLeads = stats.open > 0 || stats.pending > 0
+  const [reassignTo, setReassignTo] = useState('')
+  const [moveOpen, setMoveOpen] = useState(stats.open > 0)
+  const [movePending, setMovePending] = useState(stats.pending > 0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleDelete() {
+    setLoading(true)
+    setError('')
+
+    // Build the status list from the chosen groups (open = new, pending = contacted/qualified).
+    const statuses: string[] = []
+    if (moveOpen) statuses.push('new')
+    if (movePending) statuses.push('contacted', 'qualified')
+
+    const body =
+      reassignTo && statuses.length ? { reassign_to: reassignTo, statuses } : undefined
+
+    try {
+      const res = await fetch(`/api/client-admin/team-members/${member.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      onDeleted()
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="modal p-6 w-full max-w-md my-8" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">حذف الموظف</h3>
+          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+        </div>
+
+        <p className="text-sm text-muted mb-4">
+          سيتم حذف حساب <span className="font-semibold text-foreground">{member.full_name}</span> نهائياً.
+        </p>
+
+        {hasLeads ? (
+          <div className="space-y-4">
+            <div className="bg-surface2 rounded-xl p-4 border border-border">
+              <p className="text-sm font-semibold text-foreground mb-1">لدى هذا الموظف عملاء محتملون:</p>
+              <div className="flex gap-3 text-sm">
+                <span style={{ color: 'var(--primary)' }}>مفتوحة: {stats.open}</span>
+                <span style={{ color: 'var(--warning)' }}>معلّقة: {stats.pending}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">إسناد الليدز إلى موظف آخر</label>
+              <select className="input" value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+                <option value="">-- بدون إسناد (تبقى غير مُسنَدة) --</option>
+                {others.map(m => <option key={m.id} value={m.id}>{m.full_name}{m.job_title ? ` (${m.job_title})` : ''}</option>)}
+              </select>
+            </div>
+
+            {reassignTo && (
+              <div>
+                <label className="label">أي الليدز تُسنَد إليه؟</label>
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-2 text-sm ${stats.open === 0 ? 'opacity-50' : 'cursor-pointer'}`}>
+                    <input type="checkbox" checked={moveOpen} disabled={stats.open === 0} onChange={e => setMoveOpen(e.target.checked)} />
+                    <span className="text-foreground">الليدز المفتوحة ({stats.open})</span>
+                  </label>
+                  <label className={`flex items-center gap-2 text-sm ${stats.pending === 0 ? 'opacity-50' : 'cursor-pointer'}`}>
+                    <input type="checkbox" checked={movePending} disabled={stats.pending === 0} onChange={e => setMovePending(e.target.checked)} />
+                    <span className="text-foreground">الليدز المعلّقة ({stats.pending})</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted2 mt-2">الليدز غير المختارة ستبقى بدون إسناد.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted2 mb-2">لا يوجد لدى هذا الموظف عملاء محتملون بحاجة لإعادة إسناد.</p>
+        )}
+
+        {error && <p className="text-sm mt-3" style={{ color: 'var(--danger)' }}>{error}</p>}
+
+        <div className="flex gap-3 pt-5">
+          <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
+          <button type="button" onClick={handleDelete} disabled={loading} className="btn btn-danger flex-1 gap-2">
+            <Trash2 size={15} /> {loading ? 'جارٍ الحذف...' : 'حذف الموظف'}
+          </button>
         </div>
       </div>
     </div>
@@ -460,7 +603,7 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {}, readOnly = false }: Props) {
+export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {}, memberLeadStats = {}, readOnly = false }: Props) {
   const isAdmin = currentRole === 'client_admin' && !readOnly
   const isManager = currentRole === 'client_sales_manager' && !readOnly
   // Only admins create teams / add members. Managers are view-only here.
@@ -473,6 +616,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
   const [editMember, setEditMember] = useState<TeamMember | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null)
   const [openTeam, setOpenTeam] = useState<Team | null>(null)
 
   function refresh() { window.location.reload() }
@@ -483,12 +627,6 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ suspended: !m.suspended }),
     })
-    refresh()
-  }
-
-  async function deleteMember(id: string) {
-    if (!confirm('حذف هذا الموظف نهائياً؟ سيُحذف حسابه بالكامل.')) return
-    await fetch(`/api/client-admin/team-members/${id}`, { method: 'DELETE' })
     refresh()
   }
 
@@ -614,7 +752,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                                 <button onClick={() => toggleSuspend(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                   {m.suspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
                                 </button>
-                                <button onClick={() => deleteMember(m.id)} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="حذف نهائي">
+                                <button onClick={() => setDeleteTarget(m)} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="حذف نهائي">
                                   <Trash2 size={15} />
                                 </button>
                               </>
@@ -656,8 +794,18 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           canRemoveMember={canRemoveMember}
           canFullyManage={isAdmin}
           onEditMember={(m) => { setOpenTeam(null); setEditMember(m); setShowAddMember(true) }}
+          onDeleteMember={(m) => { setOpenTeam(null); setDeleteTarget(m) }}
           onClose={() => setOpenTeam(null)}
           onChanged={refresh}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteMemberModal
+          member={deleteTarget}
+          members={members}
+          stats={memberLeadStats[deleteTarget.id] || { open: 0, pending: 0 }}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={refresh}
         />
       )}
     </div>

@@ -52,12 +52,11 @@ const TABS = [
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
 // Period filter for the overview statistics.
-type RangeKey = 'day' | 'week' | 'month' | 'quarter' | 'all' | 'custom'
+type RangeKey = 'day' | 'week' | 'month' | 'all' | 'custom'
 const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: 'day', label: 'اليوم' },
   { key: 'week', label: 'آخر أسبوع' },
   { key: 'month', label: 'آخر شهر' },
-  { key: 'quarter', label: 'آخر ٣ أشهر' },
   { key: 'all', label: 'الكل' },
   { key: 'custom', label: 'مخصص' },
 ]
@@ -148,7 +147,6 @@ export default function DashboardView({
     if (rangeKey === 'day') s.setDate(now.getDate() - 1)
     else if (rangeKey === 'week') s.setDate(now.getDate() - 7)
     else if (rangeKey === 'month') s.setDate(now.getDate() - 30)
-    else if (rangeKey === 'quarter') s.setDate(now.getDate() - 90)
     return { start: s, end: now }
   }, [rangeKey, customFrom, customTo])
 

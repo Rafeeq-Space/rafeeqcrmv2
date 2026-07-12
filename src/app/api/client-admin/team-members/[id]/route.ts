@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -54,6 +54,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (job_title !== undefined) updates.job_title = job_title || null
   if (suspended !== undefined) updates.suspended = suspended
   if (team_id !== undefined) updates.team_id = team_id || null
+  // Permissions/role — only sales user or sales manager can be set here.
+  if (role !== undefined && (role === 'client_user' || role === 'client_sales_manager')) {
+    updates.role = role
+  }
 
   if (Object.keys(updates).length > 0) {
     const { error } = await supabase.from('profiles').update(updates).eq('id', id)
@@ -80,6 +84,44 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const supabase = createAdminSupabase()
   const target = await canManage(auth, id, supabase)
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
+
+  // Optional: reassign this member's leads to another rep before deleting.
+  // Body: { reassign_to: string, statuses: LeadStatus[] }. Only leads whose
+  // status is in `statuses` are moved; the rest are left unassigned as before.
+  let reassignTo: string | null = null
+  let statuses: string[] = []
+  try {
+    const body = await request.json()
+    reassignTo = body?.reassign_to || null
+    if (Array.isArray(body?.statuses)) {
+      const allowed = ['new', 'contacted', 'qualified', 'converted', 'lost']
+      statuses = body.statuses.filter((s: unknown) => typeof s === 'string' && allowed.includes(s))
+    }
+  } catch {
+    // No body — plain delete without reassignment.
+  }
+
+  if (reassignTo && statuses.length) {
+    if (reassignTo === id) {
+      return NextResponse.json({ error: 'لا يمكن إسناد الليدز للموظف المحذوف نفسه' }, { status: 400 })
+    }
+    // The receiving rep must belong to this tenant.
+    const { data: rep } = await supabase
+      .from('profiles')
+      .select('id, tenant_id, team_id')
+      .eq('id', reassignTo)
+      .eq('tenant_id', auth.tenantId)
+      .single()
+    if (!rep) return NextResponse.json({ error: 'الموظف المستلم غير صالح' }, { status: 400 })
+
+    const { error: reassignErr } = await supabase
+      .from('leads')
+      .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id || null, updated_at: new Date().toISOString() })
+      .eq('tenant_id', auth.tenantId)
+      .eq('assigned_sales_id', id)
+      .in('status', statuses)
+    if (reassignErr) return NextResponse.json({ error: `تعذّر نقل الليدز: ${reassignErr.message}` }, { status: 500 })
+  }
 
   await supabase.from('profiles').delete().eq('id', id)
   await supabase.auth.admin.deleteUser(id)

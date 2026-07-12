@@ -39,17 +39,26 @@ export default async function ClientAdminTeamsPage() {
   // Lead counters per team (open = new, pending = in-progress).
   const { data: leads } = await adminSupabase
     .from('leads')
-    .select('assigned_to, status')
+    .select('assigned_to, assigned_sales_id, status')
     .eq('tenant_id', tenantId)
 
   const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
   const leadStats: Record<string, { open: number; pending: number }> = {}
+  // Per-member counters (by assigned_sales_id) — used by the delete-member flow
+  // to show how many open/pending leads would need reassigning.
+  const memberLeadStats: Record<string, { open: number; pending: number }> = {}
   for (const lead of leads || []) {
     const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
-    if (!teamId) continue
-    if (!leadStats[teamId]) leadStats[teamId] = { open: 0, pending: 0 }
-    if (lead.status === 'new') leadStats[teamId].open++
-    else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
+    if (teamId) {
+      if (!leadStats[teamId]) leadStats[teamId] = { open: 0, pending: 0 }
+      if (lead.status === 'new') leadStats[teamId].open++
+      else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
+    }
+    if (lead.assigned_sales_id) {
+      if (!memberLeadStats[lead.assigned_sales_id]) memberLeadStats[lead.assigned_sales_id] = { open: 0, pending: 0 }
+      if (lead.status === 'new') memberLeadStats[lead.assigned_sales_id].open++
+      else if (lead.status === 'contacted' || lead.status === 'qualified') memberLeadStats[lead.assigned_sales_id].pending++
+    }
   }
 
   // Everyone sees all teams + members; management is gated per-role in the component.
@@ -61,6 +70,7 @@ export default async function ClientAdminTeamsPage() {
       currentRole={role}
       currentTeamId={currentTeamId}
       leadStats={leadStats}
+      memberLeadStats={memberLeadStats}
     />
   )
 }
