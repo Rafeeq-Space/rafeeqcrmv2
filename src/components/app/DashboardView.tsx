@@ -51,6 +51,72 @@ const TABS = [
 
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
+// Period filter for the overview statistics.
+type RangeKey = 'day' | 'week' | 'month' | 'quarter' | 'all' | 'custom'
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: 'day', label: 'اليوم' },
+  { key: 'week', label: 'آخر أسبوع' },
+  { key: 'month', label: 'آخر شهر' },
+  { key: 'quarter', label: 'آخر ٣ أشهر' },
+  { key: 'all', label: 'الكل' },
+  { key: 'custom', label: 'مخصص' },
+]
+
+// Builds an adaptive time-series (hourly → daily → weekly → monthly buckets
+// depending on the span) of lead counts across [start, end]. When start is
+// null the earliest lead (or the last 30 days) is used as the lower bound.
+function buildTrend(items: Lead[], start: Date | null, end: Date | null): { day: string; leads: number }[] {
+  const now = new Date()
+  const e = end ? new Date(end) : now
+  let s = start ? new Date(start) : null
+  if (!s) {
+    const times = items.map(l => new Date(l.created_at).getTime()).filter(t => !Number.isNaN(t))
+    const min = times.length ? Math.min(...times) : now.getTime() - 29 * 86400000
+    s = new Date(min)
+  }
+  const spanDays = Math.max(0, Math.round((e.getTime() - s.getTime()) / 86400000))
+
+  const buckets: { label: string; leads: number; from: number; to: number }[] = []
+  const push = (from: Date, to: Date, label: string) => buckets.push({ label, leads: 0, from: from.getTime(), to: to.getTime() })
+
+  if (spanDays <= 2) {
+    const d = new Date(s); d.setMinutes(0, 0, 0)
+    while (d <= e) {
+      const from = new Date(d), to = new Date(d); to.setHours(to.getHours() + 1)
+      push(from, to, `${from.getHours()}:00`)
+      d.setHours(d.getHours() + 1)
+    }
+  } else if (spanDays <= 45) {
+    const d = new Date(s); d.setHours(0, 0, 0, 0)
+    while (d <= e) {
+      const from = new Date(d), to = new Date(d); to.setDate(to.getDate() + 1)
+      push(from, to, spanDays <= 8 ? ARABIC_DAYS[from.getDay()] : `${from.getDate()}/${from.getMonth() + 1}`)
+      d.setDate(d.getDate() + 1)
+    }
+  } else if (spanDays <= 365) {
+    const d = new Date(s); d.setHours(0, 0, 0, 0)
+    while (d <= e) {
+      const from = new Date(d), to = new Date(d); to.setDate(to.getDate() + 7)
+      push(from, to, `${from.getDate()}/${from.getMonth() + 1}`)
+      d.setDate(d.getDate() + 7)
+    }
+  } else {
+    const d = new Date(s.getFullYear(), s.getMonth(), 1)
+    while (d <= e) {
+      const from = new Date(d), to = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+      push(from, to, `${from.getMonth() + 1}/${String(from.getFullYear()).slice(2)}`)
+      d.setMonth(d.getMonth() + 1)
+    }
+  }
+
+  for (const l of items) {
+    const t = new Date(l.created_at).getTime()
+    const b = buckets.find(b => t >= b.from && t < b.to)
+    if (b) b.leads++
+  }
+  return buckets.map(b => ({ day: b.label, leads: b.leads }))
+}
+
 export default function DashboardView({
   campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs,
   isAdmin = true, role = 'client_admin', teams = [], members = [], teamsCount, employeesCount,
@@ -63,7 +129,43 @@ export default function DashboardView({
   )
 
   const isManager = role === 'client_sales_manager'
-  const stats = useMemo(() => computeLeadStats(leads), [leads])
+
+  // ── Period filter (overview statistics) ──
+  const [rangeKey, setRangeKey] = useState<RangeKey>('month')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
+  const { start, end } = useMemo(() => {
+    const now = new Date()
+    if (rangeKey === 'all') return { start: null as Date | null, end: null as Date | null }
+    if (rangeKey === 'custom') {
+      return {
+        start: customFrom ? new Date(`${customFrom}T00:00:00`) : null,
+        end: customTo ? new Date(`${customTo}T23:59:59`) : null,
+      }
+    }
+    const s = new Date(now)
+    if (rangeKey === 'day') s.setDate(now.getDate() - 1)
+    else if (rangeKey === 'week') s.setDate(now.getDate() - 7)
+    else if (rangeKey === 'month') s.setDate(now.getDate() - 30)
+    else if (rangeKey === 'quarter') s.setDate(now.getDate() - 90)
+    return { start: s, end: now }
+  }, [rangeKey, customFrom, customTo])
+
+  const filteredLeads = useMemo(() => {
+    if (!start && !end) return leads
+    const from = start?.getTime()
+    const to = end?.getTime()
+    return leads.filter(l => {
+      const t = new Date(l.created_at).getTime()
+      if (from != null && t < from) return false
+      if (to != null && t > to) return false
+      return true
+    })
+  }, [leads, start, end])
+
+  const rangeLabel = RANGE_OPTIONS.find(o => o.key === rangeKey)?.label || ''
+  const stats = useMemo(() => computeLeadStats(filteredLeads), [filteredLeads])
 
   // Stat cards differ by role: admins get org totals, managers get team lead metrics.
   const cards = isManager
@@ -85,39 +187,34 @@ export default function DashboardView({
       ]
 
   const statusData = Object.entries(
-    leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {} as Record<string, number>)
+    filteredLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name: LEAD_STATUS_LABELS[name] || name, value, status: name }))
 
   const sourceData = Object.entries(
-    leads.reduce((acc, l) => { const src = l.source || 'direct'; acc[src] = (acc[src] || 0) + 1; return acc }, {} as Record<string, number>)
+    filteredLeads.reduce((acc, l) => { const src = l.source || 'direct'; acc[src] = (acc[src] || 0) + 1; return acc }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
 
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
-    const key = d.toISOString().split('T')[0]
-    return { day: ARABIC_DAYS[d.getDay()], leads: leads.filter(l => l.created_at.startsWith(key)).length }
-  })
+  const trend = useMemo(() => buildTrend(filteredLeads, start, end), [filteredLeads, start, end])
 
-  // Lead counts per campaign / form / member.
+  // Lead counts per campaign / form / member (within the selected period).
   const leadsByCampaign = useMemo(() => {
     const m = new Map<string, number>()
-    for (const l of leads) if (l.campaign_id) m.set(l.campaign_id, (m.get(l.campaign_id) || 0) + 1)
+    for (const l of filteredLeads) if (l.campaign_id) m.set(l.campaign_id, (m.get(l.campaign_id) || 0) + 1)
     return m
-  }, [leads])
+  }, [filteredLeads])
   const leadsByForm = useMemo(() => {
     const m = new Map<string, number>()
-    for (const l of leads) if (l.form_id) m.set(l.form_id, (m.get(l.form_id) || 0) + 1)
+    for (const l of filteredLeads) if (l.form_id) m.set(l.form_id, (m.get(l.form_id) || 0) + 1)
     return m
-  }, [leads])
+  }, [filteredLeads])
 
   const memberPerf = useMemo(() => {
     return members.map(mem => {
-      const own = leads.filter(l => l.assigned_sales_id === mem.id)
+      const own = filteredLeads.filter(l => l.assigned_sales_id === mem.id)
       const converted = own.filter(l => l.status === 'converted').length
       return { ...mem, total: own.length, converted, rate: own.length ? Math.round((converted / own.length) * 100) : 0 }
     }).sort((a, b) => b.total - a.total)
-  }, [members, leads])
+  }, [members, filteredLeads])
 
   const recentCampaigns = [...campaigns].slice(0, 6)
   const recentForms = [...forms].slice(0, 6)
@@ -153,6 +250,34 @@ export default function DashboardView({
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Period filter */}
+          <div className="card p-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted2 font-bold px-1">الفترة الزمنية</span>
+            <div className="flex flex-wrap gap-1 bg-surface2 rounded-xl p-1 border border-border">
+              {RANGE_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setRangeKey(opt.key)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                    rangeKey === opt.key ? 'bg-primary text-primary-fg' : 'text-muted hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {rangeKey === 'custom' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <input type="date" value={customFrom} max={customTo || undefined}
+                  onChange={e => setCustomFrom(e.target.value)} className="input !py-1.5 !w-auto" aria-label="من تاريخ" />
+                <span className="text-muted2 text-sm">إلى</span>
+                <input type="date" value={customTo} min={customFrom || undefined}
+                  onChange={e => setCustomTo(e.target.value)} className="input !py-1.5 !w-auto" aria-label="إلى تاريخ" />
+              </div>
+            )}
+            <span className="ms-auto text-xs text-muted2 px-1">{filteredLeads.length} عميل خلال الفترة</span>
+          </div>
+
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {cards.map(({ label, value, icon: Icon, color, href }) => (
@@ -169,9 +294,9 @@ export default function DashboardView({
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="card p-5">
-              <h3 className="font-bold text-foreground mb-4">العملاء المحتملون (آخر ٧ أيام)</h3>
+              <h3 className="font-bold text-foreground mb-4">العملاء المحتملون · {rangeLabel}</h3>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={last7}>
+                <BarChart data={trend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'var(--muted)' }} reversed />
                   <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} orientation="right" allowDecimals={false} />
