@@ -90,17 +90,13 @@ export default function CampaignsList({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">الحملات</h2>
-          <p className="text-sm text-muted mt-0.5">إدارة الحملات الإعلانية والنماذج المرتبطة بها</p>
-        </div>
-        {isAdmin && (
+      {isAdmin && (
+        <div className="flex justify-end mb-6">
           <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary">
             <Plus size={17} /> حملة جديدة
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Search + status filter */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
