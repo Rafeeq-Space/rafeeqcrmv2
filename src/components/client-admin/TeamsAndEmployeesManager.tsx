@@ -692,11 +692,10 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                   </div>
                 </div>
 
-                {manager && (
-                  <p className="text-xs text-muted2 mt-3 flex items-center gap-1">
-                    <Crown size={12} style={{ color: 'var(--warning)' }} /> {manager.full_name}
-                  </p>
-                )}
+                <p className="text-xs text-muted2 mt-3 flex items-center gap-1">
+                  <Crown size={12} style={{ color: 'var(--warning)' }} />
+                  المدير: {manager ? manager.full_name : 'غير معيّن'}
+                </p>
               </button>
             )
           })}
