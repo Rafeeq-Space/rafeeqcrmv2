@@ -22,6 +22,17 @@ interface Props {
 
 const STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const
 
+// Overview stat cards (also act as quick status filters) shown at the top of
+// the leads center. Colors mirror the status badge palette.
+const STAT_CARDS: { key: string; label: string; color: string }[] = [
+  { key: 'all', label: 'إجمالي العملاء', color: 'var(--foreground)' },
+  { key: 'new', label: 'جديد', color: 'var(--primary)' },
+  { key: 'contacted', label: 'تم التواصل', color: 'var(--warning)' },
+  { key: 'qualified', label: 'مؤهل', color: 'var(--purple)' },
+  { key: 'converted', label: 'تم التحويل', color: 'var(--success)' },
+  { key: 'lost', label: 'خسارة', color: 'var(--danger)' },
+]
+
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
@@ -74,45 +85,37 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
     })
   }, [leads, status, campaign, team, member])
 
-  const campaignCards = useMemo(() => {
-    if (!isAdmin) return []
-    const counts = new Map<string, number>()
+  // Lead counts per status — shown as overview cards that double as quick
+  // filters. More relevant to a leads center than the campaign names were.
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: leads.length, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 }
     for (const l of leads) {
-      if (l.campaign_id) counts.set(l.campaign_id, (counts.get(l.campaign_id) || 0) + 1)
+      if (l.status && counts[l.status] !== undefined) counts[l.status]++
     }
-    const cards = campaigns.map(c => ({ ...c, count: counts.get(c.id) || 0 }))
-    const noCampaign = leads.filter(l => !l.campaign_id).length
-    if (noCampaign) cards.push({ id: '__none__', name: 'بدون حملة', count: noCampaign })
-    return cards
-  }, [isAdmin, leads, campaigns])
+    return counts
+  }, [leads])
 
   return (
     <div className="space-y-6">
-      {/* Campaign cards (admin) */}
-      {isAdmin && campaignCards.length > 0 && (
-        <div>
-          <p className="text-xs font-bold text-muted2 mb-3">الحملات</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {campaignCards.map(c => {
-              const active = campaign === c.id
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setCampaign(active ? 'all' : c.id)}
-                  className={`card p-4 text-start transition hover:border-primary ${active ? 'border-primary ring-1 ring-primary' : ''}`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Megaphone size={16} style={{ color: 'var(--primary)' }} />
-                    <span className="text-sm font-semibold text-foreground truncate">{c.name}</span>
-                  </div>
-                  <p className="text-2xl font-extrabold text-foreground">{c.count}</p>
-                  <p className="text-xs text-muted2">عميل محتمل</p>
-                </button>
-              )
-            })}
-          </div>
+      {/* Overview stat cards — counts per status, clickable as quick filters */}
+      <div>
+        <p className="text-xs font-bold text-muted2 mb-3">نظرة عامة</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {STAT_CARDS.map(c => {
+            const active = status === c.key
+            return (
+              <button
+                key={c.key}
+                onClick={() => setStatus(active && c.key !== 'all' ? 'all' : c.key)}
+                className={`card p-4 text-start transition hover:border-primary ${active ? 'border-primary ring-1 ring-primary' : ''}`}
+              >
+                <p className="text-2xl font-extrabold" style={{ color: c.color }}>{statusCounts[c.key]}</p>
+                <p className="text-xs text-muted2 mt-1 truncate">{c.label}</p>
+              </button>
+            )
+          })}
         </div>
-      )}
+      </div>
 
       {/* Filters + view toggle */}
       <div className="flex flex-wrap gap-3 items-center">
