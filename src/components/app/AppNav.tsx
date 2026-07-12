@@ -88,12 +88,12 @@ export default function AppNav({ profile }: Props) {
               href={href}
               onClick={onNavigate}
               title={mini ? label : undefined}
-              className={`group flex items-start rounded-xl transition border-e-2 ${
+              className={`group flex items-start rounded-xl transition ${
                 mini ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
               } ${
                 active
-                  ? 'bg-primary-soft text-foreground border-primary'
-                  : 'text-muted hover:bg-surface2 hover:text-foreground border-transparent'
+                  ? 'text-foreground'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               <Icon
