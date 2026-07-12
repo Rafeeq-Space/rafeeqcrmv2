@@ -24,17 +24,27 @@ interface Props {
   teams?: TeamWithMembers[]
   adConnections?: AdConnection[]
   campaignConnectionMap?: Record<string, string[]>
+  // When the parent renders the "new campaign" button itself (e.g. inline in
+  // the page header), it controls the add-campaign modal through these props
+  // and CampaignsList hides its own standalone button row.
+  addOpen?: boolean
+  onAddOpenChange?: (open: boolean) => void
 }
 
 type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' | 'sheet' }
 
 export default function CampaignsList({
   campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [],
-  adConnections = [], campaignConnectionMap = {},
+  adConnections = [], campaignConnectionMap = {}, addOpen, onAddOpenChange,
 }: Props) {
   const [campaigns, setCampaigns] = useState(initialCampaigns)
   const [forms, setForms] = useState(initialForms)
-  const [showAddCampaign, setShowAddCampaign] = useState(false)
+  // The add-campaign modal is controlled by the parent when both props are
+  // supplied; otherwise CampaignsList keeps its own local state.
+  const controlledAdd = addOpen !== undefined && onAddOpenChange !== undefined
+  const [internalAddOpen, setInternalAddOpen] = useState(false)
+  const showAddCampaign = controlledAdd ? addOpen : internalAddOpen
+  const setShowAddCampaign = controlledAdd ? onAddOpenChange : setInternalAddOpen
   const [formFlow, setFormFlow] = useState<FormFlow | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -90,7 +100,7 @@ export default function CampaignsList({
 
   return (
     <div>
-      {isAdmin && (
+      {isAdmin && !controlledAdd && (
         <div className="flex justify-end mb-6">
           <button onClick={() => setShowAddCampaign(true)} className="btn btn-primary">
             <Plus size={17} /> حملة جديدة

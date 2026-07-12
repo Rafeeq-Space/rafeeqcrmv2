@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import {
   Target, FileText, Users, TrendingUp, Users2, UserCheck,
-  CheckCircle2, Clock, XCircle, Megaphone,
+  CheckCircle2, Clock, XCircle, Megaphone, Plus,
 } from 'lucide-react'
 import type { AdConnection, Campaign, Form, Lead, Employee, TeamWithMembers } from '@/lib/types'
 import { LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
@@ -129,6 +129,10 @@ export default function DashboardView({
 
   const isManager = role === 'client_sales_manager'
 
+  // Lifted so the "new campaign" button can live inline in the page header
+  // (next to the title) instead of taking its own row inside CampaignsList.
+  const [addCampaignOpen, setAddCampaignOpen] = useState(false)
+
   // ── Period filter (overview statistics) ──
   const [rangeKey, setRangeKey] = useState<RangeKey>('month')
   const [customFrom, setCustomFrom] = useState('')
@@ -243,6 +247,11 @@ export default function DashboardView({
               </button>
             ))}
           </div>
+        )}
+        {campaignsOnly && isAdmin && (
+          <button onClick={() => setAddCampaignOpen(true)} className="btn btn-primary">
+            <Plus size={17} /> حملة جديدة
+          </button>
         )}
       </div>
 
@@ -430,6 +439,7 @@ export default function DashboardView({
           teams={teams}
           adConnections={adConnections}
           campaignConnectionMap={campaignConnectionMap}
+          {...(campaignsOnly ? { addOpen: addCampaignOpen, onAddOpenChange: setAddCampaignOpen } : {})}
         />
       )}
 
