@@ -30,6 +30,13 @@ function campaignLabel(lead: Lead) {
   return lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'
 }
 
+// The source badge (e.g. "TikTok") shown next to the campaign name. Hidden when
+// there's no campaign, since campaignLabel already falls back to the source.
+function sourceLabel(lead: Lead) {
+  if (!lead.campaigns?.name || !lead.source) return null
+  return SOURCE_LABELS[lead.source] || lead.source
+}
+
 // Call / WhatsApp buttons — clicking them must not trigger the row/card navigation.
 function ContactButtons({ phone }: { phone: string }) {
   if (!phone) return null
@@ -164,7 +171,7 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
                   <span className={`badge ${LEAD_STATUS_COLORS[lead.status]} shrink-0`}>{LEAD_STATUS_LABELS[lead.status]}</span>
                 </div>
                 <div className="space-y-1.5 text-xs text-muted mb-3">
-                  <p className="flex items-center gap-2"><Megaphone size={13} /> {campaignLabel(lead)}</p>
+                  <p className="flex items-center gap-2 flex-wrap"><Megaphone size={13} /> {campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</p>
                   <p className="flex items-center gap-2"><Calendar size={13} /> {new Date(lead.created_at).toLocaleDateString('ar-EG')}</p>
                 </div>
                 {phone && <div className="flex items-center gap-2"><ContactButtons phone={phone} /></div>}
@@ -191,7 +198,7 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
                       <td className="px-4 py-3 font-semibold text-foreground">{leadName(lead.data)}</td>
-                      <td className="px-4 py-3 text-muted">{campaignLabel(lead)}</td>
+                      <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       <td className="px-4 py-3 text-muted2">{new Date(lead.created_at).toLocaleDateString('ar-EG')}</td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons phone={phone} /></div></td>
