@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, User, Megaphone, LayoutGrid, Table as TableIcon } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 
@@ -35,6 +35,15 @@ const STAT_CARDS: { key: string; label: string; color: string }[] = [
 
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
+}
+
+// Creation date is shown as a plain day; last-update also shows the time, since
+// it can change multiple times within the same day.
+function fmtDate(d?: string) {
+  return d ? new Date(d).toLocaleDateString('ar-EG') : '—'
+}
+function fmtDateTime(d?: string) {
+  return d ? new Date(d).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 }
 
 function campaignLabel(lead: Lead) {
@@ -175,7 +184,8 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
                 </div>
                 <div className="space-y-1.5 text-xs text-muted mb-3">
                   <p className="flex items-center gap-2 flex-wrap"><Megaphone size={13} /> {campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</p>
-                  <p className="flex items-center gap-2"><Calendar size={13} /> {new Date(lead.created_at).toLocaleDateString('ar-EG')}</p>
+                  <p className="flex items-center gap-2"><Calendar size={13} /> <span className="text-muted2">أنشئ:</span> {fmtDate(lead.created_at)}</p>
+                  <p className="flex items-center gap-2"><Clock size={13} /> <span className="text-muted2">آخر تحديث:</span> {fmtDateTime(lead.updated_at)}</p>
                 </div>
                 {phone && <div className="flex items-center gap-2"><ContactButtons phone={phone} /></div>}
               </div>
@@ -189,9 +199,10 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
               <thead>
                 <tr className="border-b border-border text-muted2 text-xs">
                   <th className="text-start font-semibold px-4 py-3">العميل</th>
-                  <th className="text-start font-semibold px-4 py-3">الحملة</th>
-                  <th className="text-start font-semibold px-4 py-3">التاريخ</th>
                   <th className="text-start font-semibold px-4 py-3">الحالة</th>
+                  <th className="text-start font-semibold px-4 py-3">الحملة</th>
+                  <th className="text-start font-semibold px-4 py-3">تاريخ الإنشاء</th>
+                  <th className="text-start font-semibold px-4 py-3">آخر تحديث</th>
                   <th className="text-start font-semibold px-4 py-3">تواصل</th>
                 </tr>
               </thead>
@@ -201,9 +212,10 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
                       <td className="px-4 py-3 font-semibold text-foreground">{leadName(lead.data)}</td>
-                      <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
-                      <td className="px-4 py-3 text-muted2">{new Date(lead.created_at).toLocaleDateString('ar-EG')}</td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
+                      <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
+                      <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
+                      <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons phone={phone} /></div></td>
                     </tr>
                   )
