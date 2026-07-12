@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Sparkles, Menu, X } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Sparkles, Menu, X, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface Props {
   profile: {
@@ -50,6 +50,23 @@ export default function AppNav({ profile }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Desktop sidebar starts collapsed by default; the user's preference is
+  // remembered in localStorage and mirrored to a CSS var so the page content
+  // margin (see .app-shell-main in globals.css) follows the sidebar width.
+  const [collapsed, setCollapsed] = useState(true)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebar-collapsed')
+    if (stored !== null) setCollapsed(stored === '1')
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0')
+    document.documentElement.style.setProperty('--app-sidebar-w', collapsed ? '4.75rem' : '18rem')
+  }, [collapsed, mounted])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -59,10 +76,10 @@ export default function AppNav({ profile }: Props) {
 
   const initial = profile?.full_name?.[0]?.toUpperCase() || 'م'
 
-  function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  function NavLinks({ mini = false, onNavigate }: { mini?: boolean; onNavigate?: () => void }) {
     return (
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">القائمة الرئيسية</p>
+        {!mini && <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">القائمة الرئيسية</p>}
         {navItems.map(({ href, label, desc, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
@@ -70,7 +87,10 @@ export default function AppNav({ profile }: Props) {
               key={href}
               href={href}
               onClick={onNavigate}
-              className={`group flex items-start gap-3 px-3 py-2.5 rounded-xl transition border-e-2 ${
+              title={mini ? label : undefined}
+              className={`group flex items-start rounded-xl transition border-e-2 ${
+                mini ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
+              } ${
                 active
                   ? 'bg-primary-soft text-foreground border-primary'
                   : 'text-muted hover:bg-surface2 hover:text-foreground border-transparent'
@@ -78,13 +98,15 @@ export default function AppNav({ profile }: Props) {
             >
               <Icon
                 size={19}
-                className="mt-0.5 shrink-0"
+                className={mini ? 'shrink-0' : 'mt-0.5 shrink-0'}
                 style={active ? { color: 'var(--primary)' } : undefined}
               />
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold leading-tight">{label}</span>
-                <span className="block text-[0.7rem] text-muted2 mt-0.5 leading-tight truncate">{desc}</span>
-              </span>
+              {!mini && (
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold leading-tight">{label}</span>
+                  <span className="block text-[0.7rem] text-muted2 mt-0.5 leading-tight truncate">{desc}</span>
+                </span>
+              )}
             </Link>
           )
         })}
@@ -92,7 +114,30 @@ export default function AppNav({ profile }: Props) {
     )
   }
 
-  function SidebarBrand() {
+  function CollapseToggle() {
+    return (
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="p-1.5 rounded-lg text-muted2 hover:text-foreground hover:bg-surface2 transition"
+        title={collapsed ? 'توسيع القائمة' : 'طي القائمة'}
+        aria-label={collapsed ? 'توسيع القائمة' : 'طي القائمة'}
+      >
+        {collapsed ? <ChevronsLeft size={18} /> : <ChevronsRight size={18} />}
+      </button>
+    )
+  }
+
+  function SidebarBrand({ mini = false, showToggle = false }: { mini?: boolean; showToggle?: boolean }) {
+    if (mini) {
+      return (
+        <div className="px-3 py-5 border-b border-border flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
+            <Sparkles size={20} style={{ color: 'var(--primary)' }} />
+          </div>
+          {showToggle && <CollapseToggle />}
+        </div>
+      )
+    }
     return (
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-3">
@@ -109,12 +154,34 @@ export default function AppNav({ profile }: Props) {
               </p>
             )}
           </div>
+          {showToggle && <div className="ms-auto shrink-0"><CollapseToggle /></div>}
         </div>
       </div>
     )
   }
 
-  function SidebarFooter() {
+  function SidebarFooter({ mini = false }: { mini?: boolean }) {
+    if (mini) {
+      return (
+        <div className="p-3 border-t border-border flex flex-col items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+            style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}
+            title={profile?.full_name || 'مستخدم'}
+          >
+            {initial}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-muted2 hover:text-danger transition p-1.5 rounded-lg"
+            title="تسجيل الخروج"
+            aria-label="تسجيل الخروج"
+          >
+            <LogOut size={17} />
+          </button>
+        </div>
+      )
+    }
     return (
       <div className="p-3 border-t border-border space-y-2">
         <ThemeToggle />
@@ -181,10 +248,13 @@ export default function AppNav({ profile }: Props) {
       </aside>
 
       {/* ── Desktop sidebar (fixed to the right in RTL via start-0) ── */}
-      <aside className="hidden lg:flex fixed top-0 bottom-0 start-0 w-72 bg-surface/80 backdrop-blur-xl border-e border-border flex-col z-30">
-        <SidebarBrand />
-        <NavLinks />
-        <SidebarFooter />
+      <aside
+        className="hidden lg:flex fixed top-0 bottom-0 start-0 bg-surface/80 backdrop-blur-xl border-e border-border flex-col z-30 transition-[width] duration-200 ease-out"
+        style={{ width: collapsed ? '4.75rem' : '18rem' }}
+      >
+        <SidebarBrand mini={collapsed} showToggle />
+        <NavLinks mini={collapsed} />
+        <SidebarFooter mini={collapsed} />
       </aside>
     </>
   )

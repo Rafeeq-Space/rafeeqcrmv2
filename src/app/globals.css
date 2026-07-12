@@ -35,6 +35,10 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 24px 60px -12px rgba(0, 0, 0, 0.65);
+
+  /* Desktop sidebar width — defaults to the collapsed rail so first paint
+     matches the default-collapsed sidebar (updated at runtime by the nav). */
+  --app-sidebar-w: 4.75rem;
 }
 
 .light {
@@ -97,6 +101,16 @@ body {
   font-family: var(--font-arabic), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* ── App shell content offset — follows the collapsible desktop sidebar ── */
+.app-shell-main {
+  transition: margin-inline-start 0.2s ease-out;
+}
+@media (min-width: 1024px) {
+  .app-shell-main {
+    margin-inline-start: var(--app-sidebar-w, 4.75rem);
+  }
 }
 
 /* Subtle ambient glow behind the app for depth (cheap, GPU-friendly) */
