@@ -36,12 +36,13 @@ const STAT_CARDS: { key: string; label: string; color: string }[] = [
 ]
 
 // Period quick-filter over the lead creation date.
-type PeriodKey = 'all' | 'day' | 'week' | 'month'
+type PeriodKey = 'all' | 'day' | 'week' | 'month' | 'range'
 const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: 'all', label: 'الكل' },
   { key: 'day', label: 'اليوم' },
   { key: 'week', label: 'آخر أسبوع' },
   { key: 'month', label: 'آخر شهر' },
+  { key: 'range', label: 'نطاق' },
 ]
 
 function digits(s: string) {
@@ -90,6 +91,8 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
   const [period, setPeriod] = useState<PeriodKey>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
   const [search, setSearch] = useState('')
   const [showAddLead, setShowAddLead] = useState(false)
 
@@ -103,24 +106,33 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   // the whole page — including the 6 cards up top — reacts to the period/search
   // filters, while the cards still show a per-status breakdown to pick from.
   const scoped = useMemo(() => {
-    // Lower bound for the selected period (null = no date limit).
+    // Date bounds for the selected period (null = unbounded on that side).
     const now = Date.now()
-    const span: Record<PeriodKey, number> = { all: 0, day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }
-    const minTime = period === 'all' ? null : now - span[period]
+    const span: Record<'day' | 'week' | 'month', number> = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }
+    let minTime: number | null = null
+    let maxTime: number | null = null
+    if (period === 'range') {
+      if (customFrom) minTime = new Date(`${customFrom}T00:00:00`).getTime()
+      if (customTo) maxTime = new Date(`${customTo}T23:59:59`).getTime()
+    } else if (period !== 'all') {
+      minTime = now - span[period]
+    }
     const q = search.trim().toLowerCase()
 
     return leads.filter(l => {
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
       if (team !== 'all' && l.assigned_team_id !== team) return false
       if (member !== 'all' && l.assigned_sales_id !== member) return false
-      if (minTime !== null && new Date(l.created_at).getTime() < minTime) return false
+      const t = new Date(l.created_at).getTime()
+      if (minTime !== null && t < minTime) return false
+      if (maxTime !== null && t > maxTime) return false
       if (q) {
         const hay = `${leadName(l.data)} ${leadPhone(l.data)}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
     })
-  }, [leads, campaign, team, member, period, search])
+  }, [leads, campaign, team, member, period, customFrom, customTo, search])
 
   const filtered = useMemo(
     () => scoped.filter(l => status === 'all' || l.status === status),
@@ -164,6 +176,15 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
             </button>
           ))}
         </div>
+        {period === 'range' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="date" dir="ltr" value={customFrom} max={customTo || undefined}
+              onChange={e => setCustomFrom(e.target.value)} className="input !py-1.5 !w-auto text-start" aria-label="من تاريخ" />
+            <span className="text-muted2 text-sm">إلى</span>
+            <input type="date" dir="ltr" value={customTo} min={customFrom || undefined}
+              onChange={e => setCustomTo(e.target.value)} className="input !py-1.5 !w-auto text-start" aria-label="إلى تاريخ" />
+          </div>
+        )}
       </div>
 
       {/* Overview stat cards — counts per status, clickable as quick filters */}
@@ -276,7 +297,10 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                   const phone = leadPhone(lead.data)
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
-                      <td className="px-4 py-3 font-semibold text-foreground">{leadName(lead.data)}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-foreground block">{leadName(lead.data)}</span>
+                        {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}
+                      </td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
                       <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
