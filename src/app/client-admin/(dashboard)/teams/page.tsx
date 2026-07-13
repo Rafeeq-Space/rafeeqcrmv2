@@ -14,6 +14,7 @@ export default async function ClientAdminTeamsPage() {
 
   const tenantId = profile?.tenant_id || ''
   const role = (profile?.role || 'client_user') as UserRole
+  const isAdmin = role === 'client_admin'
 
   // Service role to read all tenant members regardless of RLS.
   const adminSupabase = createAdminSupabase()
@@ -28,13 +29,22 @@ export default async function ClientAdminTeamsPage() {
   const managedTeam = (teams || []).find(t => t.manager_id === user!.id)
   const currentTeamId = managedTeam?.id || profile?.team_id || null
 
-  // Members = sales managers + sales users (exclude the admins).
-  const { data: members } = await adminSupabase
+  // Members = sales managers + sales users. When an admin opens the page we
+  // also include their own row so they can view/edit their own profile.
+  const memberRoles = isAdmin
+    ? ['client_admin', 'client_sales_manager', 'client_user']
+    : ['client_sales_manager', 'client_user']
+  const { data: membersRaw } = await adminSupabase
     .from('profiles')
     .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, created_at')
     .eq('tenant_id', tenantId)
-    .in('role', ['client_sales_manager', 'client_user'])
+    .in('role', memberRoles)
     .order('full_name')
+
+  // Emails live in auth.users, not profiles — build an id → email map.
+  const { data: authList } = await adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const emailById = new Map((authList?.users || []).map(u => [u.id, u.email || '']))
+  const members = (membersRaw || []).map(m => ({ ...m, email: emailById.get(m.id) || '' }))
 
   // Lead counters per team (open = new, pending = in-progress).
   const { data: leads } = await adminSupabase
@@ -42,7 +52,7 @@ export default async function ClientAdminTeamsPage() {
     .select('assigned_to, assigned_sales_id, status')
     .eq('tenant_id', tenantId)
 
-  const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
+  const memberTeam = new Map(members.map(m => [m.id, m.team_id]))
   const leadStats: Record<string, { open: number; pending: number }> = {}
   // Per-member counters (by assigned_sales_id) — used by the delete-member flow
   // to show how many open/pending leads would need reassigning.
@@ -65,9 +75,10 @@ export default async function ClientAdminTeamsPage() {
   return (
     <TeamsAndEmployeesManager
       teams={teams || []}
-      members={members || []}
+      members={members}
       tenantId={tenantId}
       currentRole={role}
+      currentUserId={user!.id}
       currentTeamId={currentTeamId}
       leadStats={leadStats}
       memberLeadStats={memberLeadStats}

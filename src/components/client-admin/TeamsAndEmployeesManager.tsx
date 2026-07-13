@@ -13,11 +13,14 @@ export interface TeamLeadStats {
   pending: number
 }
 
+type MemberRow = TeamMember & { email?: string }
+
 interface Props {
   teams: Team[]
-  members: TeamMember[]
+  members: MemberRow[]
   tenantId: string
   currentRole: UserRole
+  currentUserId?: string
   currentTeamId?: string | null
   leadStats?: Record<string, TeamLeadStats>
   memberLeadStats?: Record<string, TeamLeadStats>
@@ -453,7 +456,7 @@ function DeleteMemberModal({
   onClose: () => void
   onDeleted: () => void
 }) {
-  const others = members.filter(m => m.id !== member.id && !m.suspended)
+  const others = members.filter(m => m.id !== member.id && !m.suspended && m.role !== 'client_admin')
   const hasLeads = stats.open > 0 || stats.pending > 0
   const [reassignTo, setReassignTo] = useState('')
   const [moveOpen, setMoveOpen] = useState(stats.open > 0)
@@ -602,21 +605,87 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   )
 }
 
+// ─── Self Profile Modal (admin edits own name/password only) ──────
+function SelfProfileModal({ member, onClose }: { member: MemberRow; onClose: () => void }) {
+  const [fullName, setFullName] = useState(member.full_name)
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const body: { full_name: string; password?: string } = { full_name: fullName }
+      if (password) body.password = password
+      const res = await fetch(`/api/client-admin/users/${member.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      onClose()
+      window.location.reload()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="overlay items-center justify-center p-4" onClick={onClose}>
+      <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold text-foreground">تعديل بياناتي</h3>
+          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div>
+            <label className="label">الاسم الكامل</label>
+            <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} required />
+          </div>
+          <div>
+            <label className="label">البريد الإلكتروني</label>
+            <input type="email" dir="ltr" className="input text-start" value={member.email || ''} disabled />
+          </div>
+          <div>
+            <label className="label">كلمة مرور جديدة <span className="text-muted2">(اختياري)</span></label>
+            <input type="password" dir="ltr" className="input text-start" value={password} onChange={e => setPassword(e.target.value)} minLength={8} placeholder="اتركها فارغة لعدم التغيير" />
+          </div>
+          {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
+            <button type="submit" disabled={loading} className="btn btn-primary flex-1">
+              {loading ? 'جارٍ الحفظ...' : 'حفظ'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────
-export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentTeamId, leadStats = {}, memberLeadStats = {}, readOnly = false }: Props) {
+export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentUserId, currentTeamId, leadStats = {}, memberLeadStats = {}, readOnly = false }: Props) {
   const isAdmin = currentRole === 'client_admin' && !readOnly
   const isManager = currentRole === 'client_sales_manager' && !readOnly
   // Only admins create teams / add members. Managers are view-only here.
   const canAddMember = isAdmin
   // Admin can edit member details; managers cannot edit anything.
-  const canEditMember = (_m: TeamMember) => isAdmin
-  // Admin removes anyone; a sales manager may only remove members of their own team.
-  const canRemoveMember = (m: TeamMember) => isAdmin || (isManager && !!currentTeamId && m.team_id === currentTeamId)
+  // The admin's own row is edit-only (handled separately) — no full management.
+  const isSelf = (m: TeamMember) => m.id === currentUserId
+  const canEditMember = (m: TeamMember) => isAdmin && !isSelf(m)
+  // Admin removes anyone (except self); a sales manager may only remove members of their own team.
+  const canRemoveMember = (m: TeamMember) => (isAdmin && !isSelf(m)) || (isManager && !!currentTeamId && m.team_id === currentTeamId)
   const [activeTab, setActiveTab] = useState<'teams' | 'employees'>('teams')
   const [showAddTeam, setShowAddTeam] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
   const [editMember, setEditMember] = useState<TeamMember | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null)
+  const [editSelf, setEditSelf] = useState<MemberRow | null>(null)
   const [openTeam, setOpenTeam] = useState<Team | null>(null)
 
   function refresh() { window.location.reload() }
@@ -712,6 +781,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
             <thead>
               <tr className="border-b border-border">
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">الموظف</th>
+                <th className="text-start px-5 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">المسمى الوظيفي</th>
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">الفريق</th>
                 <th className="text-start px-5 py-3 text-muted2 font-semibold">اتصال</th>
@@ -721,7 +791,8 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
             <tbody>
               {members.map(m => {
                 const team = teams.find(t => t.id === m.team_id)
-                const isManager = m.role === 'client_sales_manager'
+                const isMgr = m.role === 'client_sales_manager'
+                const self = isSelf(m)
                 return (
                   <tr key={m.id} className={`border-b border-border last:border-0 hover:bg-surface2 transition ${m.suspended ? 'opacity-50' : ''}`}>
                     <td className="px-5 py-3">
@@ -729,11 +800,13 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                         <Avatar name={m.full_name} url={m.avatar_url} size={32} />
                         <span className="font-semibold text-foreground flex items-center gap-1">
                           {m.full_name}
-                          {isManager && <Crown size={13} style={{ color: 'var(--warning)' }} />}
+                          {isMgr && <Crown size={13} style={{ color: 'var(--warning)' }} />}
+                          {self && <span className="badge badge-green ms-1">أنت</span>}
                           {m.suspended && <span className="text-xs text-muted2">(معلّق)</span>}
                         </span>
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-muted2" dir="ltr">{m.email || '—'}</td>
                     <td className="px-5 py-3 text-muted">{m.job_title || '—'}</td>
                     <td className="px-5 py-3">
                       {team ? <span className="badge badge-blue">{team.name}</span> : <span className="text-muted2 text-xs">غير مُسنَد</span>}
@@ -741,7 +814,11 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                     <td className="px-5 py-3"><ContactIcons phone={m.phone} /></td>
                     {canAddMember && (
                       <td className="px-5 py-3">
-                        {canEditMember(m) ? (
+                        {self ? (
+                          <button onClick={() => setEditSelf(m)} className="text-muted2 hover:text-primary transition p-1.5 rounded-lg" title="تعديل بياناتي">
+                            <Pencil size={15} />
+                          </button>
+                        ) : canEditMember(m) ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
                               <Pencil size={15} />
@@ -766,7 +843,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                 )
               })}
               {members.length === 0 && (
-                <tr><td colSpan={5} className="px-5 py-12 text-center text-muted2">لا يوجد موظفون بعد.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-12 text-center text-muted2">لا يوجد موظفون بعد.</td></tr>
               )}
             </tbody>
           </table>
@@ -807,6 +884,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           onDeleted={refresh}
         />
       )}
+      {editSelf && <SelfProfileModal member={editSelf} onClose={() => setEditSelf(null)} />}
     </div>
   )
 }
