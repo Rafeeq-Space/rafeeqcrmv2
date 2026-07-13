@@ -41,7 +41,7 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
     if (user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, suspended')
+        .select('role, suspended, tenants(subdomain)')
         .eq('id', user.id)
         .single()
 
@@ -59,7 +59,8 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
       const hostnameSubdomain = hostname.endsWith(`.${rootDomain}`)
         ? hostname.replace(`.${rootDomain}`, '')
         : ''
-      const onSubdomain = !!(subdomain || hostnameSubdomain)
+      const currentSubdomain = subdomain || hostnameSubdomain
+      const onSubdomain = !!currentSubdomain
 
       // Main domain — only super_admin allowed
       if (!onSubdomain) {
@@ -73,11 +74,24 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         return
       }
 
-      // Subdomain login — route by role
+      // Subdomain login — super_admin goes to their own portal.
       if (profile?.role === 'super_admin') {
         router.push('/saas/dashboard')
         return
       }
+
+      // Tenant isolation: the account must belong to this subdomain's tenant.
+      // Signing in with another tenant's account looks like a bad credential,
+      // so we sign out and show the generic error instead of redirecting.
+      const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
+      if (profileSubdomain && profileSubdomain !== currentSubdomain) {
+        await supabase.auth.signOut()
+        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
+        setLoading(false)
+        return
+      }
+
+      // Route by role within the correct tenant.
       if (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') {
         router.push('/client-admin/dashboard')
         return
