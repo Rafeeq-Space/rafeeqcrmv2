@@ -11,9 +11,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, subdomain, email, password } = await request.json()
+    const { name, subdomain, email } = await request.json()
 
-    if (!name || !subdomain || !email || !password) {
+    if (!name || !subdomain || !email) {
       return NextResponse.json({ error: 'All fields required' }, { status: 400 })
     }
 
@@ -37,11 +37,12 @@ export async function POST(request: Request) {
 
     if (tenantError) throw tenantError
 
-    // Create auth user
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
+    // Invite the admin by email instead of setting a password here.
+    // They receive a login link and choose their own password on /set-password.
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
+    const redirectTo = `https://${subdomain}.${rootDomain}/set-password`
+    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
     })
 
     if (authError) {

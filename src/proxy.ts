@@ -40,6 +40,9 @@ export async function proxy(request: NextRequest) {
   // ── Public form routes ──
   if (pathname.startsWith('/f/')) return NextResponse.next()
 
+  // ── Public invite/set-password route (served as-is on any subdomain) ──
+  if (pathname.startsWith('/set-password')) return NextResponse.next()
+
   // ════════════════════════════════════════════════════
   // 1. SUPER ADMIN PORTAL  →  rafeeqcrm.com/saas
   //    (or localhost:3000/saas when no subdomain)
