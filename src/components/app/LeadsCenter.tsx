@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import AddLeadModal from './AddLeadModal'
@@ -33,6 +33,15 @@ const STAT_CARDS: { key: string; label: string; color: string }[] = [
   { key: 'qualified', label: 'مؤهل', color: 'var(--purple)' },
   { key: 'converted', label: 'تم التحويل', color: 'var(--success)' },
   { key: 'lost', label: 'خسارة', color: 'var(--danger)' },
+]
+
+// Period quick-filter over the lead creation date.
+type PeriodKey = 'all' | 'day' | 'week' | 'month'
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: 'all', label: 'الكل' },
+  { key: 'day', label: 'اليوم' },
+  { key: 'week', label: 'آخر أسبوع' },
+  { key: 'month', label: 'آخر شهر' },
 ]
 
 function digits(s: string) {
@@ -75,11 +84,13 @@ function ContactButtons({ phone }: { phone: string }) {
 
 export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [] }: Props) {
   const router = useRouter()
-  const [view, setView] = useState<'cards' | 'table'>('cards')
+  const [view, setView] = useState<'cards' | 'table'>('table')
   const [status, setStatus] = useState('all')
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
+  const [period, setPeriod] = useState<PeriodKey>('all')
+  const [search, setSearch] = useState('')
   const [showAddLead, setShowAddLead] = useState(false)
 
   const isAdmin = role === 'client_admin'
@@ -88,14 +99,25 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const open = (id: string) => router.push(`${basePath}/${id}`)
 
   const filtered = useMemo(() => {
+    // Lower bound for the selected period (null = no date limit).
+    const now = Date.now()
+    const span: Record<PeriodKey, number> = { all: 0, day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }
+    const minTime = period === 'all' ? null : now - span[period]
+    const q = search.trim().toLowerCase()
+
     return leads.filter(l => {
       if (status !== 'all' && l.status !== status) return false
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
       if (team !== 'all' && l.assigned_team_id !== team) return false
       if (member !== 'all' && l.assigned_sales_id !== member) return false
+      if (minTime !== null && new Date(l.created_at).getTime() < minTime) return false
+      if (q) {
+        const hay = `${leadName(l.data)} ${leadPhone(l.data)}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
       return true
     })
-  }, [leads, status, campaign, team, member])
+  }, [leads, status, campaign, team, member, period, search])
 
   // Lead counts per status — shown as overview cards that double as quick
   // filters. More relevant to a leads center than the campaign names were.
@@ -131,6 +153,32 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
               </button>
             )
           })}
+        </div>
+      </div>
+
+      {/* Search + period quick-filter */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-muted2 pointer-events-none" />
+          <input
+            className="input ps-9"
+            placeholder="ابحث بالاسم أو رقم الهاتف..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border w-fit">
+          {PERIODS.map(p => (
+            <button
+              key={p.key}
+              onClick={() => setPeriod(p.key)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                period === p.key ? 'bg-primary text-primary-fg' : 'text-muted hover:text-foreground'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
