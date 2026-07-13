@@ -15,8 +15,13 @@ export default async function ClientAdminUsersPage() {
     .from('profiles')
     .select('id, full_name, role, created_at')
     .eq('tenant_id', tenantId)
-    .neq('id', user!.id) // exclude self
     .order('created_at', { ascending: false })
 
-  return <UsersManager users={users || []} tenantId={tenantId} />
+  // Emails live in auth.users, not profiles — build an id → email map.
+  const { data: authList } = await adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const emailById = new Map((authList?.users || []).map(u => [u.id, u.email || '']))
+
+  const usersWithEmail = (users || []).map(u => ({ ...u, email: emailById.get(u.id) || '' }))
+
+  return <UsersManager users={usersWithEmail} tenantId={tenantId} currentUserId={user!.id} />
 }
