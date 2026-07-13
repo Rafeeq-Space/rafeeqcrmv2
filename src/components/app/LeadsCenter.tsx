@@ -98,7 +98,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
 
   const open = (id: string) => router.push(`${basePath}/${id}`)
 
-  const filtered = useMemo(() => {
+  // Leads after every filter EXCEPT status (period, search, campaign, team,
+  // member). The overview cards and the status filter both derive from this, so
+  // the whole page — including the 6 cards up top — reacts to the period/search
+  // filters, while the cards still show a per-status breakdown to pick from.
+  const scoped = useMemo(() => {
     // Lower bound for the selected period (null = no date limit).
     const now = Date.now()
     const span: Record<PeriodKey, number> = { all: 0, day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }
@@ -106,7 +110,6 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
     const q = search.trim().toLowerCase()
 
     return leads.filter(l => {
-      if (status !== 'all' && l.status !== status) return false
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
       if (team !== 'all' && l.assigned_team_id !== team) return false
       if (member !== 'all' && l.assigned_sales_id !== member) return false
@@ -117,46 +120,27 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       }
       return true
     })
-  }, [leads, status, campaign, team, member, period, search])
+  }, [leads, campaign, team, member, period, search])
+
+  const filtered = useMemo(
+    () => scoped.filter(l => status === 'all' || l.status === status),
+    [scoped, status],
+  )
 
   // Lead counts per status — shown as overview cards that double as quick
-  // filters. More relevant to a leads center than the campaign names were.
+  // filters. Computed from the scoped set so they respect the active filters.
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: leads.length, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 }
-    for (const l of leads) {
+    const counts: Record<string, number> = { all: scoped.length, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 }
+    for (const l of scoped) {
       if (l.status && counts[l.status] !== undefined) counts[l.status]++
     }
     return counts
-  }, [leads])
+  }, [scoped])
 
   return (
     <div className="space-y-6">
-      {/* Overview stat cards — counts per status, clickable as quick filters */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-bold text-muted2">نظرة عامة</p>
-          <button onClick={() => setShowAddLead(true)} className="btn btn-primary !py-1.5 !px-3 text-sm">
-            <Plus size={16} /> عميل جديد
-          </button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {STAT_CARDS.map(c => {
-            const active = status === c.key
-            return (
-              <button
-                key={c.key}
-                onClick={() => setStatus(active && c.key !== 'all' ? 'all' : c.key)}
-                className={`card p-4 text-start transition hover:border-primary ${active ? 'border-primary ring-1 ring-primary' : ''}`}
-              >
-                <p className="text-2xl font-extrabold" style={{ color: c.color }}>{statusCounts[c.key]}</p>
-                <p className="text-xs text-muted2 mt-1 truncate">{c.label}</p>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Search + period quick-filter */}
+      {/* Page-level search + period quick-filter — controls everything below,
+          including the overview cards. */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="relative flex-1 sm:max-w-xs">
           <Search size={16} className="absolute top-1/2 -translate-y-1/2 start-3 text-muted2 pointer-events-none" />
@@ -179,6 +163,31 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
               {p.label}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Overview stat cards — counts per status, clickable as quick filters */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-bold text-muted2">نظرة عامة</p>
+          <button onClick={() => setShowAddLead(true)} className="btn btn-primary !py-1.5 !px-3 text-sm">
+            <Plus size={16} /> عميل جديد
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {STAT_CARDS.map(c => {
+            const active = status === c.key
+            return (
+              <button
+                key={c.key}
+                onClick={() => setStatus(active && c.key !== 'all' ? 'all' : c.key)}
+                className={`card p-4 text-start transition hover:border-primary ${active ? 'border-primary ring-1 ring-primary' : ''}`}
+              >
+                <p className="text-2xl font-extrabold" style={{ color: c.color }}>{statusCounts[c.key]}</p>
+                <p className="text-xs text-muted2 mt-1 truncate">{c.label}</p>
+              </button>
+            )
+          })}
         </div>
       </div>
 
