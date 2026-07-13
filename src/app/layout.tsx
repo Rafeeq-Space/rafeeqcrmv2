@@ -12,6 +12,7 @@ const tajawal = Tajawal({
 export const metadata: Metadata = {
   title: 'رفيق CRM — إدارة العملاء المحتملين',
   description: 'منصة CRM لإدارة العملاء المحتملين والحملات الإعلانية',
+  icons: { icon: '/logo.svg' },
 }
 
 // Applies the saved theme before paint to avoid a flash. Dark is the default.

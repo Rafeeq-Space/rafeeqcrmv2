@@ -54,13 +54,12 @@ export async function proxy(request: NextRequest) {
 
   if (isSuperAdminHost && pathname.startsWith('/saas')) {
     const { supabaseResponse, user, profile } = await updateSession(request)
-    const isLoginPath = pathname === '/saas/login'
 
-    if (!user && !isLoginPath) {
-      return NextResponse.redirect(new URL('/saas/login', request.url))
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
-    if (user && profile?.role !== 'super_admin' && !isLoginPath) {
-      return NextResponse.redirect(new URL('/saas/login', request.url))
+    if (user && profile?.role !== 'super_admin') {
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     return supabaseResponse
   }

@@ -39,8 +39,12 @@ export async function POST(request: Request) {
 
     // Invite the admin by email instead of setting a password here.
     // They receive a login link and choose their own password on /set-password.
+    // On localhost dev there are no subdomains, so point back to localhost.
+    const host = request.headers.get('host') || ''
     const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
-    const redirectTo = `https://${subdomain}.${rootDomain}/set-password`
+    const redirectTo = host.includes('localhost')
+      ? `http://${host}/set-password`
+      : `https://${subdomain}.${rootDomain}/set-password`
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       redirectTo,
     })

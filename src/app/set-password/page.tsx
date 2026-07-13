@@ -4,7 +4,8 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { EmailOtpType } from '@supabase/supabase-js'
-import { KeyRound, CheckCircle2 } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
+import Logo from '@/components/Logo'
 
 function SetPasswordForm() {
   const router = useRouter()
@@ -30,6 +31,15 @@ function SetPasswordForm() {
       } else if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (error) return setStatus('invalid')
+      } else if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+        // Implicit flow: tokens arrive in the URL fragment.
+        const hash = new URLSearchParams(window.location.hash.slice(1))
+        const access_token = hash.get('access_token')
+        const refresh_token = hash.get('refresh_token')
+        if (access_token && refresh_token) {
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token })
+          if (error) return setStatus('invalid')
+        }
       }
 
       const { data: { user } } = await supabase.auth.getUser()
@@ -65,7 +75,7 @@ function SetPasswordForm() {
       <div className="w-full max-w-md animate-in">
         <div className="flex flex-col items-center mb-7">
           <div className="w-14 h-14 rounded-2xl bg-primary-soft flex items-center justify-center mb-4">
-            <KeyRound size={26} style={{ color: 'var(--primary)' }} />
+            <Logo style={{ color: 'var(--primary)', height: 30 }} />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">تعيين كلمة المرور</h1>
           <p className="text-muted text-sm mt-1">أنشئ كلمة مرور للدخول إلى حسابك</p>

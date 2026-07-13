@@ -3,7 +3,8 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ShieldCheck, LogIn } from 'lucide-react'
+import { LogIn } from 'lucide-react'
+import Logo from '@/components/Logo'
 
 function LoginForm() {
   const searchParams = useSearchParams()
@@ -65,7 +66,7 @@ function LoginForm() {
       <div className="w-full max-w-md animate-in">
         <div className="flex flex-col items-center mb-7">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'var(--warning-soft)' }}>
-            <ShieldCheck size={26} style={{ color: 'var(--warning)' }} />
+            <Logo style={{ color: 'var(--warning)', height: 30 }} />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">رفيق CRM</h1>
           <p className="text-muted text-sm mt-1">لوحة إدارة الحساب</p>

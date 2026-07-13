@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, BookOpen, Users, Target, Contact,
-  LogOut, Sparkles, Menu, X, Radio, ChevronsLeft, ChevronsRight
+  LogOut, Menu, X, Radio, ChevronsLeft, ChevronsRight
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
+import Logo from '@/components/Logo'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -140,7 +141,7 @@ export default function ClientAdminNav({ profile }: Props) {
     if (mini) {
       return (
         <div className="px-3 py-5 border-b border-border flex flex-col items-center gap-3">
-          <Sparkles size={22} className="shrink-0" style={{ color: 'var(--primary)' }} />
+          <Logo className="shrink-0" style={{ color: 'var(--primary)', height: 26 }} />
           {showToggle && <CollapseToggle />}
         </div>
       )
@@ -148,7 +149,7 @@ export default function ClientAdminNav({ profile }: Props) {
     return (
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-3">
-          <Sparkles size={22} className="shrink-0" style={{ color: 'var(--primary)' }} />
+          <Logo className="shrink-0" style={{ color: 'var(--primary)', height: 26 }} />
           <div className="min-w-0">
             <h2 className="font-extrabold text-foreground truncate leading-tight">
               {profile?.tenants?.name || 'رفيق CRM'}
@@ -205,7 +206,7 @@ export default function ClientAdminNav({ profile }: Props) {
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles size={18} style={{ color: 'var(--primary)' }} />
+          <Logo style={{ color: 'var(--primary)', height: 22 }} />
           <span className="font-extrabold text-foreground text-sm">{profile?.tenants?.name || 'رفيق CRM'}</span>
         </div>
         <button onClick={() => setMobileOpen(v => !v)} className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition">

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Sparkles, LogIn } from 'lucide-react'
+import { LogIn } from 'lucide-react'
+import Logo from '@/components/Logo'
 
 interface Props {
   tenantName: string
@@ -90,7 +91,7 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
       <div className="w-full max-w-md animate-in">
         <div className="flex flex-col items-center mb-7">
           <div className="w-14 h-14 rounded-2xl bg-primary-soft flex items-center justify-center mb-4">
-            <Sparkles size={26} style={{ color: 'var(--primary)' }} />
+            <Logo style={{ color: 'var(--primary)', height: 30 }} />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">
             {tenantName || 'رفيق CRM'}

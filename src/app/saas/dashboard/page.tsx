@@ -3,13 +3,14 @@ import { adminSupabase as createServiceClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import AdminClientsTable, { AddClientButton } from '@/components/admin/ClientsTable'
 import SuperAdminStats, { type TenantStat } from '@/components/admin/SuperAdminStats'
+import Logo from '@/components/Logo'
 
 export default async function AdminDashboardPage() {
   const serviceClient = createServiceClient()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/saas/login')
+  if (!user) redirect('/login')
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -17,7 +18,7 @@ export default async function AdminDashboardPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'super_admin') redirect('/saas/login')
+  if (profile?.role !== 'super_admin') redirect('/login')
 
   // Use service client to bypass RLS (super_admin has no tenant_id)
   const [{ data: tenants }, { data: campaignRows }, { data: leadRows }, { data: profileRows }] = await Promise.all([
@@ -52,9 +53,12 @@ export default async function AdminDashboardPage() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="bg-surface/80 backdrop-blur-xl border-b border-border px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-        <div>
-          <h1 className="text-xl font-extrabold text-foreground">رفيق CRM</h1>
-          <p className="text-sm text-muted">لوحة تحكم المدير</p>
+        <div className="flex items-center gap-3">
+          <Logo style={{ color: 'var(--primary)', height: 32 }} />
+          <div>
+            <h1 className="text-xl font-extrabold text-foreground">رفيق CRM</h1>
+            <p className="text-sm text-muted">لوحة تحكم المدير</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted hidden sm:block" dir="ltr">{user.email}</span>
