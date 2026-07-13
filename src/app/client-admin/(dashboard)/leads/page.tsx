@@ -5,7 +5,7 @@ import LeadsCenter from '@/components/app/LeadsCenter'
 
 export default async function ClientAdminLeadsPage() {
   const viewer = await requireTenantUser()
-  if (!viewer) redirect('/admin/login')
+  if (!viewer) redirect('/login')
 
   const leads = await fetchVisibleLeads(viewer)
   const supa = adminSupabase()

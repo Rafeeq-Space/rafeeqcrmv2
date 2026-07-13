@@ -98,16 +98,16 @@ export async function proxy(request: NextRequest) {
     const isLoginPath = pathname === '/admin/login'
 
     if (!user && !isLoginPath) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
-      return NextResponse.redirect(new URL('/admin/login', request.url))
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     // Tenant isolation: block admins/managers from accessing a different tenant's subdomain
     if (user && (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') && !isLoginPath) {
       const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (profileSubdomain && profileSubdomain !== subdomain) {
-        return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
+        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
       }
     }
 
@@ -166,7 +166,7 @@ export async function proxy(request: NextRequest) {
       const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (userSubdomain && userSubdomain !== subdomain) {
         if (role === 'client_admin' || role === 'client_sales_manager') {
-          return NextResponse.redirect(new URL('/admin/login?error=wrong_tenant', request.url))
+          return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
         }
         return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
       }

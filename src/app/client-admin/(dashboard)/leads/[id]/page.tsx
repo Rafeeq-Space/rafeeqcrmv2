@@ -9,7 +9,7 @@ const LEAD_DETAIL_SELECT =
 
 export default async function ClientAdminLeadProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const viewer = await requireTenantUser()
-  if (!viewer) redirect('/admin/login')
+  if (!viewer) redirect('/login')
 
   const { id } = await params
   const supa = adminSupabase()

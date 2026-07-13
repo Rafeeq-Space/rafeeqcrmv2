@@ -6,7 +6,7 @@ export default async function ClientAdminLayout({ children }: { children: React.
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/admin/login')
+  if (!user) redirect('/login')
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -14,7 +14,7 @@ export default async function ClientAdminLayout({ children }: { children: React.
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') redirect('/admin/login')
+  if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') redirect('/login')
 
   return (
     <div className="min-h-screen">
