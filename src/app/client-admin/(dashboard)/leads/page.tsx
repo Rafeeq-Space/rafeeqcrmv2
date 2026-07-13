@@ -39,6 +39,7 @@ export default async function ClientAdminLeadsPage() {
         leads={leads}
         role={viewer.role}
         basePath="/client-admin/leads"
+        tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
         teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
         members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}

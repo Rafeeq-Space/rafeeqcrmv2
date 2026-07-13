@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
+import AddLeadModal from './AddLeadModal'
 
 interface FilterOption {
   id: string
@@ -15,6 +16,7 @@ interface Props {
   leads: Lead[]
   role: string
   basePath: string // e.g. '/client-admin/leads' or '/app/my-leads'
+  tenantId: string
   campaigns?: FilterOption[]
   teams?: FilterOption[]
   members?: FilterOption[]
@@ -71,13 +73,14 @@ function ContactButtons({ phone }: { phone: string }) {
   )
 }
 
-export default function LeadsCenter({ leads, role, basePath, campaigns = [], teams = [], members = [] }: Props) {
+export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [] }: Props) {
   const router = useRouter()
   const [view, setView] = useState<'cards' | 'table'>('cards')
   const [status, setStatus] = useState('all')
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
+  const [showAddLead, setShowAddLead] = useState(false)
 
   const isAdmin = role === 'client_admin'
   const isManager = role === 'client_sales_manager'
@@ -108,7 +111,12 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
     <div className="space-y-6">
       {/* Overview stat cards — counts per status, clickable as quick filters */}
       <div>
-        <p className="text-xs font-bold text-muted2 mb-3">نظرة عامة</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-bold text-muted2">نظرة عامة</p>
+          <button onClick={() => setShowAddLead(true)} className="btn btn-primary !py-1.5 !px-3 text-sm">
+            <Plus size={16} /> عميل جديد
+          </button>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {STAT_CARDS.map(c => {
             const active = status === c.key
@@ -224,6 +232,17 @@ export default function LeadsCenter({ leads, role, basePath, campaigns = [], tea
             </table>
           </div>
         </div>
+      )}
+
+      {showAddLead && (
+        <AddLeadModal
+          role={role}
+          basePath={basePath}
+          tenantId={tenantId}
+          campaigns={campaigns}
+          members={members}
+          onClose={() => setShowAddLead(false)}
+        />
       )}
     </div>
   )

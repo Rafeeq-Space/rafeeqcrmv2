@@ -27,6 +27,7 @@ export default async function MyLeadsPage() {
         leads={leads}
         role={viewer.role}
         basePath="/app/my-leads"
+        tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
       />
     </div>

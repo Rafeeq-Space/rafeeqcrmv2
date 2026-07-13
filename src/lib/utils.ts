@@ -46,11 +46,13 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
 export const SOURCE_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
   facebook: 'Facebook',
+  snapchat: 'Snapchat',
   instagram: 'Instagram',
   google: 'Google',
   website: 'موقع إلكتروني',
   other: 'أخرى',
   google_sheet: 'Google Sheets',
+  crm: 'CRM',
 }
 
 // Pull a display name / phone out of a lead's free-form submitted data.
