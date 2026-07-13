@@ -110,7 +110,9 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
           <h1 className="text-2xl font-extrabold text-foreground">
             {tenantName || 'رفيق CRM'}
           </h1>
-          <p className="text-muted text-sm mt-1">سجّل الدخول إلى لوحة التحكم</p>
+          <p className="text-muted text-sm mt-1">
+            {tenantName ? 'تسجيل الدخول إلى حساب الشركة' : 'دخول المدير العام'}
+          </p>
         </div>
 
         <div className="card p-7">
