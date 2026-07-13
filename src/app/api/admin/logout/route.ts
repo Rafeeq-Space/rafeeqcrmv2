@@ -1,8 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'))
+
+  // Redirect to /login on the same host the request came from, so production
+  // lands on rafeeqcrm.com (not a hardcoded localhost). NEXT_PUBLIC_SITE_URL
+  // still wins if it is explicitly set.
+  let base = process.env.NEXT_PUBLIC_SITE_URL
+  if (!base) {
+    const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000'
+    const proto = host.includes('localhost') ? 'http' : 'https'
+    base = `${proto}://${host}`
+  }
+  return NextResponse.redirect(new URL('/login', base))
 }
