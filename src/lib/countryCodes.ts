@@ -30,6 +30,39 @@ export const COUNTRY_CODES: CountryCode[] = [
 
 export const DEFAULT_COUNTRY = COUNTRY_CODES[0]
 
+// Member phone numbers are restricted to Saudi Arabia and Egypt only.
+export const MEMBER_COUNTRY_CODES: CountryCode[] = COUNTRY_CODES.filter(
+  c => c.code === '+966' || c.code === '+20'
+)
+
+// Validation rules keyed by dial code. `pattern` runs against the local part
+// after stripping any leading zeros (matching how the number is stored).
+export interface PhoneRule {
+  pattern: RegExp
+  hint: string
+  placeholder: string
+}
+
+export const PHONE_RULES: Record<string, PhoneRule> = {
+  '+966': {
+    pattern: /^5\d{8}$/,
+    hint: 'رقم سعودي: 9 أرقام تبدأ بـ 5 (مثال: 5XXXXXXXX)',
+    placeholder: '5X XXX XXXX',
+  },
+  '+20': {
+    pattern: /^1\d{9}$/,
+    hint: 'رقم مصري: 10 أرقام تبدأ بـ 1 (مثال: 1XXXXXXXXX)',
+    placeholder: '1X XXXX XXXX',
+  },
+}
+
+// Validate a local number (leading zeros already stripped) for the given code.
+export function validateLocalPhone(code: string, localNumber: string): boolean {
+  const rule = PHONE_RULES[code]
+  if (!rule) return false
+  return rule.pattern.test(localNumber)
+}
+
 // Split a stored international number (e.g. "+966501234567") into code + local part.
 export function splitPhone(full?: string): { code: string; number: string } {
   if (!full) return { code: DEFAULT_COUNTRY.code, number: '' }

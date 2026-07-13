@@ -6,7 +6,7 @@ import {
   Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft,
 } from 'lucide-react'
 import type { Team, TeamMember, UserRole } from '@/lib/types'
-import { COUNTRY_CODES, DEFAULT_COUNTRY, splitPhone, waNumber } from '@/lib/countryCodes'
+import { MEMBER_COUNTRY_CODES, PHONE_RULES, splitPhone, validateLocalPhone, waNumber } from '@/lib/countryCodes'
 
 export interface TeamLeadStats {
   open: number
@@ -78,13 +78,15 @@ function MemberModal({
 }) {
   const editing = !!member
   const initialPhone = splitPhone(member?.phone)
+  // Phone is limited to Saudi/Egypt — fall back to Saudi for any other stored code.
+  const initialCode = initialPhone.code === '+20' ? '+20' : '+966'
   const [form, setForm] = useState({
     full_name: member?.full_name || '',
     email: '',
     password: '',
     job_title: member?.job_title || '',
     role: (member?.role === 'client_sales_manager' ? 'client_sales_manager' : 'client_user') as 'client_user' | 'client_sales_manager',
-    countryCode: initialPhone.code,
+    countryCode: initialCode,
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
   })
@@ -93,9 +95,14 @@ function MemberModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const localNumber = form.number.replace(/^0+/, '')
+    if (localNumber && !validateLocalPhone(form.countryCode, localNumber)) {
+      setError(PHONE_RULES[form.countryCode]?.hint || 'رقم الهاتف غير صحيح')
+      return
+    }
     setLoading(true)
     setError('')
-    const phone = form.number ? `${form.countryCode}${form.number.replace(/^0+/, '')}` : ''
+    const phone = localNumber ? `${form.countryCode}${localNumber}` : ''
 
     try {
       let res: Response
@@ -189,15 +196,16 @@ function MemberModal({
           </div>
 
           <div>
-            <label className="label">الهاتف</label>
+            <label className="label">الهاتف (واتساب / اتصال)</label>
             <div className="flex gap-2">
               <select className="input !w-32 shrink-0" value={form.countryCode} onChange={e => setForm({ ...form, countryCode: e.target.value })} dir="ltr">
-                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
+                {MEMBER_COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
               </select>
               <input dir="ltr" className="input flex-1 text-start" value={form.number}
                 onChange={e => setForm({ ...form, number: e.target.value.replace(/[^\d]/g, '') })}
-                placeholder="5X XXX XXXX" />
+                placeholder={PHONE_RULES[form.countryCode]?.placeholder} />
             </div>
+            <p className="text-xs text-muted2 mt-1">{PHONE_RULES[form.countryCode]?.hint}</p>
           </div>
 
           {!lockedTeamId && (
