@@ -63,7 +63,6 @@ export default async function AdminDashboardPage() {
         </div>
         <div className="flex items-center gap-4">
           <DateTimePrayer variant="bar" />
-          <span className="text-sm text-muted hidden sm:block" dir="ltr">{user.email}</span>
           <form action="/api/admin/logout" method="POST">
             <button className="btn btn-danger !py-2 !px-3 text-sm">تسجيل الخروج</button>
           </form>

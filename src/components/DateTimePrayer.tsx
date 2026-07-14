@@ -152,6 +152,11 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
   if (variant === 'bar') {
     return (
       <div className="flex items-center gap-2 rounded-full border border-border bg-surface2 ps-3 pe-1.5 py-1">
+        <span className="hidden sm:flex items-center gap-1 text-[0.7rem] font-medium text-muted2">
+          <CalendarDays size={12} />
+          {gregDate}
+        </span>
+        <span className="hidden sm:block h-3 w-px bg-border" />
         <span className="tabular-nums text-xs font-bold text-foreground" dir="ltr">{hh}:{mm}</span>
         {next && (
           <span className="flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}
