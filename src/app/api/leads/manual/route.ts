@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase } from '@/lib/leads/access'
+import { createNotification } from '@/lib/notifications/create'
 import type { KnowledgeFile } from '@/lib/types'
 
 // Creates a lead manually from inside the CRM (as opposed to a public form
@@ -96,6 +97,15 @@ export async function POST(request: Request) {
     lead_id: lead.id,
     actor_id: viewer.id,
     type: 'created',
+  })
+
+  // Notify the assigned rep (skipped automatically when it's the creator).
+  await createNotification(supa, {
+    tenantId: viewer.tenantId,
+    recipientId: assignedSalesId,
+    actorId: viewer.id,
+    type: 'lead_assigned',
+    leadId: lead.id,
   })
 
   return NextResponse.json({ success: true, lead }, { status: 201 })

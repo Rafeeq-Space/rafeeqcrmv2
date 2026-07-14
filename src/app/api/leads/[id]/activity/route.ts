@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
+import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
@@ -101,6 +102,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (type === 'comment' && record.mentioned_id) {
+    await createNotification(supa, {
+      tenantId: viewer.tenantId,
+      recipientId: record.mentioned_id as string,
+      actorId: viewer.id,
+      type: 'mention',
+      leadId,
+    })
+  }
+
   return NextResponse.json({ success: true, activity }, { status: 201 })
 }
 

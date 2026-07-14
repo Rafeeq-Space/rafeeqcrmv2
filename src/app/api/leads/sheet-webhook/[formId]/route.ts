@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
+import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { leadPhone, leadEmail } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
@@ -92,6 +93,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
 
     if (lead) {
       syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
+      if (assigned_sales_id) {
+        await createNotification(supabase, {
+          tenantId: form.tenant_id,
+          recipientId: assigned_sales_id,
+          type: 'lead_assigned',
+          leadId: lead.id,
+        })
+      }
     }
 
     return NextResponse.json({ success: true, lead }, { status: 201 })

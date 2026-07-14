@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Menu, X, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, Bell, LogOut, Menu, X, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import Logo from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import { useUnreadNotifications } from '@/lib/notifications/useUnread'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -46,6 +47,12 @@ const navItems = [
     desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
   },
+  {
+    href: '/app/notifications',
+    label: 'الإشعارات',
+    desc: 'أهم الأحداث المتعلقة بك',
+    icon: Bell,
+  },
 ]
 
 export default function AppNav({ profile }: Props) {
@@ -57,6 +64,7 @@ export default function AppNav({ profile }: Props) {
   // margin (see .app-shell-main in globals.css) follows the sidebar width.
   const [collapsed, setCollapsed] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const unread = useUnreadNotifications()
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
@@ -84,6 +92,7 @@ export default function AppNav({ profile }: Props) {
         {!mini && <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">القائمة الرئيسية</p>}
         {navItems.map(({ href, label, desc, icon: Icon }) => {
           const active = pathname.startsWith(href)
+          const badge = href.endsWith('/notifications') ? unread : 0
           return (
             <Link
               key={href}
@@ -98,13 +107,16 @@ export default function AppNav({ profile }: Props) {
                   : 'text-muted hover:text-foreground'
               }`}
             >
-              <Icon
-                size={19}
-                className={mini ? 'shrink-0' : 'mt-0.5 shrink-0'}
-                style={active ? { color: 'var(--primary)' } : undefined}
-              />
+              <span className={`relative ${mini ? 'shrink-0' : 'mt-0.5 shrink-0'}`}>
+                <Icon size={19} style={active ? { color: 'var(--primary)' } : undefined} />
+                {badge > 0 && (
+                  <span className="absolute -top-1.5 -end-1.5 min-w-[15px] h-[15px] px-1 rounded-full text-[0.55rem] font-bold flex items-center justify-center text-white" style={{ background: 'var(--danger)' }}>
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </span>
               {!mini && (
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold leading-tight">{label}</span>
                   <span className="block text-[0.7rem] text-muted2 mt-0.5 leading-tight truncate">{desc}</span>
                 </span>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
+import { createNotification } from '@/lib/notifications/create'
 import { adminSupabase } from '@/lib/supabase/admin'
 
 export async function POST(request: Request) {
@@ -65,6 +66,14 @@ export async function POST(request: Request) {
     // Called directly (no HTTP self-fetch) so it works regardless of NEXT_PUBLIC_SITE_URL.
     if (lead) {
       syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
+      if (assigned_sales_id) {
+        await createNotification(supabase, {
+          tenantId: form.tenant_id,
+          recipientId: assigned_sales_id,
+          type: 'lead_assigned',
+          leadId: lead.id,
+        })
+      }
     }
 
     return NextResponse.json({ success: true, lead }, { status: 201 })

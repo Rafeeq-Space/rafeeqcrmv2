@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
+import { createNotification } from '@/lib/notifications/create'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
@@ -62,6 +63,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     type: 'assignment',
     mentioned_id: (update.assigned_sales_id as string) || null,
   })
+
+  if (update.assigned_sales_id) {
+    await createNotification(supa, {
+      tenantId: viewer.tenantId,
+      recipientId: update.assigned_sales_id as string,
+      actorId: viewer.id,
+      type: 'lead_assigned',
+      leadId,
+    })
+  }
 
   const { data: updated } = await supa
     .from('leads')

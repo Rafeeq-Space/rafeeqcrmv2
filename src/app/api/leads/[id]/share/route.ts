@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
+import { createNotification } from '@/lib/notifications/create'
 import type { Lead } from '@/lib/types'
 
 // Shares a lead with another user (profile). Admin & managers only.
@@ -53,6 +54,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     actor_id: viewer.id,
     type: 'share',
     mentioned_id: body.profile_id,
+  })
+
+  await createNotification(supa, {
+    tenantId: viewer.tenantId,
+    recipientId: body.profile_id,
+    actorId: viewer.id,
+    type: 'lead_shared',
+    leadId,
   })
 
   return NextResponse.json({ success: true, share }, { status: 201 })

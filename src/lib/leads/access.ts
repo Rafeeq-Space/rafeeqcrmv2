@@ -23,7 +23,7 @@ export async function managedTeamIds(viewer: Viewer): Promise<string[]> {
 }
 
 // Profile ids that belong to the given teams (team members).
-async function teamMemberIds(tenantId: string, teamIds: string[]): Promise<string[]> {
+export async function teamMemberIds(tenantId: string, teamIds: string[]): Promise<string[]> {
   if (!teamIds.length) return []
   const supa = adminSupabase()
   const { data } = await supa.from('profiles').select('id').eq('tenant_id', tenantId).in('team_id', teamIds)
