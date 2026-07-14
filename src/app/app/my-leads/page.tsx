@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { fetchVisibleLeads, adminSupabase } from '@/lib/leads/access'
 import LeadsCenter from '@/components/app/LeadsCenter'
+import DateTimePrayer from '@/components/DateTimePrayer'
 
 export default async function MyLeadsPage() {
   const viewer = await requireTenantUser()
@@ -19,9 +20,12 @@ export default async function MyLeadsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
-        <p className="text-muted text-sm mt-1">العملاء المحتملون المُسنَدون إليك أو المشاركون معك</p>
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div className="me-auto">
+          <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
+          <p className="text-muted text-sm mt-1">العملاء المحتملون المُسنَدون إليك أو المشاركون معك</p>
+        </div>
+        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
       <LeadsCenter
         leads={leads}

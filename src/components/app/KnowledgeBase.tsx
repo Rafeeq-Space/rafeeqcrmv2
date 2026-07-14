@@ -8,6 +8,7 @@ import {
   FileText, ExternalLink, Paperclip, Inbox, Check, Clock
 } from 'lucide-react'
 import type { KnowledgeItem, KnowledgeCategoryDynamic, KnowledgeSection, KnowledgeFile, KnowledgeLink } from '@/lib/types'
+import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface Props {
   items: KnowledgeItem[]
@@ -536,6 +537,7 @@ export default function KnowledgeBase({ items: initialItems, categories: initial
           <button onClick={() => setShowAdd(true)} className="btn btn-primary gap-2">
             <Plus size={17} /> {isAdmin ? 'إضافة عنصر' : 'طلب إضافة عنصر'}
           </button>
+          <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
         </div>
       </div>
 

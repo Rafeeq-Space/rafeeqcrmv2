@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ClientAdminNav from '@/components/client-admin/ClientAdminNav'
-import DateTimePrayer from '@/components/DateTimePrayer'
 
 export default async function ClientAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -21,11 +20,6 @@ export default async function ClientAdminLayout({ children }: { children: React.
     <div className="min-h-screen">
       <ClientAdminNav profile={profile} />
       <main className="app-shell-main ms-0 min-h-screen">
-        {/* Desktop top bar — carries the date/time/prayer widget at the top,
-            matching the super-admin page (mobile shows it in the nav top bar). */}
-        <header className="hidden lg:flex items-center justify-end sticky top-0 z-20 bg-surface/80 backdrop-blur-xl border-b border-border px-8 py-3">
-          <DateTimePrayer variant="bar" />
-        </header>
         <div className="p-4 pt-20 md:p-6 md:pt-20 lg:p-8 lg:pt-8">
           {children}
         </div>

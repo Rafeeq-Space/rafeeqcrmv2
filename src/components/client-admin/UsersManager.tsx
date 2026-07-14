@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { X, UserPlus, Trash2 } from 'lucide-react'
+import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface User {
   id: string
@@ -90,8 +91,8 @@ export default function UsersManager({ users }: Props) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div className="me-auto">
           <h1 className="text-2xl font-extrabold text-foreground">المستخدمون</h1>
           <p className="text-muted text-sm mt-1">إدارة أعضاء الفريق وصلاحياتهم</p>
         </div>
@@ -99,6 +100,7 @@ export default function UsersManager({ users }: Props) {
           <UserPlus size={17} />
           إضافة مستخدم
         </button>
+        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
 
       <div className="card overflow-hidden">

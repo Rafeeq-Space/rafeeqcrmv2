@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, CheckCircle, Clock, XCircle, TrendingUp } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
+import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface Props {
   leads: Lead[]
@@ -72,9 +73,12 @@ export default function SalesDashboard({ leads, fullName }: Props) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-foreground">مرحباً، {fullName} 👋</h1>
-        <p className="text-muted text-sm mt-1">ملخص أدائك خلال آخر ٣٠ يوماً</p>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="me-auto">
+          <h1 className="text-2xl font-extrabold text-foreground">مرحباً، {fullName} 👋</h1>
+          <p className="text-muted text-sm mt-1">ملخص أدائك خلال آخر ٣٠ يوماً</p>
+        </div>
+        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
 
       {/* Stats Cards */}
