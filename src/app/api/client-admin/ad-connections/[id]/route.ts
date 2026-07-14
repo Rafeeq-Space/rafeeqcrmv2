@@ -18,6 +18,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.pixel_id !== undefined) updates.pixel_id = body.pixel_id
   if (body.access_token !== undefined) updates.access_token = body.access_token
   if (body.default_campaign_id !== undefined) updates.default_campaign_id = body.default_campaign_id || null
+  if (body.page_id !== undefined) updates.page_id = body.page_id || null
+  if (body.form_id !== undefined) updates.form_id = body.form_id || null
+  if (body.tiktok_test_event_code !== undefined) updates.tiktok_test_event_code = body.tiktok_test_event_code || null
 
   const { data, error } = await supabase.from('ad_connections').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

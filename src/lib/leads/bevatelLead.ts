@@ -114,6 +114,45 @@ interface AppendResult {
   agentMatched: boolean
 }
 
+interface EventLog {
+  kind: 'chat' | 'call'
+  event: string
+  direction: 'in' | 'out'
+  phone: string
+  agentHint: string
+  matched: boolean
+  created: boolean
+  assigned: boolean
+  leadId: string | null
+}
+
+// Persist a one-line summary of every processed event so an admin can diagnose
+// unassigned leads from inside the CRM (no server-log access needed). Best
+// effort: if the table is missing or the insert fails we just skip it.
+async function recordEvent(tenantId: string, log: EventLog) {
+  console.log(
+    `[bevatel:${log.kind}] tenant=${tenantId} event=${log.event} dir=${log.direction}` +
+    ` phone=*${log.phone} agentHint=${log.agentHint} matched=${log.matched}` +
+    ` created=${log.created} assigned=${log.assigned} leadId=${log.leadId ?? '-'}`
+  )
+  try {
+    await adminSupabase().from('bevatel_webhook_logs').insert({
+      tenant_id: tenantId,
+      kind: log.kind,
+      event: log.event,
+      direction: log.direction,
+      phone: log.phone,
+      agent_hint: log.agentHint,
+      matched: log.matched,
+      created: log.created,
+      assigned: log.assigned,
+      lead_id: log.leadId,
+    })
+  } catch {
+    /* logging table not provisioned — ignore */
+  }
+}
+
 // Match-or-create the lead and append the timeline activity.
 async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const { tenantId, phone, source, activityBody } = args
@@ -220,7 +259,10 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
   const phone = (contact.phone_number as string) || ''
   if (!phone) {
-    console.log(`[bevatel:chat] tenant=${tenantId} event=${eventName} skipped=no_phone`)
+    await recordEvent(tenantId, {
+      kind: 'chat', event: eventName, direction: 'in', phone: 'بدون رقم',
+      agentHint: 'none', matched: false, created: false, assigned: false, leadId: null,
+    })
     return { ok: false as const, reason: 'no_phone' }
   }
 
@@ -263,13 +305,17 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     agent,
   })
 
-  // A single line per event so unassigned leads are diagnosable from the logs:
-  // did we get an agent hint at all, and did it match a CRM user?
-  console.log(
-    `[bevatel:chat] tenant=${tenantId} event=${eventName} dir=${incoming ? 'in' : 'out'}` +
-    ` phone=*${phoneKey(phone)} agentHint=${hasHint(agent) ? (agent.email || agent.name) : 'none'}` +
-    ` matched=${res.agentMatched} created=${res.created} assigned=${res.assigned} leadId=${res.leadId ?? '-'}`
-  )
+  await recordEvent(tenantId, {
+    kind: 'chat',
+    event: eventName,
+    direction: incoming ? 'in' : 'out',
+    phone: phoneKey(phone),
+    agentHint: hasHint(agent) ? (agent.email || agent.name || '') : 'none',
+    matched: res.agentMatched,
+    created: res.created,
+    assigned: res.assigned,
+    leadId: res.leadId,
+  })
 
   return { ok: !!res.leadId, leadId: res.leadId }
 }
@@ -317,11 +363,17 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     agent,
   })
 
-  console.log(
-    `[bevatel:call] tenant=${tenantId} event=${eventType || 'unknown'} dir=${inbound ? 'in' : 'out'}` +
-    ` abandoned=${abandoned} phone=*${phoneKey(phone)} agentHint=${hasHint(agent) ? (agent.email || agent.phone || agent.name) : 'none'}` +
-    ` matched=${res.agentMatched} created=${res.created} assigned=${res.assigned} leadId=${res.leadId ?? '-'}`
-  )
+  await recordEvent(tenantId, {
+    kind: 'call',
+    event: (abandoned ? `${eventType || 'call'} (لم يُرد)` : eventType) || 'unknown',
+    direction: inbound ? 'in' : 'out',
+    phone: phoneKey(phone),
+    agentHint: hasHint(agent) ? (agent.email || agent.phone || agent.name || '') : 'none',
+    matched: res.agentMatched,
+    created: res.created,
+    assigned: res.assigned,
+    leadId: res.leadId,
+  })
 
   return { ok: !!res.leadId, leadId: res.leadId }
 }

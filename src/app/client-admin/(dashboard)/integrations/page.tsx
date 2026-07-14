@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase } from '@/lib/supabase/admin'
-import BevatelIntegration from '@/components/client-admin/BevatelIntegration'
+import BevatelIntegration, { type BevatelLog } from '@/components/client-admin/BevatelIntegration'
 
 // Integrations (Bevatel chat + calls) — holds a webhook secret, admin only.
 export default async function IntegrationsPage() {
@@ -28,5 +28,16 @@ export default async function IntegrationsPage() {
     await supa.from('tenants').update({ bevatel_webhook_secret: secret }).eq('id', tenantId)
   }
 
-  return <BevatelIntegration tenantId={tenantId} secret={secret} />
+  // Recent webhook events, so the admin can diagnose unassigned leads without
+  // touching server logs. Table may not exist yet — degrade gracefully.
+  let logs: BevatelLog[] = []
+  const { data: logRows } = await supa
+    .from('bevatel_webhook_logs')
+    .select('id, kind, event, direction, phone, agent_hint, matched, created, assigned, lead_id, created_at')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (logRows) logs = logRows as BevatelLog[]
+
+  return <BevatelIntegration tenantId={tenantId} secret={secret} logs={logs} />
 }

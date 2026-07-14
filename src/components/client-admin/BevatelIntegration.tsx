@@ -1,12 +1,27 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageSquare, Phone, Copy, Check, RefreshCw } from 'lucide-react'
+import { MessageSquare, Phone, Copy, Check, RefreshCw, MessageCircle, PhoneCall } from 'lucide-react'
 import DateTimePrayer from '@/components/DateTimePrayer'
+
+export interface BevatelLog {
+  id: string
+  kind: 'chat' | 'call'
+  event: string
+  direction: 'in' | 'out'
+  phone: string
+  agent_hint: string
+  matched: boolean
+  created: boolean
+  assigned: boolean
+  lead_id: string | null
+  created_at: string
+}
 
 interface Props {
   tenantId: string
   secret: string
+  logs: BevatelLog[]
 }
 
 function CopyField({ label, url }: { label: string; url: string }) {
@@ -31,7 +46,48 @@ function CopyField({ label, url }: { label: string; url: string }) {
   )
 }
 
-export default function BevatelIntegration({ tenantId, secret }: Props) {
+function LogRow({ log }: { log: BevatelLog }) {
+  // Explain the outcome in one plain-Arabic phrase so the reason a lead did or
+  // didn't get assigned is obvious without reading the raw fields.
+  let status: string
+  let tone: 'ok' | 'warn' | 'bad'
+  if (log.assigned) {
+    status = 'أُسنِد لموظف ✓'
+    tone = 'ok'
+  } else if (log.phone === 'بدون رقم') {
+    status = 'حدث بدون رقم — تم تجاهله'
+    tone = 'bad'
+  } else if (log.agent_hint === 'none') {
+    status = 'لا يحمل بيانات موظف من بيفاتيل'
+    tone = 'warn'
+  } else if (!log.matched) {
+    status = `موظف «${log.agent_hint}» غير مطابق في CRM`
+    tone = 'bad'
+  } else {
+    status = 'مطابَق — الليد مُسنَد بالفعل'
+    tone = 'ok'
+  }
+  const toneColor = tone === 'ok' ? 'var(--success, #16a34a)' : tone === 'warn' ? '#d97706' : '#dc2626'
+  const when = new Date(log.created_at).toLocaleString('ar-EG', {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+  return (
+    <tr className="border-t border-[var(--border)]">
+      <td className="py-2 px-2 whitespace-nowrap text-muted2">{when}</td>
+      <td className="py-2 px-2">
+        <span className="inline-flex items-center gap-1">
+          {log.kind === 'call' ? <PhoneCall size={13} /> : <MessageCircle size={13} />}
+          {log.kind === 'call' ? 'مكالمة' : 'شات'}
+        </span>
+      </td>
+      <td className="py-2 px-2 whitespace-nowrap">{log.direction === 'in' ? 'واردة' : 'صادرة'}</td>
+      <td className="py-2 px-2 whitespace-nowrap" dir="ltr">{log.phone === 'بدون رقم' ? '—' : `••••${log.phone.slice(-4)}`}</td>
+      <td className="py-2 px-2 font-medium" style={{ color: toneColor }}>{status}</td>
+    </tr>
+  )
+}
+
+export default function BevatelIntegration({ tenantId, secret, logs }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -102,6 +158,37 @@ export default function BevatelIntegration({ tenantId, secret }: Props) {
           <li>لو غير موجود، نُنشئ ليد جديدة تلقائيًا برقمه واسمه.</li>
           <li>نحاول إسناد الليد للموظف المطابق في بيفاتيل (بالبريد أو الرقم)، وإلا تبقى دون إسناد.</li>
         </ul>
+      </div>
+
+      <div className="card p-5 mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-bold text-foreground text-sm">آخر الأحداث الواردة</h3>
+            <p className="text-xs text-muted2 mt-0.5">آخر ٥٠ حدث وصلنا من بيفاتيل — لمعرفة سبب عدم إسناد أي ليد.</p>
+          </div>
+        </div>
+        {logs.length === 0 ? (
+          <p className="text-sm text-muted2 py-6 text-center">
+            لم يصل أي حدث بعد. تأكد من لصق الرابط في إعدادات Webhook بلوحة بيفاتيل وتفعيل الأحداث.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted2 text-start">
+                  <th className="py-1.5 px-2 font-medium text-start">الوقت</th>
+                  <th className="py-1.5 px-2 font-medium text-start">النوع</th>
+                  <th className="py-1.5 px-2 font-medium text-start">الاتجاه</th>
+                  <th className="py-1.5 px-2 font-medium text-start">الرقم</th>
+                  <th className="py-1.5 px-2 font-medium text-start">النتيجة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(log => <LogRow key={log.id} log={log} />)}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

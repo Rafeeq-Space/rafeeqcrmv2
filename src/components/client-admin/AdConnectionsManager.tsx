@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-react'
 import type { AdConnection, AdPlatform } from '@/lib/types'
+import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface CampaignOption { id: string; name: string }
 
@@ -50,6 +51,9 @@ function ConnectionModal({
     pixel_id: connection?.pixel_id || '',
     access_token: connection?.access_token || '',
     default_campaign_id: connection?.default_campaign_id || '',
+    page_id: connection?.page_id || '',
+    form_id: connection?.form_id || '',
+    tiktok_test_event_code: connection?.tiktok_test_event_code || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,6 +72,9 @@ function ConnectionModal({
               pixel_id: form.pixel_id,
               access_token: form.access_token,
               default_campaign_id: form.default_campaign_id || null,
+              page_id: form.page_id || null,
+              form_id: form.form_id || null,
+              tiktok_test_event_code: form.tiktok_test_event_code || null,
             }),
           })
         : await fetch('/api/client-admin/ad-connections', {
@@ -123,16 +130,49 @@ function ConnectionModal({
               placeholder={editing ? 'اتركه كما هو أو أدخل توكن جديد' : ''} />
           </div>
 
-          {form.platform === 'tiktok' && (
+          {form.platform === 'facebook' && (
             <div>
-              <label className="label">الحملة الافتراضية لليدز Instant Form</label>
+              <label className="label">Page ID *</label>
+              <input dir="ltr" className="input text-start" value={form.page_id}
+                onChange={e => setForm({ ...form, page_id: e.target.value.trim() })} required
+                placeholder="معرّف صفحة فيسبوك المالكة لنموذج الليدز" />
+              <p className="text-xs text-muted2 mt-1">
+                استقبال ليدز Lead Ads يعمل عبر ويبهوك عام لكل المنصة (وليس رابطًا خاصًا بهذا الحساب) — رقم الصفحة هذا هو ما يربط الليدز الواردة بهذا الحساب وحملته.
+              </p>
+            </div>
+          )}
+
+          {form.platform === 'snapchat' && (
+            <div>
+              <label className="label">Form ID *</label>
+              <input dir="ltr" className="input text-start" value={form.form_id}
+                onChange={e => setForm({ ...form, form_id: e.target.value.trim() })} required
+                placeholder="معرّف نموذج Lead Generation في سناب شات" />
+            </div>
+          )}
+
+          {(form.platform === 'tiktok' || form.platform === 'facebook' || form.platform === 'snapchat') && (
+            <div>
+              <label className="label">الحملة الافتراضية لليدز النموذج الداخلي</label>
               <select className="input" value={form.default_campaign_id}
                 onChange={e => setForm({ ...form, default_campaign_id: e.target.value })}>
                 <option value="">بدون حملة (غير محدد)</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <p className="text-xs text-muted2 mt-1">
-                أي ليد جديد يصل عبر رابط الويبهوك من نموذج تيك توك الداخلي (Instant Form) سيُنسب تلقائيًا لهذه الحملة.
+                أي ليد جديد يصل عبر النموذج الداخلي لهذه المنصة (وليس رابط الحملة من الـ CRM) سيُنسب تلقائيًا لهذه الحملة.
+              </p>
+            </div>
+          )}
+
+          {form.platform === 'tiktok' && (
+            <div>
+              <label className="label">Test Event Code (اختياري — للاختبار فقط)</label>
+              <input dir="ltr" className="input text-start" value={form.tiktok_test_event_code}
+                onChange={e => setForm({ ...form, tiktok_test_event_code: e.target.value.trim() })}
+                placeholder="مثال: TEST6f1382" />
+              <p className="text-xs text-muted2 mt-1">
+                انسخ الكود من تيك توك (Events Manager ← Test events) والصقه هنا لتظهر الأحداث لحظيًا في تبويب &quot;Test events&quot;. امسحه بعد انتهاء الاختبار لترجع الأحداث للتيار الحقيقي.
               </p>
             </div>
           )}
@@ -185,6 +225,64 @@ function WebhookUrlField({ connection, campaigns }: { connection: AdConnection; 
   )
 }
 
+// Informational note for Facebook connections — Lead Ads webhooks are
+// registered once, globally, at the Meta Developer App level (not per
+// connection), so there's no per-account URL to copy here. What matters is
+// that the Page ID above is correct, since that's what routes an incoming
+// lead back to this connection and its default campaign.
+function FacebookWebhookNote({ connection, campaigns }: { connection: AdConnection; campaigns: CampaignOption[] }) {
+  const campaignName = campaigns.find(c => c.id === connection.default_campaign_id)?.name
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-xs text-muted2">
+        استقبال ليدز Lead Ads يعمل عبر ويبهوك عام على مستوى المنصة بالكامل (وليس رابطًا خاصًا بهذا الحساب) — يتطلب أيضًا موافقة Meta App Review على صلاحية leads_retrieval حتى تصل ليدز صفحات حقيقية (غير تجريبية).
+      </p>
+      <p className="text-xs text-muted2 mt-1">
+        الحملة الافتراضية: <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span>
+      </p>
+    </div>
+  )
+}
+
+// Registers (or re-registers) this Snapchat connection's webhook with
+// Snapchat's Marketing API so its Lead Generation form starts pushing
+// submissions here — see registerSnapchatWebhook.
+function SnapchatWebhookField({ connection, campaigns, onSaved }: { connection: AdConnection; campaigns: CampaignOption[]; onSaved: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const campaignName = campaigns.find(c => c.id === connection.default_campaign_id)?.name
+
+  async function register() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/client-admin/ad-connections/${connection.id}/register-snap-webhook`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      onSaved()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border">
+      <p className="text-xs text-muted2 mb-1.5">
+        {connection.snap_integration_id ? '✓ تم تفعيل استقبال ليدز هذا الفورم.' : 'لم يتم تفعيل استقبال ليدز هذا الفورم بعد.'}
+      </p>
+      <button type="button" onClick={register} disabled={loading || !connection.form_id} className="btn btn-outline w-full text-xs py-1.5">
+        {loading ? 'جارٍ التسجيل...' : connection.snap_integration_id ? 'إعادة تسجيل الويبهوك' : 'تفعيل استقبال الليدز'}
+      </button>
+      {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+      <p className="text-xs text-muted2 mt-1.5">
+        الحملة الافتراضية: <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span>
+      </p>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────
 export default function AdConnectionsManager({ connections, campaigns }: Props) {
   const [activeTab, setActiveTab] = useState<AdPlatform>('tiktok')
@@ -204,8 +302,8 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div className="me-auto">
           <h1 className="text-2xl font-extrabold text-foreground">الحسابات الإعلانية</h1>
           <p className="text-muted text-sm mt-1">
             محفظة حسابات إعلانية جاهزة — أضِف كل حساب مرة واحدة، ثم اختره داخل أي حملة تريد ربطها به.
@@ -214,6 +312,7 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
         <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
           <Plus size={17} /> إضافة حساب
         </button>
+        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
 
       {/* Platform tabs */}
@@ -242,10 +341,18 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
               </div>
               <p className="font-bold text-foreground text-lg">{conn.name}</p>
               <p className="text-sm text-muted mt-1" dir="ltr">Pixel: {conn.pixel_id}</p>
+              {conn.platform === 'facebook' && conn.page_id && (
+                <p className="text-sm text-muted mt-0.5" dir="ltr">Page ID: {conn.page_id}</p>
+              )}
+              {conn.platform === 'snapchat' && conn.form_id && (
+                <p className="text-sm text-muted mt-0.5" dir="ltr">Form ID: {conn.form_id}</p>
+              )}
               <p className="text-sm text-muted2 mt-0.5 flex items-center gap-1" dir="ltr">
                 <KeyRound size={13} /> {maskToken(conn.access_token)}
               </p>
               {conn.platform === 'tiktok' && <WebhookUrlField connection={conn} campaigns={campaigns} />}
+              {conn.platform === 'facebook' && <FacebookWebhookNote connection={conn} campaigns={campaigns} />}
+              {conn.platform === 'snapchat' && <SnapchatWebhookField connection={conn} campaigns={campaigns} onSaved={refresh} />}
               <div className="flex items-center gap-1 justify-end mt-4 pt-3 border-t border-border">
                 <button onClick={() => { setEditConn(conn); setShowModal(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
                   <Pencil size={15} />
