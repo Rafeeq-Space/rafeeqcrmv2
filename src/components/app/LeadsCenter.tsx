@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search } from 'lucide-react'
 import type { Lead } from '@/lib/types'
@@ -10,6 +10,7 @@ import AddLeadModal from './AddLeadModal'
 interface FilterOption {
   id: string
   name: string
+  team_id?: string | null
 }
 
 interface Props {
@@ -100,6 +101,20 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const isManager = role === 'client_sales_manager'
 
   const open = (id: string) => router.push(`${basePath}/${id}`)
+
+  // When a team is selected, the employees dropdown shows only that team's
+  // members. If members carry no team_id (e.g. legacy data), fall back to all.
+  const visibleMembers = useMemo(() => {
+    if (team === 'all') return members
+    const scopedToTeam = members.filter(m => m.team_id === team)
+    return scopedToTeam.length ? scopedToTeam : members
+  }, [members, team])
+
+  // If the currently-selected employee isn't in the chosen team, clear it so the
+  // employee filter never contradicts the team filter.
+  useEffect(() => {
+    if (member !== 'all' && !visibleMembers.some(m => m.id === member)) setMember('all')
+  }, [visibleMembers, member])
 
   // Leads after every filter EXCEPT status (period, search, campaign, team,
   // member). The overview cards and the status filter both derive from this, so
@@ -233,7 +248,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
         {(isAdmin || isManager) && members.length > 0 && (
           <select className="input !w-auto" value={member} onChange={e => setMember(e.target.value)}>
             <option value="all">كل الموظفين</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {visibleMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
         <span className="text-sm text-muted2">{filtered.length} عميل محتمل</span>

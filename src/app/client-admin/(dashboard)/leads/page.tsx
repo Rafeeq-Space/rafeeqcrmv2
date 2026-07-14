@@ -19,13 +19,13 @@ export default async function ClientAdminLeadsPage() {
   // Members shown in filters/assign: admin sees all reps; manager sees their team members.
   let membersQuery = supa
     .from('profiles')
-    .select('id, full_name')
+    .select('id, full_name, team_id')
     .eq('tenant_id', viewer.tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
   if (viewer.role === 'client_sales_manager') {
     const teamIds = await managedTeamIds(viewer)
     membersQuery = teamIds.length
-      ? supa.from('profiles').select('id, full_name').eq('tenant_id', viewer.tenantId).in('team_id', teamIds)
+      ? supa.from('profiles').select('id, full_name, team_id').eq('tenant_id', viewer.tenantId).in('team_id', teamIds)
       : membersQuery.eq('id', viewer.id)
   }
   const { data: members } = await membersQuery
@@ -46,7 +46,7 @@ export default async function ClientAdminLeadsPage() {
         tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
         teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
-        members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
+        members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
       />
     </div>
   )
