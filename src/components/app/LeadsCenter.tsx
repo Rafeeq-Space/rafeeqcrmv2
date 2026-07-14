@@ -272,6 +272,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                   <p className="flex items-center gap-2 flex-wrap"><Megaphone size={13} /> {campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</p>
                   <p className="flex items-center gap-2"><Calendar size={13} /> <span className="text-muted2">أنشئ:</span> {fmtDate(lead.created_at)}</p>
                   <p className="flex items-center gap-2"><Clock size={13} /> <span className="text-muted2">آخر تحديث:</span> {fmtDateTime(lead.updated_at)}</p>
+                  {(isAdmin || isManager) && <p className="flex items-center gap-2"><User size={13} /> <span className="text-muted2">المسؤول:</span> {lead.assigned_sales?.full_name || 'غير مُسنَد'}</p>}
                 </div>
                 {phone && <div className="flex items-center gap-2"><ContactButtons phone={phone} /></div>}
               </div>
@@ -287,6 +288,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                   <th className="text-start font-semibold px-4 py-3">العميل</th>
                   <th className="text-start font-semibold px-4 py-3">الحالة</th>
                   <th className="text-start font-semibold px-4 py-3">الحملة</th>
+                  {(isAdmin || isManager) && <th className="text-start font-semibold px-4 py-3">المسؤول</th>}
                   <th className="text-start font-semibold px-4 py-3">تاريخ الإنشاء</th>
                   <th className="text-start font-semibold px-4 py-3">آخر تحديث</th>
                   <th className="text-start font-semibold px-4 py-3">تواصل</th>
@@ -303,6 +305,13 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                       </td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
                       <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
+                      {(isAdmin || isManager) && (
+                        <td className="px-4 py-3 text-muted whitespace-nowrap">
+                          {lead.assigned_sales?.full_name
+                            ? <span className="flex items-center gap-1.5"><User size={13} /> {lead.assigned_sales.full_name}</span>
+                            : <span className="text-muted2">غير مُسنَد</span>}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
                       <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons phone={phone} /></div></td>
