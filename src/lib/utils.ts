@@ -53,6 +53,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   other: 'أخرى',
   google_sheet: 'Google Sheets',
   crm: 'CRM',
+  bevatel_chat: 'بيفاتيل — شات',
+  bevatel_call: 'بيفاتيل — مكالمة',
 }
 
 // Pull a display name / phone out of a lead's free-form submitted data.

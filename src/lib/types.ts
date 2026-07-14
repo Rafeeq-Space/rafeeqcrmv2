@@ -73,6 +73,8 @@ export interface Tenant {
   created_at: string
   // false while the client is invited but hasn't set their password yet.
   activated?: boolean
+  // random token that gates this tenant's Bevatel webhook URLs.
+  bevatel_webhook_secret?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
