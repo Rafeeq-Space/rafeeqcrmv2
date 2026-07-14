@@ -1,16 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CalendarDays, Clock } from 'lucide-react'
+import { CalendarDays, Sunrise, Sun, CloudSun, Sunset, Moon, type LucideIcon } from 'lucide-react'
 
-// The five daily prayers (Sunrise is intentionally skipped) with Arabic labels.
-const PRAYERS: { key: string; label: string }[] = [
-  { key: 'Fajr', label: 'الفجر' },
-  { key: 'Dhuhr', label: 'الظهر' },
-  { key: 'Asr', label: 'العصر' },
-  { key: 'Maghrib', label: 'المغرب' },
-  { key: 'Isha', label: 'العشاء' },
+// The five daily prayers (Sunrise is intentionally skipped) with Arabic labels
+// and a matching lucide icon so the widget stays consistent with the UI.
+const PRAYERS: { key: string; label: string; icon: LucideIcon }[] = [
+  { key: 'Fajr', label: 'الفجر', icon: Sunrise },
+  { key: 'Dhuhr', label: 'الظهر', icon: Sun },
+  { key: 'Asr', label: 'العصر', icon: CloudSun },
+  { key: 'Maghrib', label: 'المغرب', icon: Sunset },
+  { key: 'Isha', label: 'العشاء', icon: Moon },
 ]
+const ICON_BY_LABEL: Record<string, LucideIcon> = Object.fromEntries(PRAYERS.map(p => [p.label, p.icon]))
 
 // We have no stored location, so we derive an approximate city + calculation
 // method from the browser timezone. Aladhan returns times in that timezone,
@@ -43,25 +45,22 @@ function parseTime(hhmm: string, dayOffset = 0): Date {
   return d
 }
 
-interface NextPrayer {
+interface Slot {
   label: string
-  time: string   // "HH:MM" display
+  time: string
   at: Date
 }
 
-function computeNext(timings: Timings, now: Date): NextPrayer | null {
+// Ordered timeline spanning yesterday's Isha → tomorrow's Fajr so we can find
+// both the next prayer and the previous one (for the progress bar).
+function buildTimeline(timings: Timings): Slot[] {
+  const items: Slot[] = []
+  if (timings.Isha) items.push({ label: 'العشاء', time: timings.Isha.slice(0, 5), at: parseTime(timings.Isha, -1) })
   for (const p of PRAYERS) {
-    const raw = timings[p.key]
-    if (!raw) continue
-    const at = parseTime(raw)
-    if (at.getTime() > now.getTime()) {
-      return { label: p.label, time: raw.slice(0, 5), at }
-    }
+    if (timings[p.key]) items.push({ label: p.label, time: timings[p.key].slice(0, 5), at: parseTime(timings[p.key], 0) })
   }
-  // Past Isha → next is tomorrow's Fajr.
-  const fajr = timings.Fajr
-  if (fajr) return { label: 'الفجر', time: fajr.slice(0, 5), at: parseTime(fajr, 1) }
-  return null
+  if (timings.Fajr) items.push({ label: 'الفجر', time: timings.Fajr.slice(0, 5), at: parseTime(timings.Fajr, 1) })
+  return items
 }
 
 function useDateTimePrayer() {
@@ -104,43 +103,61 @@ function useDateTimePrayer() {
       .catch(() => { /* offline / API down — widget simply omits prayer line */ })
   }, [])
 
-  const next = timings ? computeNext(timings, now) : null
+  let next: Slot | null = null
+  let prev: Slot | null = null
+  if (timings) {
+    const timeline = buildTimeline(timings)
+    for (let i = 0; i < timeline.length; i++) {
+      if (timeline[i].at.getTime() > now.getTime()) {
+        next = timeline[i]
+        prev = timeline[i - 1] || null
+        break
+      }
+    }
+  }
 
   let countdown = ''
+  let progress = 0
   if (next) {
     let diff = Math.max(0, Math.floor((next.at.getTime() - now.getTime()) / 1000))
     const h = Math.floor(diff / 3600); diff -= h * 3600
     const m = Math.floor(diff / 60); const s = diff - m * 60
     countdown = `${pad(h)}:${pad(m)}:${pad(s)}`
+    if (prev) {
+      const span = next.at.getTime() - prev.at.getTime()
+      progress = span > 0 ? Math.min(100, Math.max(0, ((now.getTime() - prev.at.getTime()) / span) * 100)) : 0
+    }
   }
 
-  const clock = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  const hh = pad(now.getHours())
+  const mm = pad(now.getMinutes())
+  const ss = pad(now.getSeconds())
   const gregDate = new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)
   let hijriDate = ''
   try {
     hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now)
   } catch { /* Intl without islamic calendar */ }
 
-  return { mounted, clock, gregDate, hijriDate, next, countdown }
+  return { mounted, hh, mm, ss, gregDate, hijriDate, next, countdown, progress }
 }
 
 export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' | 'bar' | 'mini' }) {
-  const { mounted, clock, gregDate, hijriDate, next, countdown } = useDateTimePrayer()
+  const { mounted, hh, mm, ss, gregDate, hijriDate, next, countdown, progress } = useDateTimePrayer()
 
   if (!mounted) return null
 
-  // ── Mobile top-bar: single compact line ──
+  const NextIcon = next ? (ICON_BY_LABEL[next.label] || Moon) : Moon
+
+  // ── Mobile top-bar / header: a compact pill ──
   if (variant === 'bar') {
     return (
-      <div className="flex items-center gap-1.5 text-xs">
-        <span className="tabular-nums font-bold text-foreground" dir="ltr">{clock.slice(0, 5)}</span>
+      <div className="flex items-center gap-2 rounded-full border border-border bg-surface2 ps-3 pe-2.5 py-1">
+        <span className="tabular-nums text-xs font-bold text-foreground" dir="ltr">{hh}:{mm}</span>
         {next && (
-          <>
-            <span className="text-muted2">·</span>
-            <span className="font-semibold" style={{ color: 'var(--primary)' }}>
-              🕌 {next.label} <span className="tabular-nums" dir="ltr">{countdown.slice(0, 5)}</span>
-            </span>
-          </>
+          <span className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
+            <NextIcon size={13} />
+            <span className="tabular-nums text-xs font-semibold" dir="ltr">{countdown}</span>
+          </span>
         )}
       </div>
     )
@@ -149,13 +166,13 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
   // ── Collapsed sidebar: narrow vertical stack ──
   if (variant === 'mini') {
     return (
-      <div className="px-1 py-2 border-b border-border flex flex-col items-center gap-0.5 text-center">
-        <span className="tabular-nums text-[0.72rem] font-bold text-foreground" dir="ltr">{clock.slice(0, 5)}</span>
+      <div className="px-1 py-2.5 border-b border-border flex flex-col items-center gap-1 text-center">
+        <span className="tabular-nums text-[0.72rem] font-bold text-foreground" dir="ltr">{hh}:{mm}</span>
         {next && (
-          <>
-            <span className="text-[0.62rem] text-muted2 leading-tight">{next.label}</span>
-            <span className="tabular-nums text-[0.62rem] font-semibold leading-tight" style={{ color: 'var(--primary)' }} dir="ltr">{countdown.slice(0, 5)}</span>
-          </>
+          <div className="flex flex-col items-center gap-0.5" style={{ color: 'var(--primary)' }} title={`${next.label} — باقٍ ${countdown}`}>
+            <NextIcon size={14} />
+            <span className="tabular-nums text-[0.6rem] font-semibold leading-none" dir="ltr">{countdown.slice(0, 5)}</span>
+          </div>
         )}
       </div>
     )
@@ -163,25 +180,35 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
 
   // ── Full card (expanded sidebar / mobile drawer) ──
   return (
-    <div className="mx-3 my-3 rounded-xl bg-surface2 border border-border p-3 text-center">
-      <div className="flex items-center justify-center gap-1 text-xs text-muted2">
-        <CalendarDays size={13} /> {gregDate}
+    <div className="mx-3 my-3 rounded-2xl border border-border bg-surface2 overflow-hidden">
+      {/* Date + live clock */}
+      <div className="px-4 pt-3.5 pb-3 text-center">
+        <div className="flex items-center justify-center gap-1.5 text-[0.7rem] font-medium text-muted2">
+          <CalendarDays size={12} />
+          <span>{gregDate}</span>
+        </div>
+        <div className="mt-1.5 font-extrabold text-foreground tabular-nums tracking-tight leading-none" dir="ltr">
+          <span className="text-[1.7rem]">{hh}:{mm}</span>
+          <span className="text-base text-muted2">:{ss}</span>
+        </div>
+        {hijriDate && <div className="mt-1.5 text-[0.68rem] text-muted2">{hijriDate}</div>}
       </div>
-      {hijriDate && <div className="text-[0.7rem] text-muted2 mt-0.5">{hijriDate}</div>}
-      <div className="flex items-center justify-center gap-1.5 mt-1.5">
-        <Clock size={17} className="text-muted2" />
-        <span className="text-2xl font-extrabold text-foreground tabular-nums" dir="ltr">{clock}</span>
-      </div>
+
+      {/* Next prayer — highlighted footer with a progress bar */}
       {next && (
-        <div className="mt-2 pt-2 border-t border-border">
-          <div className="text-[0.7rem] text-muted2">الصلاة القادمة</div>
-          <div className="flex items-center justify-center gap-1 font-bold text-foreground mt-0.5">
-            🕌 {next.label}
-            <span className="text-muted2 font-normal">·</span>
-            <span className="tabular-nums" dir="ltr">{next.time}</span>
+        <div className="px-4 py-2.5 border-t border-border" style={{ background: 'var(--primary-soft)' }}>
+          <div className="flex items-center justify-between gap-2" style={{ color: 'var(--primary)' }}>
+            <span className="flex items-center gap-1.5 text-sm font-bold">
+              <NextIcon size={15} />
+              {next.label}
+            </span>
+            <span className="tabular-nums text-xs font-semibold" dir="ltr">{next.time}</span>
           </div>
-          <div className="text-xs font-semibold tabular-nums mt-0.5" style={{ color: 'var(--primary)' }} dir="ltr">
-            باقٍ {countdown}
+          <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'var(--border-strong)' }}>
+            <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%`, background: 'var(--primary)' }} />
+          </div>
+          <div className="mt-1.5 text-center text-[0.7rem] font-semibold text-muted2">
+            باقٍ <span className="tabular-nums" style={{ color: 'var(--primary)' }} dir="ltr">{countdown}</span>
           </div>
         </div>
       )}
