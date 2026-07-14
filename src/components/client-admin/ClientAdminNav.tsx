@@ -233,7 +233,6 @@ export default function ClientAdminNav({ profile }: Props) {
         style={{ width: collapsed ? '4.75rem' : '18rem' }}
       >
         <Brand mini={collapsed} showToggle />
-        <DateTimePrayer variant={collapsed ? 'mini' : 'card'} />
         <NavLinks mini={collapsed} />
         <Footer mini={collapsed} />
       </aside>
