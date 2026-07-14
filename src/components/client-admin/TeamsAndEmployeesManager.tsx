@@ -252,7 +252,31 @@ function TeamDetailModal({
   const [saving, setSaving] = useState(false)
   const [editingTeam, setEditingTeam] = useState(false)
   const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '' })
+  const [adding, setAdding] = useState(false)
+  const [selectedToAdd, setSelectedToAdd] = useState<string[]>([])
+  const [addingSaving, setAddingSaving] = useState(false)
   const teamMembers = members.filter(m => m.team_id === team.id)
+  // Company members that can be pulled into this team: sales staff not already
+  // here and not suspended (excludes the admin's own account).
+  const availableToAdd = members.filter(
+    m => m.team_id !== team.id && !m.suspended && (m.role === 'client_user' || m.role === 'client_sales_manager'),
+  )
+
+  async function addSelectedMembers() {
+    if (selectedToAdd.length === 0) return
+    setAddingSaving(true)
+    await Promise.all(selectedToAdd.map(id =>
+      fetch(`/api/client-admin/team-members/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: team.id }),
+      }),
+    ))
+    setAddingSaving(false)
+    setAdding(false)
+    setSelectedToAdd([])
+    onChanged()
+  }
 
   async function saveTeamInfo(e: React.FormEvent) {
     e.preventDefault()
@@ -376,7 +400,48 @@ function TeamDetailModal({
         )}
 
         {/* Members table */}
-        <p className="text-xs font-bold text-muted2 mb-2">الأعضاء ({teamMembers.length})</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold text-muted2">الأعضاء ({teamMembers.length})</p>
+          {canManageTeam && !adding && (
+            <button onClick={() => setAdding(true)} className="text-sm font-semibold flex items-center gap-1" style={{ color: 'var(--primary)' }}>
+              <UserPlus size={15} /> إضافة أعضاء
+            </button>
+          )}
+        </div>
+
+        {canManageTeam && adding && (
+          <div className="bg-surface2 rounded-xl p-4 border border-border mb-3 space-y-3">
+            <p className="text-sm font-semibold text-foreground">اختر موظفين من الشركة لإضافتهم إلى الفريق</p>
+            {availableToAdd.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto space-y-1">
+                {availableToAdd.map(m => {
+                  const otherTeam = m.team_id && m.team_id !== team.id
+                  return (
+                    <label key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedToAdd.includes(m.id)}
+                        onChange={e => setSelectedToAdd(prev => e.target.checked ? [...prev, m.id] : prev.filter(x => x !== m.id))}
+                      />
+                      <Avatar name={m.full_name} url={m.avatar_url} size={26} />
+                      <span className="text-sm text-foreground">{m.full_name}{m.job_title ? ` · ${m.job_title}` : ''}</span>
+                      {otherTeam && <span className="text-[0.68rem] text-muted2 ms-auto">(في فريق آخر)</span>}
+                    </label>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted2">لا يوجد موظفون متاحون للإضافة.</p>
+            )}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setAdding(false); setSelectedToAdd([]) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
+              <button type="button" onClick={addSelectedMembers} disabled={addingSaving || selectedToAdd.length === 0} className="btn btn-primary flex-1 !py-2">
+                {addingSaving ? 'جارٍ الإضافة...' : `إضافة${selectedToAdd.length ? ` (${selectedToAdd.length})` : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
