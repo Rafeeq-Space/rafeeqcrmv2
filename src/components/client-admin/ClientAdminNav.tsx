@@ -98,6 +98,7 @@ export default function ClientAdminNav({ profile }: Props) {
   }
 
   const initial = profile?.full_name?.[0]?.toUpperCase() || 'م'
+  const roleLabel = profile?.role === 'client_sales_manager' ? 'مدير المبيعات' : 'مدير الحساب'
 
   function NavLinks({ mini = false, onNavigate }: { mini?: boolean; onNavigate?: () => void }) {
     return (
@@ -208,7 +209,7 @@ export default function ClientAdminNav({ profile }: Props) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{profile?.full_name || 'مستخدم'}</p>
-            <p className="text-xs text-muted2">مدير الحساب</p>
+            <p className="text-xs text-muted2">{roleLabel}</p>
           </div>
           <button onClick={handleLogout} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="تسجيل الخروج" aria-label="تسجيل الخروج">
             <LogOut size={17} />
