@@ -37,6 +37,20 @@ async function sharedLeadIds(tenantId: string, profileId: string): Promise<strin
   return (data || []).map(s => s.lead_id)
 }
 
+// Whether the user has received a notification about this lead (e.g. a mention).
+// Getting notified about a lead grants read access to it, so the notification
+// link never dead-ends on a 404.
+async function hasLeadNotification(tenantId: string, profileId: string, leadId: string): Promise<boolean> {
+  const supa = adminSupabase()
+  const { count } = await supa
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('recipient_id', profileId)
+    .eq('lead_id', leadId)
+  return (count || 0) > 0
+}
+
 // Returns the set of leads a viewer is allowed to see, respecting role.
 export async function fetchVisibleLeads(viewer: Viewer): Promise<Lead[]> {
   const supa = adminSupabase()
@@ -47,9 +61,11 @@ export async function fetchVisibleLeads(viewer: Viewer): Promise<Lead[]> {
   } else if (viewer.role === 'client_sales_manager') {
     const teamIds = await managedTeamIds(viewer)
     const memberIds = await teamMemberIds(viewer.tenantId, teamIds)
+    const shared = await sharedLeadIds(viewer.tenantId, viewer.id)
     const orParts: string[] = [`assigned_sales_id.eq.${viewer.id}`]
     if (teamIds.length) orParts.push(`assigned_team_id.in.(${teamIds.join(',')})`)
     if (memberIds.length) orParts.push(`assigned_sales_id.in.(${memberIds.join(',')})`)
+    if (shared.length) orParts.push(`id.in.(${shared.join(',')})`)
     query = query.or(orParts.join(','))
   } else {
     // client_user (sales): assigned to me, or shared with me
@@ -72,10 +88,14 @@ export async function canAccessLead(viewer: Viewer, lead: Lead): Promise<boolean
     const teamIds = await managedTeamIds(viewer)
     if (lead.assigned_team_id && teamIds.includes(lead.assigned_team_id)) return true
     const memberIds = await teamMemberIds(viewer.tenantId, teamIds)
-    return !!lead.assigned_sales_id && memberIds.includes(lead.assigned_sales_id)
+    if (!!lead.assigned_sales_id && memberIds.includes(lead.assigned_sales_id)) return true
+    const shared = await sharedLeadIds(viewer.tenantId, viewer.id)
+    if (shared.includes(lead.id)) return true
+    return hasLeadNotification(viewer.tenantId, viewer.id, lead.id)
   }
   // sales
   if (lead.assigned_sales_id === viewer.id) return true
   const shared = await sharedLeadIds(viewer.tenantId, viewer.id)
-  return shared.includes(lead.id)
+  if (shared.includes(lead.id)) return true
+  return hasLeadNotification(viewer.tenantId, viewer.id, lead.id)
 }
