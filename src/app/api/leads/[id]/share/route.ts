@@ -28,6 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
   if (!body.profile_id) return NextResponse.json({ error: 'Missing profile_id' }, { status: 400 })
+  if (body.profile_id === viewer.id) return NextResponse.json({ error: 'لا يمكن مشاركة العميل مع نفسك' }, { status: 400 })
 
   const { data: target } = await supa
     .from('profiles')

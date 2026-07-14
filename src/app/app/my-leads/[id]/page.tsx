@@ -38,6 +38,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
       role={viewer.role}
       backPath="/app/my-leads"
       tenantId={viewer.tenantId}
+      viewerId={viewer.id}
       members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
     />
   )

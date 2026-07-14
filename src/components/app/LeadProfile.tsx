@@ -19,6 +19,7 @@ interface Props {
   role: string
   backPath: string
   tenantId: string
+  viewerId: string
   members?: Option[]
   teams?: Option[]
 }
@@ -29,7 +30,7 @@ function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
-export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, members = [], teams = [] }: Props) {
+export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [] }: Props) {
   const [lead, setLead] = useState(initialLead)
   const [activities, setActivities] = useState<LeadActivity[]>(initialActivities)
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
@@ -45,6 +46,8 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const imageRef = useRef<HTMLInputElement>(null)
 
   const canManage = role === 'client_admin' || role === 'client_sales_manager'
+  // You can't share a lead with yourself.
+  const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)
   const phone = leadPhone(lead.data)
 
@@ -180,7 +183,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="mt-3 p-3 rounded-xl bg-surface2 border border-border space-y-2">
                 <select className="input" value={shareId} onChange={e => setShareId(e.target.value)}>
                   <option value="">اختر موظفًا للمشاركة</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {shareMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
                 <button disabled={busy || !shareId} onClick={share} className="btn btn-primary w-full text-xs !py-1.5">مشاركة</button>
               </div>
