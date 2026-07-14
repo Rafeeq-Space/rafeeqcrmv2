@@ -169,6 +169,7 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
 
   const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
   let leadId = existing?.id || null
+  let existingAssignedId: string | null = existing?.assigned_sales_id ?? null
   let created = false
   let assigned = false
 
@@ -193,20 +194,39 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
       .select('id')
       .single()
 
-    if (error || !lead) return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
-    leadId = lead.id
-    created = true
-    assigned = !!agent
+    if (!error && lead) {
+      leadId = lead.id
+      created = true
+      assigned = !!agent
 
-    await supa.from('lead_activities').insert({
-      tenant_id: tenantId,
-      lead_id: leadId,
-      actor_id: agent?.id ?? null,
-      type: 'created',
-    })
-  } else if (agent && !existing?.assigned_sales_id) {
-    // Lead already exists but is unassigned — hand it to the agent who just
-    // replied / answered, and log the assignment on the timeline.
+      await supa.from('lead_activities').insert({
+        tenant_id: tenantId,
+        lead_id: leadId,
+        actor_id: agent?.id ?? null,
+        type: 'created',
+      })
+    } else if (error?.code === '23505') {
+      // Unique-violation on (tenant_id, phone_key): a concurrent event just
+      // created this lead a moment ago. Adopt it instead of inserting a
+      // duplicate, then fall through to the assignment logic below.
+      const { data: dupe } = await supa
+        .from('leads')
+        .select('id, assigned_sales_id')
+        .eq('tenant_id', tenantId)
+        .eq('phone_key', key)
+        .limit(1)
+        .maybeSingle()
+      if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
+      leadId = dupe.id
+      existingAssignedId = dupe.assigned_sales_id ?? null
+    } else {
+      return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
+    }
+  }
+
+  // Existing (or just-adopted) lead with no owner — hand it to the agent who
+  // just replied / answered, and log the assignment on the timeline.
+  if (leadId && !created && agent && !existingAssignedId) {
     await supa
       .from('leads')
       .update({ assigned_sales_id: agent.id, assigned_team_id: agent.team_id })
