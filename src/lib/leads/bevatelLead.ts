@@ -221,12 +221,19 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     ? (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
     : ''
 
-  // Who is the responsible agent? On a reply it's the message sender; otherwise
-  // fall back to the conversation assignee (often null until someone replies).
-  const agentSrc = incoming ? assignee : topSender
+  // Who is the responsible agent?
+  //  - Incoming (customer → us): the top-level sender IS the customer, never the
+  //    agent, so only the conversation assignee can identify the rep.
+  //  - Outgoing (us → customer): the replying agent is the top-level sender;
+  //    fall back to the conversation assignee when the sender is missing (e.g. an
+  //    outbound conversation the agent started but the customer never answered).
+  const primary = (incoming ? assignee : topSender) || {}
+  const fallback = assignee || {}
+  const pick = (k: string) =>
+    (primary[k] as string) || (incoming ? undefined : (fallback[k] as string)) || undefined
   const agent: AgentHint = {
-    email: (agentSrc.email as string) || undefined,
-    name: (agentSrc.name as string) || (agentSrc.available_name as string) || undefined,
+    email: pick('email'),
+    name: pick('name') || pick('available_name'),
   }
 
   const leadId = await appendToLead({
