@@ -29,9 +29,16 @@ export default async function AdminDashboardPage() {
     serviceClient.from('profiles').select('tenant_id, role'),
   ])
 
+  // Split invited-but-not-yet-activated clients out of the main table. They
+  // only "count" as real clients once they've confirmed the invite by setting
+  // a password (activated = true). Existing rows default to activated.
+  const allTenants = tenants || []
+  const activeTenants = allTenants.filter(t => t.activated !== false)
+  const pendingTenants = allTenants.filter(t => t.activated === false)
+
   // Aggregate metrics per tenant.
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-  const stats: TenantStat[] = (tenants || []).map(t => {
+  const stats: TenantStat[] = activeTenants.map(t => {
     const leads = (leadRows || []).filter(l => l.tenant_id === t.id)
     const converted = leads.filter(l => l.status === 'converted').length
     const lost = leads.filter(l => l.status === 'lost').length
@@ -79,7 +86,7 @@ export default async function AdminDashboardPage() {
             <h2 className="font-bold text-foreground">العملاء</h2>
             <AddClientButton />
           </div>
-          <AdminClientsTable tenants={tenants || []} />
+          <AdminClientsTable tenants={activeTenants} pending={pendingTenants} />
         </div>
       </main>
     </div>

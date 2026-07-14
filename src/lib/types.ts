@@ -71,6 +71,8 @@ export interface Tenant {
   email: string
   logo_url?: string
   created_at: string
+  // false while the client is invited but hasn't set their password yet.
+  activated?: boolean
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'

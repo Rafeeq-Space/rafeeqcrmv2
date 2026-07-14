@@ -68,6 +68,8 @@ function SetPasswordForm() {
       setSaving(false)
       return
     }
+    // Mark the tenant activated now that the invite has been confirmed.
+    await fetch('/api/tenant/activate', { method: 'POST' }).catch(() => {})
     router.push('/admin/dashboard')
   }
 

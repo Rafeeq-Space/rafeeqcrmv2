@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     // Create tenant record
     const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
-      .insert({ name, subdomain, email })
+      .insert({ name, subdomain, email, activated: false })
       .select()
       .single()
 

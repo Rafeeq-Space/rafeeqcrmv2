@@ -6,6 +6,7 @@ import type { Tenant } from '@/lib/types'
 
 interface Props {
   tenants: Tenant[]
+  pending?: Tenant[]
 }
 
 export function AddClientButton() {
@@ -168,7 +169,7 @@ function EditButton({ tenant }: { tenant: Tenant }) {
   )
 }
 
-export default function AdminClientsTable({ tenants }: Props) {
+export default function AdminClientsTable({ tenants, pending = [] }: Props) {
   async function handleDelete(id: string) {
     if (!confirm('حذف هذا العميل؟')) return
     await fetch(`/api/admin/clients/${id}`, { method: 'DELETE' })
@@ -176,6 +177,7 @@ export default function AdminClientsTable({ tenants }: Props) {
   }
 
   return (
+    <>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -210,6 +212,42 @@ export default function AdminClientsTable({ tenants }: Props) {
         </tbody>
       </table>
     </div>
+
+    {pending.length > 0 && (
+      <div className="border-t border-border">
+        <div className="px-6 py-3 flex items-center gap-2">
+          <span className="badge" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}>بانتظار التفعيل</span>
+          <span className="text-xs text-muted2">عملاء تمت دعوتهم ولم يُعيّنوا كلمة المرور بعد ({pending.length})</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-start px-6 py-3 text-muted2 font-semibold">الاسم</th>
+                <th className="text-start px-6 py-3 text-muted2 font-semibold">النطاق</th>
+                <th className="text-start px-6 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
+                <th className="text-start px-6 py-3 text-muted2 font-semibold">تاريخ الدعوة</th>
+                <th className="text-start px-6 py-3 text-muted2 font-semibold">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(tenant => (
+                <tr key={tenant.id} className="border-b border-border last:border-0 hover:bg-surface2 transition opacity-80">
+                  <td className="px-6 py-3 font-semibold text-foreground">{tenant.name}</td>
+                  <td className="px-6 py-3 text-muted2" dir="ltr">{tenant.subdomain}.rafeeqcrm.com</td>
+                  <td className="px-6 py-3 text-muted" dir="ltr">{tenant.email}</td>
+                  <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
+                  <td className="px-6 py-3 whitespace-nowrap">
+                    <button onClick={() => handleDelete(tenant.id)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>حذف</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
