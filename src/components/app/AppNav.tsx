@@ -6,6 +6,7 @@ import { BookOpen, ClipboardList, LayoutDashboard, Users, LogOut, Menu, X, Chevr
 import Logo from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
+import DateTimePrayer from '@/components/DateTimePrayer'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -210,13 +211,14 @@ export default function AppNav({ profile }: Props) {
     <>
       {/* ── Mobile top bar ── */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <Logo style={{ color: 'var(--primary)', height: 22 }} />
-          <span className="font-extrabold text-foreground text-sm">{profile?.tenants?.name || 'رفيق CRM'}</span>
+          <span className="font-extrabold text-foreground text-sm truncate hidden sm:inline">{profile?.tenants?.name || 'رفيق CRM'}</span>
         </div>
+        <DateTimePrayer variant="bar" />
         <button
           onClick={() => setMobileOpen(v => !v)}
-          className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition"
+          className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition shrink-0"
           aria-label="القائمة"
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -238,6 +240,7 @@ export default function AppNav({ profile }: Props) {
         }`}
       >
         <SidebarBrand />
+        <DateTimePrayer variant="card" />
         <NavLinks onNavigate={() => setMobileOpen(false)} />
         <SidebarFooter />
       </aside>
@@ -248,6 +251,7 @@ export default function AppNav({ profile }: Props) {
         style={{ width: collapsed ? '4.75rem' : '18rem' }}
       >
         <SidebarBrand mini={collapsed} showToggle />
+        <DateTimePrayer variant={collapsed ? 'mini' : 'card'} />
         <NavLinks mini={collapsed} />
         <SidebarFooter mini={collapsed} />
       </aside>

@@ -9,6 +9,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import Logo from '@/components/Logo'
+import DateTimePrayer from '@/components/DateTimePrayer'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -205,11 +206,12 @@ export default function ClientAdminNav({ profile }: Props) {
     <>
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <Logo style={{ color: 'var(--primary)', height: 22 }} />
-          <span className="font-extrabold text-foreground text-sm">{profile?.tenants?.name || 'رفيق CRM'}</span>
+          <span className="font-extrabold text-foreground text-sm truncate hidden sm:inline">{profile?.tenants?.name || 'رفيق CRM'}</span>
         </div>
-        <button onClick={() => setMobileOpen(v => !v)} className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition">
+        <DateTimePrayer variant="bar" />
+        <button onClick={() => setMobileOpen(v => !v)} className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-surface2 transition shrink-0">
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </header>
@@ -220,6 +222,7 @@ export default function ClientAdminNav({ profile }: Props) {
 
       <aside className={`lg:hidden fixed top-0 bottom-0 start-0 w-72 bg-surface border-e border-border flex flex-col z-50 transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <Brand />
+        <DateTimePrayer variant="card" />
         <NavLinks onNavigate={() => setMobileOpen(false)} />
         <Footer />
       </aside>
@@ -230,6 +233,7 @@ export default function ClientAdminNav({ profile }: Props) {
         style={{ width: collapsed ? '4.75rem' : '18rem' }}
       >
         <Brand mini={collapsed} showToggle />
+        <DateTimePrayer variant={collapsed ? 'mini' : 'card'} />
         <NavLinks mini={collapsed} />
         <Footer mini={collapsed} />
       </aside>
