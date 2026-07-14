@@ -107,13 +107,20 @@ interface AppendArgs {
   agent: AgentHint
 }
 
-// Match-or-create the lead and append the timeline activity. Returns the lead id.
-async function appendToLead(args: AppendArgs): Promise<string | null> {
+interface AppendResult {
+  leadId: string | null
+  created: boolean
+  assigned: boolean
+  agentMatched: boolean
+}
+
+// Match-or-create the lead and append the timeline activity.
+async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const { tenantId, phone, source, activityBody } = args
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
-  if (!key) return null
+  if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false }
 
   // Look for an existing lead in this tenant with the same phone.
   const { data: leads } = await supa
@@ -123,6 +130,8 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
 
   const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
   let leadId = existing?.id || null
+  let created = false
+  let assigned = false
 
   // Resolve the Bevatel agent whenever the event carries one (an agent reply /
   // an answered call). Incoming-only events have no agent, so this is null.
@@ -145,8 +154,10 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
       .select('id')
       .single()
 
-    if (error || !lead) return null
+    if (error || !lead) return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
     leadId = lead.id
+    created = true
+    assigned = !!agent
 
     await supa.from('lead_activities').insert({
       tenant_id: tenantId,
@@ -169,6 +180,7 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
       type: 'assignment',
       mentioned_id: agent.id,
     })
+    assigned = true
   }
 
   // Skip the timeline comment for contact-only events (no message body).
@@ -182,7 +194,7 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
     })
   }
 
-  return leadId
+  return { leadId, created, assigned, agentMatched: !!agent }
 }
 
 // ── Chat (Bevatel Business Chat — Chatwoot-shaped payload) ────────────────────
@@ -204,8 +216,13 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     ? nestedContact
     : payload
 
+  const eventName = (payload.event as string) || (typeof payload.message_type !== 'undefined' ? 'message_created' : 'unknown')
+
   const phone = (contact.phone_number as string) || ''
-  if (!phone) return { ok: false as const, reason: 'no_phone' }
+  if (!phone) {
+    console.log(`[bevatel:chat] tenant=${tenantId} event=${eventName} skipped=no_phone`)
+    return { ok: false as const, reason: 'no_phone' }
+  }
 
   const name = (contact.name as string) || ''
   const email = (contact.email as string) || ''
@@ -236,7 +253,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     name: pick('name') || pick('available_name'),
   }
 
-  const leadId = await appendToLead({
+  const res = await appendToLead({
     tenantId,
     phone,
     name,
@@ -246,7 +263,15 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     agent,
   })
 
-  return { ok: !!leadId, leadId }
+  // A single line per event so unassigned leads are diagnosable from the logs:
+  // did we get an agent hint at all, and did it match a CRM user?
+  console.log(
+    `[bevatel:chat] tenant=${tenantId} event=${eventName} dir=${incoming ? 'in' : 'out'}` +
+    ` phone=*${phoneKey(phone)} agentHint=${hasHint(agent) ? (agent.email || agent.name) : 'none'}` +
+    ` matched=${res.agentMatched} created=${res.created} assigned=${res.assigned} leadId=${res.leadId ?? '-'}`
+  )
+
+  return { ok: !!res.leadId, leadId: res.leadId }
 }
 
 // ── Calls (Bevatel Call Center) ───────────────────────────────────────────────
@@ -284,7 +309,7 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     name: (data.agent_name as string) || undefined,
   }
 
-  const leadId = await appendToLead({
+  const res = await appendToLead({
     tenantId,
     phone,
     source: 'bevatel_call',
@@ -292,5 +317,11 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     agent,
   })
 
-  return { ok: !!leadId, leadId }
+  console.log(
+    `[bevatel:call] tenant=${tenantId} event=${eventType || 'unknown'} dir=${inbound ? 'in' : 'out'}` +
+    ` abandoned=${abandoned} phone=*${phoneKey(phone)} agentHint=${hasHint(agent) ? (agent.email || agent.phone || agent.name) : 'none'}` +
+    ` matched=${res.agentMatched} created=${res.created} assigned=${res.assigned} leadId=${res.leadId ?? '-'}`
+  )
+
+  return { ok: !!res.leadId, leadId: res.leadId }
 }
