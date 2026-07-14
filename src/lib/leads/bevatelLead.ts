@@ -198,7 +198,8 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
   const name = (contact.name as string) || ''
   const email = (contact.email as string) || ''
-  const channel = (conversation.channel as string) || 'واتساب'
+  const rawChannel = (conversation.channel as string) || ''
+  const channel = /whatsapp/i.test(rawChannel) ? 'واتساب' : rawChannel.replace(/^Channel::/, '') || 'واتساب'
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
