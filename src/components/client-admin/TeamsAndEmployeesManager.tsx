@@ -90,6 +90,7 @@ function MemberModal({
     countryCode: initialCode,
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
+    bevatel_agent_id: member?.bevatel_agent_id || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -114,6 +115,7 @@ function MemberModal({
           role: form.role,
           phone,
           team_id: form.team_id || null,
+          bevatel_agent_id: form.bevatel_agent_id,
         }
         if (form.password) payload.password = form.password
         res = await fetch(`/api/client-admin/team-members/${member!.id}`, {
@@ -133,6 +135,7 @@ function MemberModal({
             role: form.role,
             phone,
             team_id: form.team_id || null,
+            bevatel_agent_id: form.bevatel_agent_id,
           }),
         })
       }
@@ -207,6 +210,20 @@ function MemberModal({
                 placeholder={PHONE_RULES[form.countryCode]?.placeholder} />
             </div>
             <p className="text-xs text-muted2 mt-1">{PHONE_RULES[form.countryCode]?.hint}</p>
+          </div>
+
+          <div>
+            <label className="label">معرّف الموظف في بيفاتيل</label>
+            <input
+              dir="ltr"
+              className="input text-start"
+              value={form.bevatel_agent_id}
+              onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
+              placeholder="نفس إيميل أو اسم الموظف في بيفاتيل"
+            />
+            <p className="text-xs text-muted2 mt-1">
+              لربط ليدز الشات والمكالمات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتبه كما يظهر في بيفاتيل بالضبط.
+            </p>
           </div>
 
           {!lockedTeamId && (

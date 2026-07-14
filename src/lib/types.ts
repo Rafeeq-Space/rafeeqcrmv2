@@ -112,6 +112,9 @@ export interface TeamMember {
   team_id?: string
   suspended?: boolean
   avatar_url?: string
+  // Agent identifier in Bevatel (email/name as shown there) — used to assign
+  // Bevatel chat/call leads to this employee.
+  bevatel_agent_id?: string | null
   created_at: string
 }
 

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'ليس لديك صلاحية إضافة موظفين' }, { status: 403 })
   }
 
-  const { full_name, email, password, phone, job_title, team_id, role } = await request.json()
+  const { full_name, email, password, phone, job_title, team_id, role, bevatel_agent_id } = await request.json()
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'الاسم والبريد وكلمة السر مطلوبة' }, { status: 400 })
   }
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     phone: phone || null,
     job_title: job_title || null,
     team_id: finalTeamId,
+    bevatel_agent_id: bevatel_agent_id || null,
     suspended: false,
   }, { onConflict: 'id' })
 
