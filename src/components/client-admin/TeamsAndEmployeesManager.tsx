@@ -814,7 +814,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                         </span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-muted2" dir="ltr">{m.email || '—'}</td>
+                    <td className="px-5 py-3 text-muted2 text-start"><span dir="ltr">{m.email || '—'}</span></td>
                     <td className="px-5 py-3 text-muted">{m.job_title || '—'}</td>
                     <td className="px-5 py-3">
                       {team ? <span className="badge badge-blue">{team.name}</span> : <span className="text-muted2 text-xs">غير مُسنَد</span>}
