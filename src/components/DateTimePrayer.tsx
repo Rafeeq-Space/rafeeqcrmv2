@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CalendarDays, Sunrise, Sun, CloudSun, Sunset, Moon, type LucideIcon } from 'lucide-react'
+import { CalendarDays, Hourglass, Sunrise, Sun, CloudSun, Sunset, Moon, type LucideIcon } from 'lucide-react'
 
 // The five daily prayers (Sunrise is intentionally skipped) with Arabic labels
 // and a matching lucide icon so the widget stays consistent with the UI.
@@ -151,12 +151,16 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
   // ── Mobile top-bar / header: a compact pill ──
   if (variant === 'bar') {
     return (
-      <div className="flex items-center gap-2 rounded-full border border-border bg-surface2 ps-3 pe-2.5 py-1">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-surface2 ps-3 pe-1.5 py-1">
         <span className="tabular-nums text-xs font-bold text-foreground" dir="ltr">{hh}:{mm}</span>
         {next && (
-          <span className="flex items-center gap-1 rounded-full px-1.5 py-0.5" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
-            <NextIcon size={13} />
-            <span className="tabular-nums text-xs font-semibold" dir="ltr">{countdown}</span>
+          <span className="flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}
+            title={`باقٍ على ${next.label} (${next.time})`}>
+            <NextIcon size={12} />
+            <span className="text-[0.7rem] font-bold">{next.label}</span>
+            <span className="mx-0.5 h-2.5 w-px" style={{ background: 'currentColor', opacity: 0.35 }} />
+            <Hourglass size={10} className="opacity-80" />
+            <span className="tabular-nums text-[0.7rem] font-semibold" dir="ltr">{countdown}</span>
           </span>
         )}
       </div>
@@ -166,12 +170,16 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
   // ── Collapsed sidebar: narrow vertical stack ──
   if (variant === 'mini') {
     return (
-      <div className="px-1 py-2.5 border-b border-border flex flex-col items-center gap-1 text-center">
+      <div className="px-1 py-2.5 border-b border-border flex flex-col items-center gap-1 text-center"
+        title={next ? `باقٍ على أذان ${next.label}: ${countdown}` : undefined}>
         <span className="tabular-nums text-[0.72rem] font-bold text-foreground" dir="ltr">{hh}:{mm}</span>
         {next && (
-          <div className="flex flex-col items-center gap-0.5" style={{ color: 'var(--primary)' }} title={`${next.label} — باقٍ ${countdown}`}>
+          <div className="flex flex-col items-center gap-0.5" style={{ color: 'var(--primary)' }}>
             <NextIcon size={14} />
-            <span className="tabular-nums text-[0.6rem] font-semibold leading-none" dir="ltr">{countdown.slice(0, 5)}</span>
+            <span className="text-[0.6rem] font-semibold leading-none">{next.label}</span>
+            <span className="flex items-center gap-0.5 tabular-nums text-[0.58rem] font-semibold leading-none" dir="ltr">
+              <Hourglass size={8} />{countdown.slice(0, 5)}
+            </span>
           </div>
         )}
       </div>
@@ -207,8 +215,10 @@ export default function DateTimePrayer({ variant = 'card' }: { variant?: 'card' 
           <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'var(--border-strong)' }}>
             <div className="h-full rounded-full transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%`, background: 'var(--primary)' }} />
           </div>
-          <div className="mt-1.5 text-center text-[0.7rem] font-semibold text-muted2">
-            باقٍ <span className="tabular-nums" style={{ color: 'var(--primary)' }} dir="ltr">{countdown}</span>
+          <div className="mt-1.5 flex items-center justify-center gap-1 text-[0.7rem] font-semibold text-muted2">
+            <Hourglass size={11} />
+            <span>باقٍ على الأذان</span>
+            <span className="tabular-nums" style={{ color: 'var(--primary)' }} dir="ltr">{countdown}</span>
           </div>
         </div>
       )}
