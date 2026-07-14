@@ -65,6 +65,13 @@ export async function POST(request: Request) {
     // Fire-and-forget: send initial Lead event to social platform.
     // Called directly (no HTTP self-fetch) so it works regardless of NEXT_PUBLIC_SITE_URL.
     if (lead) {
+      // Timeline entry — no authenticated actor, so it shows as created by the system.
+      await supabase.from('lead_activities').insert({
+        tenant_id: form.tenant_id,
+        lead_id: lead.id,
+        actor_id: null,
+        type: 'created',
+      })
       syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
       if (assigned_sales_id) {
         await createNotification(supabase, {

@@ -92,6 +92,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
     if (error) throw error
 
     if (lead) {
+      // Timeline entry — no authenticated actor, so it shows as created by the system.
+      await supabase.from('lead_activities').insert({
+        tenant_id: form.tenant_id,
+        lead_id: lead.id,
+        actor_id: null,
+        type: 'created',
+      })
       syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
       if (assigned_sales_id) {
         await createNotification(supabase, {
