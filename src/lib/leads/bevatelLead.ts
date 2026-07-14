@@ -171,13 +171,16 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
     })
   }
 
-  await supa.from('lead_activities').insert({
-    tenant_id: tenantId,
-    lead_id: leadId,
-    actor_id: null,
-    type: 'comment',
-    body: activityBody,
-  })
+  // Skip the timeline comment for contact-only events (no message body).
+  if (activityBody) {
+    await supa.from('lead_activities').insert({
+      tenant_id: tenantId,
+      lead_id: leadId,
+      actor_id: null,
+      type: 'comment',
+      body: activityBody,
+    })
+  }
 
   return leadId
 }
@@ -187,11 +190,19 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
 export async function handleBevatelChat(tenantId: string, payload: Record<string, unknown>) {
   const conversation = (payload.conversation as Record<string, unknown>) || {}
   const meta = (conversation.meta as Record<string, unknown>) || {}
-  // meta.sender is always the customer contact (even on outgoing messages).
-  const contact = (meta.sender as Record<string, unknown>) || {}
   const assignee = (meta.assignee as Record<string, unknown>) || {}
   // On outgoing messages the top-level sender is the replying agent.
   const topSender = (payload.sender as Record<string, unknown>) || {}
+
+  // The customer contact lives under conversation.meta.sender on message events,
+  // but contact_updated / contact_created events are FLAT — the phone/name/email
+  // sit at the top level with no conversation wrapper. Read from whichever is
+  // present so both shapes resolve a phone number.
+  const nestedContact = (meta.sender as Record<string, unknown>) || {}
+  const hasMessage = 'content' in payload || 'message_type' in payload
+  const contact = (nestedContact.phone_number as string)
+    ? nestedContact
+    : payload
 
   const phone = (contact.phone_number as string) || ''
   if (!phone) return { ok: false as const, reason: 'no_phone' }
@@ -203,8 +214,12 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
+  // Contact-only events (contact_updated / contact_created) carry no message —
+  // still match-or-create the lead so it exists, but don't log a message comment.
   const label = incoming ? `رسالة واردة عبر ${channel}` : `رد صادر عبر ${channel}`
-  const body = text ? `💬 ${label}: «${text}»` : `💬 ${label}`
+  const body = hasMessage
+    ? (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
+    : ''
 
   // Who is the responsible agent? On a reply it's the message sender; otherwise
   // fall back to the conversation assignee (often null until someone replies).
