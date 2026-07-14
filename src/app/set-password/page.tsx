@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { CheckCircle2 } from 'lucide-react'
 import Logo from '@/components/Logo'
+import PasswordInput from '@/components/PasswordInput'
 
 function SetPasswordForm() {
   const router = useRouter()
@@ -97,11 +98,11 @@ function SetPasswordForm() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="label">كلمة المرور</label>
-                <input type="password" dir="ltr" className="input text-start" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} placeholder="••••••••" />
+                <PasswordInput dir="ltr" className="input text-start" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} placeholder="••••••••" />
               </div>
               <div>
                 <label className="label">تأكيد كلمة المرور</label>
-                <input type="password" dir="ltr" className="input text-start" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={8} placeholder="••••••••" />
+                <PasswordInput dir="ltr" className="input text-start" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={8} placeholder="••••••••" />
               </div>
 
               {error && <div className="badge-red rounded-xl text-sm px-4 py-2.5 w-full justify-center">{error}</div>}

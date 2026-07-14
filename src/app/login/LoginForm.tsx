@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { LogIn } from 'lucide-react'
 import Logo from '@/components/Logo'
+import PasswordInput from '@/components/PasswordInput'
 
 interface Props {
   tenantName: string
@@ -131,8 +132,7 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
             </div>
             <div>
               <label className="label">كلمة المرور</label>
-              <input
-                type="password"
+              <PasswordInput
                 dir="ltr"
                 className="input text-start"
                 value={password}
