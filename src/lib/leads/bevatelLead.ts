@@ -22,6 +22,14 @@ export interface AgentHint {
   name?: string
 }
 
+function hasHint(h: AgentHint): boolean {
+  return !!(h.email || h.phone || h.name)
+}
+
+function normName(s: string): string {
+  return s.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ـ/g, '').replace(/\s+/g, ' ')
+}
+
 // Reduce a phone number to its last 9 significant digits so numbers written in
 // different formats still match, e.g. "00201018305632", "+201018305632" and
 // "01018305632" all collapse to "018305632".
@@ -42,17 +50,19 @@ async function matchAgent(
 
   const { data: profiles } = await supa
     .from('profiles')
-    .select('id, phone, team_id')
+    .select('id, phone, full_name, team_id')
     .eq('tenant_id', tenantId)
 
   if (!profiles || profiles.length === 0) return null
 
+  // 1) Phone — most reliable when Bevatel reports the agent's number.
   if (hint.phone) {
     const key = phoneKey(hint.phone)
     const byPhone = profiles.find(p => p.phone && phoneKey(p.phone) === key)
     if (byPhone) return { id: byPhone.id, team_id: byPhone.team_id ?? null }
   }
 
+  // 2) Email — the agent's Bevatel email must equal their CRM login email.
   if (hint.email) {
     const email = hint.email.trim().toLowerCase()
     const ids = new Set(profiles.map(p => p.id))
@@ -62,6 +72,13 @@ async function matchAgent(
       const prof = profiles.find(p => p.id === user.id)!
       return { id: prof.id, team_id: prof.team_id ?? null }
     }
+  }
+
+  // 3) Display name — last-resort fallback (agent name in Bevatel == full_name).
+  if (hint.name) {
+    const key = normName(hint.name)
+    const byName = profiles.find(p => p.full_name && normName(p.full_name) === key)
+    if (byName) return { id: byName.id, team_id: byName.team_id ?? null }
   }
 
   return null
@@ -88,12 +105,15 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
   // Look for an existing lead in this tenant with the same phone.
   const { data: leads } = await supa
     .from('leads')
-    .select('id, data')
+    .select('id, data, assigned_sales_id')
     .eq('tenant_id', tenantId)
 
-  let leadId = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key)?.id || null
+  const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
+  let leadId = existing?.id || null
 
-  const agent = leadId ? null : await matchAgent(tenantId, args.agent)
+  // Resolve the Bevatel agent whenever the event carries one (an agent reply /
+  // an answered call). Incoming-only events have no agent, so this is null.
+  const agent = hasHint(args.agent) ? await matchAgent(tenantId, args.agent) : null
 
   if (!leadId) {
     const data: Record<string, string> = { 'الاسم': args.name || 'عميل بيفاتيل', 'رقم الهاتف': phone }
@@ -121,6 +141,21 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
       actor_id: agent?.id ?? null,
       type: 'created',
     })
+  } else if (agent && !existing?.assigned_sales_id) {
+    // Lead already exists but is unassigned — hand it to the agent who just
+    // replied / answered, and log the assignment on the timeline.
+    await supa
+      .from('leads')
+      .update({ assigned_sales_id: agent.id, assigned_team_id: agent.team_id })
+      .eq('id', leadId)
+
+    await supa.from('lead_activities').insert({
+      tenant_id: tenantId,
+      lead_id: leadId,
+      actor_id: null,
+      type: 'assignment',
+      mentioned_id: agent.id,
+    })
   }
 
   await supa.from('lead_activities').insert({
@@ -139,20 +174,31 @@ async function appendToLead(args: AppendArgs): Promise<string | null> {
 export async function handleBevatelChat(tenantId: string, payload: Record<string, unknown>) {
   const conversation = (payload.conversation as Record<string, unknown>) || {}
   const meta = (conversation.meta as Record<string, unknown>) || {}
-  const sender = (meta.sender as Record<string, unknown>) || {}
+  // meta.sender is always the customer contact (even on outgoing messages).
+  const contact = (meta.sender as Record<string, unknown>) || {}
   const assignee = (meta.assignee as Record<string, unknown>) || {}
+  // On outgoing messages the top-level sender is the replying agent.
+  const topSender = (payload.sender as Record<string, unknown>) || {}
 
-  const phone = (sender.phone_number as string) || ''
+  const phone = (contact.phone_number as string) || ''
   if (!phone) return { ok: false as const, reason: 'no_phone' }
 
-  const name = (sender.name as string) || ''
-  const email = (sender.email as string) || ''
+  const name = (contact.name as string) || ''
+  const email = (contact.email as string) || ''
   const channel = (conversation.channel as string) || 'واتساب'
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
   const label = incoming ? `رسالة واردة عبر ${channel}` : `رد صادر عبر ${channel}`
   const body = text ? `💬 ${label}: «${text}»` : `💬 ${label}`
+
+  // Who is the responsible agent? On a reply it's the message sender; otherwise
+  // fall back to the conversation assignee (often null until someone replies).
+  const agentSrc = incoming ? assignee : topSender
+  const agent: AgentHint = {
+    email: (agentSrc.email as string) || undefined,
+    name: (agentSrc.name as string) || (agentSrc.available_name as string) || undefined,
+  }
 
   const leadId = await appendToLead({
     tenantId,
@@ -161,10 +207,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     email,
     source: 'bevatel_chat',
     activityBody: body,
-    agent: {
-      email: (assignee.email as string) || undefined,
-      name: (assignee.name as string) || undefined,
-    },
+    agent,
   })
 
   return { ok: !!leadId, leadId }
@@ -197,14 +240,20 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     body = `📞 مكالمة صادرة${durText}`
   }
 
-  const agentNumber = (data.agent_number as string) || (data.did as string) || undefined
+  // The agent who handled the call. Abandoned calls have no agent; answered
+  // calls report the agent under one of these fields depending on the event.
+  const agent: AgentHint = abandoned ? {} : {
+    email: (data.agent_email as string) || undefined,
+    phone: (data.agent_number as string) || (data.extension as string) || undefined,
+    name: (data.agent_name as string) || undefined,
+  }
 
   const leadId = await appendToLead({
     tenantId,
     phone,
     source: 'bevatel_call',
     activityBody: body,
-    agent: { phone: agentNumber },
+    agent,
   })
 
   return { ok: !!leadId, leadId }
