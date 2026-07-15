@@ -127,6 +127,7 @@ interface EventLog {
   created: boolean
   assigned: boolean
   leadId: string | null
+  raw?: unknown
 }
 
 // Persist a one-line summary of every processed event so an admin can diagnose
@@ -139,7 +140,7 @@ async function recordEvent(tenantId: string, log: EventLog) {
     ` created=${log.created} assigned=${log.assigned} leadId=${log.leadId ?? '-'}`
   )
   try {
-    await adminSupabase().from('bevatel_webhook_logs').insert({
+    const row = {
       tenant_id: tenantId,
       kind: log.kind,
       event: log.event,
@@ -150,7 +151,12 @@ async function recordEvent(tenantId: string, log: EventLog) {
       created: log.created,
       assigned: log.assigned,
       lead_id: log.leadId,
-    })
+    }
+    const { error } = await adminSupabase()
+      .from('bevatel_webhook_logs')
+      .insert({ ...row, raw: log.raw ?? null })
+    // The raw column may not be provisioned yet — retry without it.
+    if (error) await adminSupabase().from('bevatel_webhook_logs').insert(row)
   } catch {
     /* logging table not provisioned — ignore */
   }
@@ -330,7 +336,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   if (!phone) {
     await recordEvent(tenantId, {
       kind: 'chat', event: eventName, direction: 'in', phone: 'بدون رقم',
-      agentHint: 'none', matched: false, created: false, assigned: false, leadId: null,
+      agentHint: 'none', matched: false, created: false, assigned: false, leadId: null, raw: payload,
     })
     return { ok: false as const, reason: 'no_phone' }
   }
@@ -413,6 +419,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     created: res.created,
     assigned: res.assigned,
     leadId: res.leadId,
+    raw: payload,
   })
 
   return { ok: !!res.leadId, leadId: res.leadId }
@@ -471,6 +478,7 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     created: res.created,
     assigned: res.assigned,
     leadId: res.leadId,
+    raw: payload,
   })
 
   return { ok: !!res.leadId, leadId: res.leadId }
