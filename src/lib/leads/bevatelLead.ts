@@ -1,5 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
+import { LABEL_TO_STATUS } from '@/lib/leads/bevatelSync'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
 //
@@ -271,11 +272,44 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   return { leadId, created, assigned, agentMatched: !!agent }
 }
 
+// Reverse sync: a Bevatel conversation label → CRM lead status. Picks the most
+// advanced status when several status labels are present, and only writes (and
+// logs a status_change) when it actually differs from the lead's current status.
+const STATUS_ORDER = ['new', 'contacted', 'qualified', 'converted', 'lost']
+async function syncStatusFromLabels(tenantId: string, leadId: string, labels: string[]) {
+  const statuses = labels.map(l => LABEL_TO_STATUS[l]).filter(Boolean)
+  if (!statuses.length) return
+  const chosen = statuses.sort((a, b) => STATUS_ORDER.indexOf(b) - STATUS_ORDER.indexOf(a))[0]
+
+  const supa = adminSupabase()
+  const { data: lead } = await supa.from('leads').select('status').eq('id', leadId).single()
+  if (!lead || lead.status === chosen) return
+
+  await supa.from('leads').update({ status: chosen, updated_at: new Date().toISOString() }).eq('id', leadId)
+  await supa.from('lead_activities').insert({
+    tenant_id: tenantId,
+    lead_id: leadId,
+    actor_id: null,
+    type: 'status_change',
+    from_status: lead.status,
+    to_status: chosen,
+  })
+}
+
+// Read the labels array off a Chatwoot payload wherever it sits (top level on
+// conversation events, or nested under conversation on message events).
+function readLabels(payload: Record<string, unknown>, conversation: Record<string, unknown>): string[] {
+  const raw = (payload.labels as unknown[]) ?? (conversation.labels as unknown[]) ?? []
+  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+}
+
 // ── Chat (Bevatel Business Chat — Chatwoot-shaped payload) ────────────────────
 
 export async function handleBevatelChat(tenantId: string, payload: Record<string, unknown>) {
   const conversation = (payload.conversation as Record<string, unknown>) || {}
-  const meta = (conversation.meta as Record<string, unknown>) || {}
+  // Message events nest the conversation under `conversation`; conversation
+  // events (conversation_updated etc.) put meta/labels at the top level.
+  const meta = (conversation.meta as Record<string, unknown>) || (payload.meta as Record<string, unknown>) || {}
   const assignee = (meta.assignee as Record<string, unknown>) || {}
   // On outgoing messages the top-level sender is the replying agent.
   const topSender = (payload.sender as Record<string, unknown>) || {}
@@ -318,13 +352,23 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     ? (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
     : ''
 
+  // On conversation events (conversation_updated etc.) payload.id IS the
+  // conversation id; on message events payload.id is the message id.
+  const isConversationEvent = /^conversation/.test(eventName)
+
   // Bevatel's message id — used to dedupe the timeline comment so a retried or
   // re-sent webhook can't log the same message twice.
-  const messageId = payload.id != null ? `bevatel_msg_${payload.id}` : undefined
+  const messageId = !isConversationEvent && payload.id != null ? `bevatel_msg_${payload.id}` : undefined
 
   // Bevatel/Chatwoot conversation id — stored on the lead so CRM status changes
   // can push the matching label back onto the right conversation.
-  const convId = conversation.id != null ? String(conversation.id) : undefined
+  const convId = isConversationEvent
+    ? (payload.id != null ? String(payload.id) : undefined)
+    : (conversation.id != null ? String(conversation.id) : undefined)
+
+  // Labels currently on the conversation — used to sync a status label back
+  // into the CRM lead's status (the reverse of pushStatusToBevatel).
+  const labels = readLabels(payload, conversation)
 
   // Who is the responsible agent?
   //  - Incoming (customer → us): the top-level sender IS the customer, never the
@@ -352,6 +396,12 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     conversationId: convId,
     agent,
   })
+
+  // Reverse sync: if the conversation carries a status label, mirror it onto the
+  // CRM lead's status (agent changed the label in Bevatel → status in the CRM).
+  if (res.leadId && labels.length) {
+    await syncStatusFromLabels(tenantId, res.leadId, labels)
+  }
 
   await recordEvent(tenantId, {
     kind: 'chat',
