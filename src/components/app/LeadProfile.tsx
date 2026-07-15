@@ -161,6 +161,26 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               </div>
             )}
 
+            {/* Status changer — detailed sub-status grouped by canonical status */}
+            <div className="mb-4">
+              <p className="text-xs text-muted2 mb-1">الحالة</p>
+              <select
+                disabled={busy}
+                value={lead.sub_status || ''}
+                onChange={e => changeSubStatus(e.target.value)}
+                className="input w-full"
+              >
+                <option value="" disabled>اختر الحالة...</option>
+                {SUB_STATUS_GROUPS.map(g => (
+                  <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
+                    {g.items.map(s => (
+                      <option key={s.key} value={s.key}>{s.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-2.5 text-sm border-t border-border pt-4">
               {phone && <div className="flex items-center gap-2 text-foreground" dir="ltr"><Phone size={15} className="text-muted2" /> {phone}</div>}
               <div className="flex items-center gap-2 text-foreground flex-wrap"><Megaphone size={15} className="text-muted2" /> {lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'}{lead.campaigns?.name && lead.source && <span className="badge bg-surface2 text-muted2">{SOURCE_LABELS[lead.source] || lead.source}</span>}</div>
@@ -221,25 +241,6 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             </div>
           )}
 
-          {/* Status changer — detailed sub-status grouped by canonical status */}
-          <div className="card p-5">
-            <p className="text-sm font-bold text-foreground mb-3">تغيير الحالة</p>
-            <select
-              disabled={busy}
-              value={lead.sub_status || ''}
-              onChange={e => changeSubStatus(e.target.value)}
-              className="input w-full"
-            >
-              <option value="" disabled>اختر الحالة...</option>
-              {SUB_STATUS_GROUPS.map(g => (
-                <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
-                  {g.items.map(s => (
-                    <option key={s.key} value={s.key}>{s.label}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
         </aside>
 
         {/* ── Center: attachments + timeline ── */}
