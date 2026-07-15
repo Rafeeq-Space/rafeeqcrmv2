@@ -4,14 +4,24 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-react'
 import type { AdConnection, AdPlatform } from '@/lib/types'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import BevatelIntegration, { type BevatelLog } from '@/components/client-admin/BevatelIntegration'
 
 interface CampaignOption { id: string; name: string }
+
+interface BevatelData {
+  secret: string
+  logs: BevatelLog[]
+  api: { hasToken: boolean; host: string; accountId: string }
+}
 
 interface Props {
   tenantId: string
   connections: AdConnection[]
   campaigns: CampaignOption[]
+  bevatel?: BevatelData | null
 }
+
+type TabKey = AdPlatform | 'bevatel'
 
 const PLATFORM_LABELS: Record<AdPlatform, string> = {
   tiktok: 'تيك توك',
@@ -284,10 +294,11 @@ function SnapchatWebhookField({ connection, campaigns, onSaved }: { connection: 
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-export default function AdConnectionsManager({ connections, campaigns }: Props) {
-  const [activeTab, setActiveTab] = useState<AdPlatform>('tiktok')
+export default function AdConnectionsManager({ tenantId, connections, campaigns, bevatel }: Props) {
+  const [activeTab, setActiveTab] = useState<TabKey>('tiktok')
   const [showModal, setShowModal] = useState(false)
   const [editConn, setEditConn] = useState<AdConnection | null>(null)
+  const onBevatel = activeTab === 'bevatel'
 
   function refresh() { window.location.reload() }
 
@@ -304,19 +315,21 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
       {/* Header */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <div className="me-auto">
-          <h1 className="text-2xl font-extrabold text-foreground">الحسابات الإعلانية</h1>
+          <h1 className="text-2xl font-extrabold text-foreground">التكاملات</h1>
           <p className="text-muted text-sm mt-1">
-            محفظة حسابات إعلانية جاهزة — أضِف كل حساب مرة واحدة، ثم اختره داخل أي حملة تريد ربطها به.
+            المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
           </p>
         </div>
-        <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
-          <Plus size={17} /> إضافة حساب
-        </button>
+        {!onBevatel && (
+          <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
+            <Plus size={17} /> إضافة حساب
+          </button>
+        )}
         <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
 
       {/* Platform tabs */}
-      <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border w-fit mb-6">
+      <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border w-fit mb-6 flex-wrap">
         {PLATFORMS.map(p => {
           const count = connections.filter(c => c.platform === p).length
           return (
@@ -326,10 +339,19 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
             </button>
           )
         })}
+        {bevatel && (
+          <button onClick={() => setActiveTab('bevatel')}
+            className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition ${onBevatel ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>
+            بيفاتيل
+          </button>
+        )}
       </div>
 
-      {/* Connections list */}
-      {tabConnections.length > 0 ? (
+      {/* Bevatel integration */}
+      {onBevatel && bevatel ? (
+        <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} />
+      ) : /* Connections list */
+      tabConnections.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tabConnections.map(conn => (
             <div key={conn.id} className="card p-5">
@@ -366,14 +388,14 @@ export default function AdConnectionsManager({ connections, campaigns }: Props) 
         </div>
       ) : (
         <div className="text-center py-16 text-muted2 card">
-          لا توجد حسابات {PLATFORM_LABELS[activeTab]} بعد. أضِف حسابك الأول للبدء بربط الحملات.
+          لا توجد حسابات {PLATFORM_LABELS[activeTab as AdPlatform]} بعد. أضِف حسابك الأول للبدء بربط الحملات.
         </div>
       )}
 
       {showModal && (
         <ConnectionModal
           connection={editConn}
-          defaultPlatform={activeTab}
+          defaultPlatform={activeTab as AdPlatform}
           campaigns={campaigns}
           onClose={() => { setShowModal(false); setEditConn(null) }}
           onSaved={refresh}

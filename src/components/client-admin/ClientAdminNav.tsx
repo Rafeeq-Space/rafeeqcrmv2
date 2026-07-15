@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, BookOpen, Users, Target, Contact,
-  LogOut, Menu, X, Radio, Bell, ChevronsLeft, ChevronsRight, Plug
+  LogOut, Menu, X, Radio, Bell, ChevronsLeft, ChevronsRight
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -63,13 +63,6 @@ const navItems = [
     label: 'التكاملات',
     desc: 'المنصات الإعلانية والربط مع بيفاتيل',
     icon: Radio,
-    adminOnly: true,
-  },
-  {
-    href: '/client-admin/integrations',
-    label: 'الربط مع بيفاتيل',
-    desc: 'ربط الشات والمكالمات مع العملاء',
-    icon: Plug,
     adminOnly: true,
   },
 ]
