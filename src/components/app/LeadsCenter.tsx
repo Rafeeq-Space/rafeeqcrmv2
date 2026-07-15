@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import AddLeadModal from './AddLeadModal'
@@ -160,6 +160,15 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
     [scoped, status],
   )
 
+  // Pagination — show a bounded page of leads instead of the whole list.
+  const PAGE_SIZE = 10
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  // Snap back to a valid page whenever filters shrink the list.
+  useEffect(() => { setPage(1) }, [status, campaign, team, member, period, customFrom, customTo, search])
+  const safePage = Math.min(page, totalPages)
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   // Lead counts per status — shown as overview cards that double as quick
   // filters. Computed from the scoped set so they respect the active filters.
   const statusCounts = useMemo(() => {
@@ -276,7 +285,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
         <div className="card p-10 text-center text-muted2">لا يوجد عملاء محتملون.</div>
       ) : view === 'cards' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map(lead => {
+          {paged.map(lead => {
             const phone = leadPhone(lead.data)
             return (
               <div key={lead.id} onClick={() => open(lead.id)} className="card p-4 text-start transition hover:border-primary cursor-pointer">
@@ -316,7 +325,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(lead => {
+                {paged.map(lead => {
                   const phone = leadPhone(lead.data)
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
@@ -342,6 +351,27 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="btn btn-outline text-sm !py-1.5 !px-3 gap-1 disabled:opacity-40"
+          >
+            <ChevronRight size={15} /> السابق
+          </button>
+          <span className="text-sm text-muted2 px-2">صفحة {safePage} من {totalPages}</span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="btn btn-outline text-sm !py-1.5 !px-3 gap-1 disabled:opacity-40"
+          >
+            التالي <ChevronLeft size={15} />
+          </button>
         </div>
       )}
 
