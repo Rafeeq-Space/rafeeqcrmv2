@@ -60,8 +60,8 @@ const navItems = [
   },
   {
     href: '/client-admin/ad-connections',
-    label: 'الحسابات الإعلانية',
-    desc: 'حسابات المنصات الإعلانية المرتبطة بحملاتك',
+    label: 'التكاملات',
+    desc: 'المنصات الإعلانية والربط مع بيفاتيل',
     icon: Radio,
     adminOnly: true,
   },
