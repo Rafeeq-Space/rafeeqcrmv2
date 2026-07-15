@@ -72,7 +72,7 @@ function MemberModal({
   teams, member, lockedTeamId, onClose, onSaved,
 }: {
   teams: Team[]
-  member?: TeamMember | null
+  member?: MemberRow | null
   lockedTeamId?: string | null   // sales_manager: force their team
   onClose: () => void
   onSaved: () => void
