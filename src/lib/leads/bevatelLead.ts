@@ -1,6 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
-import { LABEL_TO_STATUS } from '@/lib/leads/bevatelSync'
+import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
 //
@@ -107,6 +107,7 @@ interface AppendArgs {
   activityBody: string
   activityExternalId?: string
   conversationId?: string
+  contactId?: string
   agent: AgentHint
 }
 
@@ -164,7 +165,7 @@ async function recordEvent(tenantId: string, log: EventLog) {
 
 // Match-or-create the lead and append the timeline activity.
 async function appendToLead(args: AppendArgs): Promise<AppendResult> {
-  const { tenantId, phone, source, activityBody, activityExternalId, conversationId } = args
+  const { tenantId, phone, source, activityBody, activityExternalId, conversationId, contactId } = args
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
@@ -173,7 +174,7 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // Look for an existing lead in this tenant with the same phone.
   const { data: leads } = await supa
     .from('leads')
-    .select('id, data, assigned_sales_id, bevatel_conversation_id')
+    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id')
     .eq('tenant_id', tenantId)
 
   const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
@@ -182,10 +183,14 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   let created = false
   let assigned = false
 
-  // Backfill the conversation id on an existing lead that doesn't have one yet,
-  // so status-label sync can target its Bevatel conversation later.
-  if (existing && conversationId && !existing.bevatel_conversation_id) {
-    await supa.from('leads').update({ bevatel_conversation_id: conversationId }).eq('id', existing.id)
+  // Backfill the Bevatel conversation/contact ids on an existing lead that
+  // doesn't have them yet, so status sync can target the right conversation
+  // and contact later.
+  if (existing) {
+    const patch: Record<string, string> = {}
+    if (conversationId && !existing.bevatel_conversation_id) patch.bevatel_conversation_id = conversationId
+    if (contactId && !existing.bevatel_contact_id) patch.bevatel_contact_id = contactId
+    if (Object.keys(patch).length) await supa.from('leads').update(patch).eq('id', existing.id)
   }
 
   // Resolve the Bevatel agent whenever the event carries one (an agent reply /
@@ -206,6 +211,7 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         assigned_sales_id: agent?.id ?? null,
         assigned_team_id: agent?.team_id ?? null,
         bevatel_conversation_id: conversationId ?? null,
+        bevatel_contact_id: contactId ?? null,
       })
       .select('id')
       .single()
@@ -278,35 +284,30 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   return { leadId, created, assigned, agentMatched: !!agent }
 }
 
-// Reverse sync: a Bevatel conversation label → CRM lead status. Picks the most
-// advanced status when several status labels are present, and only writes (and
-// logs a status_change) when it actually differs from the lead's current status.
-const STATUS_ORDER = ['new', 'contacted', 'qualified', 'converted', 'lost']
-async function syncStatusFromLabels(tenantId: string, leadId: string, labels: string[]) {
-  const statuses = labels.map(l => LABEL_TO_STATUS[l]).filter(Boolean)
-  if (!statuses.length) return
-  const chosen = statuses.sort((a, b) => STATUS_ORDER.indexOf(b) - STATUS_ORDER.indexOf(a))[0]
+// Reverse sync: the Bevatel contact's crm_status attribute → CRM lead status.
+// The attribute holds the Arabic label; we resolve it to a stable sub-status
+// key + its canonical status, and only write (and log a status_change) when the
+// sub-status actually changed.
+async function syncStatusFromAttribute(tenantId: string, leadId: string, label: string) {
+  const sub = subStatusByLabel(label)
+  if (!sub) return
 
   const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('status').eq('id', leadId).single()
-  if (!lead || lead.status === chosen) return
+  const { data: lead } = await supa.from('leads').select('status, sub_status').eq('id', leadId).single()
+  if (!lead || lead.sub_status === sub.key) return
 
-  await supa.from('leads').update({ status: chosen, updated_at: new Date().toISOString() }).eq('id', leadId)
+  await supa
+    .from('leads')
+    .update({ status: sub.status, sub_status: sub.key, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
   await supa.from('lead_activities').insert({
     tenant_id: tenantId,
     lead_id: leadId,
     actor_id: null,
     type: 'status_change',
     from_status: lead.status,
-    to_status: chosen,
+    to_status: sub.status,
   })
-}
-
-// Read the labels array off a Chatwoot payload wherever it sits (top level on
-// conversation events, or nested under conversation on message events).
-function readLabels(payload: Record<string, unknown>, conversation: Record<string, unknown>): string[] {
-  const raw = (payload.labels as unknown[]) ?? (conversation.labels as unknown[]) ?? []
-  return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
 }
 
 // ── Chat (Bevatel Business Chat — Chatwoot-shaped payload) ────────────────────
@@ -372,9 +373,14 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     ? (payload.id != null ? String(payload.id) : undefined)
     : (conversation.id != null ? String(conversation.id) : undefined)
 
-  // Labels currently on the conversation — used to sync a status label back
-  // into the CRM lead's status (the reverse of pushStatusToBevatel).
-  const labels = readLabels(payload, conversation)
+  // Bevatel contact id — stored on the lead so the CRM can set the contact's
+  // crm_status attribute when the status changes on our side.
+  const contactId = contact.id != null ? String(contact.id) : undefined
+
+  // The contact's crm_status attribute (Arabic label) — used to mirror a
+  // status change made in Bevatel back onto the CRM lead.
+  const attrs = (contact.custom_attributes as Record<string, unknown>) || {}
+  const statusLabel = (attrs[BEVATEL_STATUS_ATTRIBUTE] as string) || ''
 
   // Who is the responsible agent?
   //  - Incoming (customer → us): the top-level sender IS the customer, never the
@@ -400,13 +406,14 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     activityBody: body,
     activityExternalId: messageId,
     conversationId: convId,
+    contactId,
     agent,
   })
 
-  // Reverse sync: if the conversation carries a status label, mirror it onto the
-  // CRM lead's status (agent changed the label in Bevatel → status in the CRM).
-  if (res.leadId && labels.length) {
-    await syncStatusFromLabels(tenantId, res.leadId, labels)
+  // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
+  // the CRM lead (agent changed the status in Bevatel → status in the CRM).
+  if (res.leadId && statusLabel) {
+    await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
   }
 
   await recordEvent(tenantId, {

@@ -1,27 +1,13 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import type { Lead } from '@/lib/types'
+import { BEVATEL_STATUS_ATTRIBUTE, subStatusByKey } from '@/lib/leads/subStatus'
 
-// ── Two-way status ↔ label sync with Bevatel (Chatwoot) ───────────────────────
+// ── Two-way sync of the detailed lead status with Bevatel (Chatwoot) ──────────
 //
-// Each CRM lead status maps to exactly one Bevatel conversation label. Labels
-// can't contain spaces in Chatwoot, hence the underscores. The three business
-// labels (تمويل / كاش / مستعمل) are NOT status labels and are always preserved.
-
-export const STATUS_TO_LABEL: Record<string, string> = {
-  new: 'جديد',
-  contacted: 'تم_التواصل',
-  qualified: 'مؤهلين',
-  converted: 'تم_التحويل',
-  lost: 'غير_مؤهلين',
-}
-
-export const LABEL_TO_STATUS: Record<string, string> = Object.fromEntries(
-  Object.entries(STATUS_TO_LABEL).map(([status, label]) => [label, status])
-)
-
-// The set of labels that represent a CRM status — used to swap only the status
-// label on a conversation while leaving the business labels untouched.
-const STATUS_LABELS = new Set(Object.values(STATUS_TO_LABEL))
+// The CRM lead's sub-status (e.g. "عميل مهتم") is mirrored onto the Bevatel
+// contact's `crm_status` custom attribute, so a change on either side shows up
+// on the other. The value exchanged is the Arabic label; the CRM stores the
+// stable key and derives the canonical status from it (see subStatus.ts).
 
 interface BevatelCreds {
   token: string
@@ -40,29 +26,24 @@ async function tenantCreds(tenantId: string): Promise<BevatelCreds | null> {
   return { token: data.bevatel_api_token, host, accountId: String(data.bevatel_account_id) }
 }
 
-// CRM status change → set the matching label on the Bevatel conversation,
-// preserving any non-status (business) labels already on it. Fire-and-forget:
-// never blocks or fails the CRM-side status change.
-export async function pushStatusToBevatel(lead: Lead, status: string): Promise<void> {
-  const convId = lead.bevatel_conversation_id
-  const label = STATUS_TO_LABEL[status]
-  if (!convId || !label) return
+// CRM sub-status change → set the matching label on the Bevatel contact's
+// crm_status attribute. Fire-and-forget: never blocks the CRM-side change.
+export async function pushSubStatusToBevatel(lead: Lead, subStatusKey: string): Promise<void> {
+  const contactId = lead.bevatel_contact_id
+  const sub = subStatusByKey(subStatusKey)
+  if (!contactId || !sub) return
 
   const creds = await tenantCreds(lead.tenant_id)
   if (!creds) return
 
-  const url = `${creds.host}/api/v1/accounts/${creds.accountId}/conversations/${convId}/labels`
-  const headers = { api_access_token: creds.token, 'Content-Type': 'application/json' }
-
+  const url = `${creds.host}/api/v1/accounts/${creds.accountId}/contacts/${contactId}`
   try {
-    // The label API replaces the full list, so read the current labels first
-    // and keep every non-status one.
-    const cur = await fetch(url, { headers })
-    const curLabels: string[] = cur.ok ? ((await cur.json()).payload ?? []) : []
-    const next = Array.from(new Set([...curLabels.filter(l => !STATUS_LABELS.has(l)), label]))
-
-    await fetch(url, { method: 'POST', headers, body: JSON.stringify({ labels: next }) })
+    await fetch(url, {
+      method: 'PUT',
+      headers: { api_access_token: creds.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_attributes: { [BEVATEL_STATUS_ATTRIBUTE]: sub.label } }),
+    })
   } catch (err) {
-    console.error('pushStatusToBevatel failed', err)
+    console.error('pushSubStatusToBevatel failed', err)
   }
 }

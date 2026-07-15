@@ -258,6 +258,7 @@ export interface Lead {
   ttclid?: string
   fbclid?: string
   status: LeadStatus
+  sub_status?: string | null // detailed stage key (rolls up to status); see subStatus.ts
   assigned_to?: string // legacy: employee id (kept for backward-compat)
   assigned_sales_id?: string // profile id of the sales rep
   assigned_team_id?: string // team id
@@ -265,6 +266,7 @@ export interface Lead {
   notes?: string
   sheet_row?: number // row number in the connected Google Sheet (google_sheet leads only)
   bevatel_conversation_id?: string | null // Bevatel/Chatwoot conversation id, for label sync
+  bevatel_contact_id?: string | null // Bevatel/Chatwoot contact id, for status-attribute sync
   created_at: string
   updated_at: string
   campaigns?: Campaign

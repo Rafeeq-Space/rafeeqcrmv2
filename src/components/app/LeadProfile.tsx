@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
+import { SUB_STATUS_GROUPS, subStatusByKey } from '@/lib/leads/subStatus'
 
 interface Option { id: string; name: string }
 
@@ -23,8 +24,6 @@ interface Props {
   members?: Option[]
   teams?: Option[]
 }
-
-const STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const
 
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
@@ -61,11 +60,13 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
     }
   }
 
-  async function changeStatus(to: string) {
-    if (to === lead.status) return
-    const r = await post(`/api/leads/${lead.id}/activity`, { type: 'status_change', to_status: to })
+  async function changeSubStatus(key: string) {
+    if (!key || key === lead.sub_status) return
+    const sub = subStatusByKey(key)
+    if (!sub) return
+    const r = await post(`/api/leads/${lead.id}/activity`, { type: 'status_change', sub_status: key })
     if (r?.activity) {
-      setLead(prev => ({ ...prev, status: to as Lead['status'] }))
+      setLead(prev => ({ ...prev, status: sub.status, sub_status: key }))
       setActivities(prev => [...prev, r.activity])
     }
   }
@@ -219,17 +220,27 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             </div>
           )}
 
-          {/* Status changer */}
+          {/* Status changer — detailed sub-status grouped by canonical status */}
           <div className="card p-5">
             <p className="text-sm font-bold text-foreground mb-3">تغيير الحالة</p>
-            <div className="flex flex-wrap gap-2">
-              {STATUSES.map(s => (
-                <button key={s} disabled={busy} onClick={() => changeStatus(s)}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition border ${lead.status === s ? 'bg-primary text-primary-fg border-transparent' : 'border-border text-muted hover:bg-surface2'}`}>
-                  {LEAD_STATUS_LABELS[s]}
-                </button>
+            <select
+              disabled={busy}
+              value={lead.sub_status || ''}
+              onChange={e => changeSubStatus(e.target.value)}
+              className="input w-full"
+            >
+              <option value="" disabled>اختر الحالة...</option>
+              {SUB_STATUS_GROUPS.map(g => (
+                <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
+                  {g.items.map(s => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
+                </optgroup>
               ))}
-            </div>
+            </select>
+            <p className="text-xs text-muted2 mt-2">
+              المجموعة: <span className="font-semibold text-foreground">{LEAD_STATUS_LABELS[lead.status]}</span>
+            </p>
           </div>
         </aside>
 

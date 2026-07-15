@@ -3,7 +3,8 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { pushStatusToBevatel } from '@/lib/leads/bevatelSync'
+import { pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
+import { statusForSubStatus } from '@/lib/leads/subStatus'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
@@ -54,6 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   let body: {
     type?: string
     to_status?: string
+    sub_status?: string
     call_result?: string
     body?: string
     mentioned_id?: string
@@ -77,14 +79,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   if (type === 'status_change') {
-    const to = body.to_status
-    if (!to) return NextResponse.json({ error: 'Missing to_status' }, { status: 400 })
+    // Prefer the detailed sub-status; the canonical status is derived from it.
+    // Falls back to an explicit to_status for backward-compatibility.
+    const subStatus = body.sub_status
+    const to = subStatus ? statusForSubStatus(subStatus) : body.to_status
+    if (!to) return NextResponse.json({ error: 'Missing/invalid status' }, { status: 400 })
     record.from_status = (lead as Lead).status
     record.to_status = to
-    await supa.from('leads').update({ status: to, updated_at: new Date().toISOString() }).eq('id', leadId)
+    const update: Record<string, unknown> = { status: to, updated_at: new Date().toISOString() }
+    if (subStatus) update.sub_status = subStatus
+    await supa.from('leads').update(update).eq('id', leadId)
     syncLeadEvent({ leadId, status: to }).catch(console.error)
     pushStatusToSheet(supa, lead as Lead, to).catch(console.error)
-    pushStatusToBevatel(lead as Lead, to).catch(console.error)
+    if (subStatus) pushSubStatusToBevatel(lead as Lead, subStatus).catch(console.error)
   } else if (type === 'call') {
     const result = body.call_result
     if (!result || !['answered', 'no_answer'].includes(result)) {
