@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-react'
 import type { AdConnection, AdPlatform } from '@/lib/types'
 import DateTimePrayer from '@/components/DateTimePrayer'
@@ -21,7 +21,7 @@ interface Props {
   bevatel?: BevatelData | null
 }
 
-type TabKey = AdPlatform | 'bevatel'
+type TabKey = AdPlatform | 'bevatel' | 'ahmed'
 
 const PLATFORM_LABELS: Record<AdPlatform, string> = {
   tiktok: 'تيك توك',
@@ -299,6 +299,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
   const [showModal, setShowModal] = useState(false)
   const [editConn, setEditConn] = useState<AdConnection | null>(null)
   const onBevatel = activeTab === 'bevatel'
+  const onAhmed = activeTab === 'ahmed'
 
   function refresh() { window.location.reload() }
 
@@ -320,7 +321,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
             المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
           </p>
         </div>
-        {!onBevatel && (
+        {!onBevatel && !onAhmed && (
           <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
             <Plus size={17} /> إضافة حساب
           </button>
@@ -333,10 +334,18 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
         {PLATFORMS.map(p => {
           const count = connections.filter(c => c.platform === p).length
           return (
-            <button key={p} onClick={() => setActiveTab(p)}
-              className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition ${activeTab === p ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>
-              {PLATFORM_LABELS[p]} {count > 0 && <span className="text-muted2">({count})</span>}
-            </button>
+            <Fragment key={p}>
+              <button onClick={() => setActiveTab(p)}
+                className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition ${activeTab === p ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>
+                {PLATFORM_LABELS[p]} {count > 0 && <span className="text-muted2">({count})</span>}
+              </button>
+              {p === 'tiktok' && (
+                <button onClick={() => setActiveTab('ahmed')}
+                  className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition ${onAhmed ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>
+                  أحمد
+                </button>
+              )}
+            </Fragment>
           )
         })}
         {bevatel && (
@@ -350,6 +359,8 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
       {/* Bevatel integration */}
       {onBevatel && bevatel ? (
         <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} />
+      ) : onAhmed ? (
+        <div className="text-center py-16 text-muted2 card">قريباً</div>
       ) : /* Connections list */
       tabConnections.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
