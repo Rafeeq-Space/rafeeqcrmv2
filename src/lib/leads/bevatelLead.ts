@@ -104,6 +104,7 @@ interface AppendArgs {
   email?: string
   source: 'bevatel_chat' | 'bevatel_call'
   activityBody: string
+  activityExternalId?: string
   agent: AgentHint
 }
 
@@ -155,7 +156,7 @@ async function recordEvent(tenantId: string, log: EventLog) {
 
 // Match-or-create the lead and append the timeline activity.
 async function appendToLead(args: AppendArgs): Promise<AppendResult> {
-  const { tenantId, phone, source, activityBody } = args
+  const { tenantId, phone, source, activityBody, activityExternalId } = args
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
@@ -242,15 +243,21 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     assigned = true
   }
 
-  // Skip the timeline comment for contact-only events (no message body).
+  // Skip the timeline comment for contact-only events (no message body). The
+  // external_id (Bevatel's message id) is deduped by a unique index, so a
+  // re-sent webhook silently no-ops instead of duplicating the message.
   if (activityBody) {
-    await supa.from('lead_activities').insert({
-      tenant_id: tenantId,
-      lead_id: leadId,
-      actor_id: null,
-      type: 'comment',
-      body: activityBody,
-    })
+    const base = { tenant_id: tenantId, lead_id: leadId, actor_id: null, type: 'comment' as const, body: activityBody }
+    const { error: commentErr } = await supa
+      .from('lead_activities')
+      .insert({ ...base, external_id: activityExternalId ?? null })
+
+    // 23505 = duplicate external_id (message already logged) — expected, ignore.
+    // Any other error usually means the external_id column isn't provisioned
+    // yet; retry without it so the message still lands on the timeline.
+    if (commentErr && commentErr.code !== '23505') {
+      await supa.from('lead_activities').insert(base)
+    }
   }
 
   return { leadId, created, assigned, agentMatched: !!agent }
@@ -293,12 +300,19 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
-  // Contact-only events (contact_updated / contact_created) carry no message —
-  // still match-or-create the lead so it exists, but don't log a message comment.
+  // Chatwoot fires several events for one message — message_created (the new
+  // message) then message_updated repeatedly as its delivery status changes
+  // (sent → delivered → read). Only the create is a real new message; logging
+  // the updates too is what duplicated a message 4-5 times on the timeline.
+  const isNewMessage = eventName === 'message_created' && hasMessage
   const label = incoming ? `رسالة واردة عبر ${channel}` : `رد صادر عبر ${channel}`
-  const body = hasMessage
+  const body = isNewMessage
     ? (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
     : ''
+
+  // Bevatel's message id — used to dedupe the timeline comment so a retried or
+  // re-sent webhook can't log the same message twice.
+  const messageId = payload.id != null ? `bevatel_msg_${payload.id}` : undefined
 
   // Who is the responsible agent?
   //  - Incoming (customer → us): the top-level sender IS the customer, never the
@@ -322,6 +336,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     email,
     source: 'bevatel_chat',
     activityBody: body,
+    activityExternalId: messageId,
     agent,
   })
 
