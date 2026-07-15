@@ -75,6 +75,10 @@ export interface Tenant {
   activated?: boolean
   // random token that gates this tenant's Bevatel webhook URLs.
   bevatel_webhook_secret?: string | null
+  // Bevatel (Chatwoot) API credentials, for pushing status labels back.
+  bevatel_api_token?: string | null
+  bevatel_api_host?: string | null
+  bevatel_account_id?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
@@ -260,6 +264,7 @@ export interface Lead {
   attachments?: KnowledgeFile[] // images/files uploaded to this lead
   notes?: string
   sheet_row?: number // row number in the connected Google Sheet (google_sheet leads only)
+  bevatel_conversation_id?: string | null // Bevatel/Chatwoot conversation id, for label sync
   created_at: string
   updated_at: string
   campaigns?: Campaign

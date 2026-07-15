@@ -3,6 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
+import { pushStatusToBevatel } from '@/lib/leads/bevatelSync'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
@@ -83,6 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await supa.from('leads').update({ status: to, updated_at: new Date().toISOString() }).eq('id', leadId)
     syncLeadEvent({ leadId, status: to }).catch(console.error)
     pushStatusToSheet(supa, lead as Lead, to).catch(console.error)
+    pushStatusToBevatel(lead as Lead, to).catch(console.error)
   } else if (type === 'call') {
     const result = body.call_result
     if (!result || !['answered', 'no_answer'].includes(result)) {

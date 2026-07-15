@@ -18,10 +18,17 @@ export interface BevatelLog {
   created_at: string
 }
 
+interface BevatelApi {
+  hasToken: boolean
+  host: string
+  accountId: string
+}
+
 interface Props {
   tenantId: string
   secret: string
   logs: BevatelLog[]
+  api: BevatelApi
 }
 
 function CopyField({ label, url }: { label: string; url: string }) {
@@ -87,9 +94,38 @@ function LogRow({ log }: { log: BevatelLog }) {
   )
 }
 
-export default function BevatelIntegration({ tenantId, secret, logs }: Props) {
+export default function BevatelIntegration({ tenantId, secret, logs, api }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
+
+  // API credentials (for pushing status labels back to Bevatel).
+  const [token, setToken] = useState('')
+  const [host, setHost] = useState(api.host || 'https://chat.bevatel.com')
+  const [accountId, setAccountId] = useState(api.accountId || '')
+  const [savingApi, setSavingApi] = useState(false)
+  const [apiSaved, setApiSaved] = useState(false)
+  const [hasToken, setHasToken] = useState(api.hasToken)
+
+  async function saveApi() {
+    setSavingApi(true)
+    setApiSaved(false)
+    try {
+      const res = await fetch('/api/client-admin/bevatel', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        // Keep the stored token if the field is left blank (already saved).
+        body: JSON.stringify({ token: token || undefined, host, accountId }),
+      })
+      if (res.ok) {
+        setApiSaved(true)
+        if (token) setHasToken(true)
+        setToken('')
+        setTimeout(() => setApiSaved(false), 2000)
+      }
+    } finally {
+      setSavingApi(false)
+    }
+  }
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const chatUrl = `${origin}/api/integrations/bevatel/chat/${tenantId}/${currentSecret}`
@@ -147,6 +183,48 @@ export default function BevatelIntegration({ tenantId, secret, logs }: Props) {
             </div>
           </div>
           <CopyField label="رابط استقبال أحداث المكالمات — الصقه في إعدادات Webhook بلوحة بيفاتيل:" url={callsUrl} />
+        </div>
+      </div>
+
+      <div className="card p-5 mt-4 space-y-4">
+        <div>
+          <h3 className="font-bold text-foreground text-sm">مزامنة الحالة مع بيفاتيل (اختياري)</h3>
+          <p className="text-xs text-muted2 mt-0.5">
+            بمفتاح API، تغيير حالة العميل في الـ CRM يضع الوسم المطابق على المحادثة في بيفاتيل تلقائيًا.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-1">
+            <p className="text-xs text-muted2 mb-1">مفتاح API {hasToken && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
+            <input dir="ltr" type="password" value={token} onChange={e => setToken(e.target.value)}
+              placeholder={hasToken ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق التوكن'} className="input text-xs py-1.5 w-full" />
+          </div>
+          <div>
+            <p className="text-xs text-muted2 mb-1">رابط الـ API</p>
+            <input dir="ltr" value={host} onChange={e => setHost(e.target.value)} className="input text-xs py-1.5 w-full" />
+          </div>
+          <div>
+            <p className="text-xs text-muted2 mb-1">رقم الحساب</p>
+            <input dir="ltr" value={accountId} onChange={e => setAccountId(e.target.value)} className="input text-xs py-1.5 w-full" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveApi} disabled={savingApi} className="btn btn-primary text-xs !py-1.5">
+            {savingApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
+          </button>
+          {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+        </div>
+
+        <div className="border-t border-[var(--border)] pt-3">
+          <p className="text-xs font-semibold text-foreground mb-2">مطابقة الحالات ↔ الوسوم:</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted">
+            <div className="flex justify-between"><span>جديد</span><span dir="ltr" className="text-muted2">جديد</span></div>
+            <div className="flex justify-between"><span>تم التواصل</span><span dir="ltr" className="text-muted2">تم_التواصل</span></div>
+            <div className="flex justify-between"><span>مؤهل</span><span dir="ltr" className="text-muted2">مؤهلين</span></div>
+            <div className="flex justify-between"><span>تم التحويل</span><span dir="ltr" className="text-muted2">تم_التحويل</span></div>
+            <div className="flex justify-between"><span>خسارة</span><span dir="ltr" className="text-muted2">غير_مؤهلين</span></div>
+          </div>
         </div>
       </div>
 

@@ -17,7 +17,7 @@ export default async function IntegrationsPage() {
   const supa = adminSupabase()
   const { data: tenant } = await supa
     .from('tenants')
-    .select('bevatel_webhook_secret')
+    .select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id')
     .eq('id', tenantId)
     .single()
 
@@ -39,5 +39,16 @@ export default async function IntegrationsPage() {
     .limit(50)
   if (logRows) logs = logRows as BevatelLog[]
 
-  return <BevatelIntegration tenantId={tenantId} secret={secret} logs={logs} />
+  return (
+    <BevatelIntegration
+      tenantId={tenantId}
+      secret={secret}
+      logs={logs}
+      api={{
+        hasToken: !!tenant?.bevatel_api_token,
+        host: (tenant?.bevatel_api_host as string) || '',
+        accountId: (tenant?.bevatel_account_id as string) || '',
+      }}
+    />
+  )
 }

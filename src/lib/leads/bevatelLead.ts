@@ -105,6 +105,7 @@ interface AppendArgs {
   source: 'bevatel_chat' | 'bevatel_call'
   activityBody: string
   activityExternalId?: string
+  conversationId?: string
   agent: AgentHint
 }
 
@@ -156,7 +157,7 @@ async function recordEvent(tenantId: string, log: EventLog) {
 
 // Match-or-create the lead and append the timeline activity.
 async function appendToLead(args: AppendArgs): Promise<AppendResult> {
-  const { tenantId, phone, source, activityBody, activityExternalId } = args
+  const { tenantId, phone, source, activityBody, activityExternalId, conversationId } = args
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
@@ -165,7 +166,7 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // Look for an existing lead in this tenant with the same phone.
   const { data: leads } = await supa
     .from('leads')
-    .select('id, data, assigned_sales_id')
+    .select('id, data, assigned_sales_id, bevatel_conversation_id')
     .eq('tenant_id', tenantId)
 
   const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
@@ -173,6 +174,12 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   let existingAssignedId: string | null = existing?.assigned_sales_id ?? null
   let created = false
   let assigned = false
+
+  // Backfill the conversation id on an existing lead that doesn't have one yet,
+  // so status-label sync can target its Bevatel conversation later.
+  if (existing && conversationId && !existing.bevatel_conversation_id) {
+    await supa.from('leads').update({ bevatel_conversation_id: conversationId }).eq('id', existing.id)
+  }
 
   // Resolve the Bevatel agent whenever the event carries one (an agent reply /
   // an answered call). Incoming-only events have no agent, so this is null.
@@ -191,6 +198,7 @@ async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         status: 'new',
         assigned_sales_id: agent?.id ?? null,
         assigned_team_id: agent?.team_id ?? null,
+        bevatel_conversation_id: conversationId ?? null,
       })
       .select('id')
       .single()
@@ -314,6 +322,10 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // re-sent webhook can't log the same message twice.
   const messageId = payload.id != null ? `bevatel_msg_${payload.id}` : undefined
 
+  // Bevatel/Chatwoot conversation id — stored on the lead so CRM status changes
+  // can push the matching label back onto the right conversation.
+  const convId = conversation.id != null ? String(conversation.id) : undefined
+
   // Who is the responsible agent?
   //  - Incoming (customer → us): the top-level sender IS the customer, never the
   //    agent, so only the conversation assignee can identify the rep.
@@ -337,6 +349,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     source: 'bevatel_chat',
     activityBody: body,
     activityExternalId: messageId,
+    conversationId: convId,
     agent,
   })
 
