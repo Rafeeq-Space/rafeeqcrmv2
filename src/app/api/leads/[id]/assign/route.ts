@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
+import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
@@ -72,6 +73,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       type: 'lead_assigned',
       leadId,
     })
+  }
+
+  // Mirror the assignment onto the Bevatel conversation's assignee.
+  if ('assigned_sales_id' in body) {
+    pushAssigneeToBevatel(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error)
   }
 
   const { data: updated } = await supa

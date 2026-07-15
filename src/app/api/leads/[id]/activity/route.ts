@@ -3,7 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
+import { pushSubStatusToBevatel, pushNoteToBevatel } from '@/lib/leads/bevatelSync'
 import { statusForSubStatus } from '@/lib/leads/subStatus'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
@@ -120,6 +120,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       type: 'mention',
       leadId,
     })
+  }
+
+  // Mirror the comment to Bevatel as a private note. Store the returned Bevatel
+  // message id on our activity so the echoed webhook is deduped (external_id).
+  if (type === 'comment' && record.body) {
+    pushNoteToBevatel(lead as Lead, record.body as string)
+      .then(msgId => {
+        if (msgId && activity?.id) {
+          return supa.from('lead_activities').update({ external_id: `bevatel_msg_${msgId}` }).eq('id', activity.id)
+        }
+      })
+      .catch(console.error)
   }
 
   return NextResponse.json({ success: true, activity }, { status: 201 })

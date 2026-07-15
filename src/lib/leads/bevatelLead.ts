@@ -354,10 +354,15 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // (sent → delivered → read). Only the create is a real new message; logging
   // the updates too is what duplicated a message 4-5 times on the timeline.
   const isNewMessage = eventName === 'message_created' && hasMessage
+  // Private notes (internal, customer never sees them) come through as messages
+  // with private:true — log them as a note, not a customer message.
+  const isPrivate = payload.private === true
   const label = incoming ? `رسالة واردة عبر ${channel}` : `رد صادر عبر ${channel}`
-  const body = isNewMessage
-    ? (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
-    : ''
+  const body = !isNewMessage
+    ? ''
+    : isPrivate
+      ? (text ? `📝 ملاحظة: «${text}»` : '')
+      : (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
 
   // On conversation events (conversation_updated etc.) payload.id IS the
   // conversation id; on message events payload.id is the message id.
