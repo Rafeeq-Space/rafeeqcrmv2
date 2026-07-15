@@ -33,7 +33,7 @@ const STAT_CARDS: { key: string; label: string; color: string }[] = [
   { key: 'contacted', label: 'تم التواصل', color: 'var(--warning)' },
   { key: 'qualified', label: 'مؤهل', color: 'var(--purple)' },
   { key: 'converted', label: 'تم التحويل', color: 'var(--success)' },
-  { key: 'lost', label: 'خسارة', color: 'var(--danger)' },
+  { key: 'lost', label: 'غير مؤهل', color: 'var(--danger)' },
 ]
 
 // Period quick-filter over the lead creation date.

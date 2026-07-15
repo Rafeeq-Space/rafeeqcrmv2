@@ -22,7 +22,7 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   contacted: 'تم التواصل',
   qualified: 'مؤهل',
   converted: 'تم التحويل',
-  lost: 'خسارة',
+  lost: 'غير مؤهل',
 }
 
 // Reverse of LEAD_STATUS_LABELS — used to interpret a status value typed

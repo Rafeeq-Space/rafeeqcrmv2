@@ -1,27 +1,20 @@
 'use client'
 
-import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Users, CheckCircle, Clock, XCircle, TrendingUp } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import LeadStatCards from '@/components/app/LeadStatCards'
 
 interface Props {
   leads: Lead[]
   fullName: string
+  avgResponseMs?: number | null
 }
-
-const STAT_CONFIG = [
-  { key: 'total',     label: 'إجمالي العملاء هذا الشهر', icon: Users,       color: 'var(--primary)',  soft: 'var(--primary-soft)' },
-  { key: 'converted', label: 'تم إتمامهم',                icon: CheckCircle, color: 'var(--success)',  soft: 'var(--success-soft)' },
-  { key: 'inprogress',label: 'قيد المتابعة',              icon: Clock,       color: 'var(--warning)',  soft: 'var(--warning-soft)' },
-  { key: 'lost',      label: 'خسرناهم',                   icon: XCircle,     color: 'var(--danger)',   soft: 'var(--danger-soft)'  },
-]
 
 const ARABIC_WEEKS = ['الأسبوع 1', 'الأسبوع 2', 'الأسبوع 3', 'الأسبوع 4']
 
-export default function SalesDashboard({ leads, fullName }: Props) {
+export default function SalesDashboard({ leads, fullName, avgResponseMs = null }: Props) {
   // Filter leads from the last 30 days
   const now = new Date()
   const thirtyDaysAgo = new Date(now)
@@ -29,16 +22,7 @@ export default function SalesDashboard({ leads, fullName }: Props) {
 
   const monthLeads = leads.filter(l => new Date(l.created_at) >= thirtyDaysAgo)
 
-  const stats = {
-    total:      monthLeads.length,
-    converted:  monthLeads.filter(l => l.status === 'converted').length,
-    inprogress: monthLeads.filter(l => l.status === 'contacted' || l.status === 'qualified').length,
-    lost:       monthLeads.filter(l => l.status === 'lost').length,
-  }
-
-  const conversionRate = stats.total > 0
-    ? Math.round((stats.converted / stats.total) * 100)
-    : 0
+  const stats = { total: monthLeads.length }
 
   // Group leads by week within last 30 days
   const weeklyData = ARABIC_WEEKS.map((label, i) => {
@@ -82,36 +66,7 @@ export default function SalesDashboard({ leads, fullName }: Props) {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CONFIG.map(({ key, label, icon: Icon, color, soft }) => (
-          <Link key={key} href="/app/my-leads" className="card card-hover p-5 transition hover:border-primary">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: soft }}>
-              <Icon size={21} style={{ color }} />
-            </div>
-            <p className="text-2xl font-extrabold text-foreground">{stats[key as keyof typeof stats]}</p>
-            <p className="text-sm text-muted mt-0.5">{label}</p>
-          </Link>
-        ))}
-      </div>
-
-      {/* Conversion Rate Banner */}
-      <div className="card p-5 flex items-center gap-5">
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'var(--primary-soft)' }}>
-          <TrendingUp size={26} style={{ color: 'var(--primary)' }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm text-muted mb-1">نسبة العملاء المكتملين هذا الشهر</p>
-          <div className="flex items-center gap-3">
-            <p className="text-3xl font-extrabold text-foreground">{conversionRate}%</p>
-            <div className="flex-1 bg-surface2 rounded-full h-2.5 border border-border overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${conversionRate}%`, background: 'var(--primary)' }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+      <LeadStatCards leads={leads} avgResponseMs={avgResponseMs} href="/app/my-leads" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Weekly Chart */}

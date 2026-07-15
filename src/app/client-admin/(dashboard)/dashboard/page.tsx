@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase, fetchVisibleLeads, managedTeamIds, type Viewer } from '@/lib/leads/access'
+import { avgResponseGapMs } from '@/lib/leads/stats'
 import DashboardView from '@/components/app/DashboardView'
 
 export default async function ClientAdminDashboardPage() {
@@ -49,10 +50,22 @@ export default async function ClientAdminDashboardPage() {
     .filter(m => isAdmin || (m.team_id && managerTeamIds.includes(m.team_id)))
     .map(m => ({ id: m.id, name: m.full_name }))
 
+  // Average gap between timeline updates across the visible leads.
+  let avgResponseMs: number | null = null
+  const leadIds = leads.map(l => l.id)
+  if (leadIds.length) {
+    const { data: acts } = await supa
+      .from('lead_activities')
+      .select('lead_id, created_at')
+      .in('lead_id', leadIds)
+    avgResponseMs = avgResponseGapMs(acts || [])
+  }
+
   return (
     <DashboardView
       campaigns={campaigns || []}
       leads={leads}
+      avgResponseMs={avgResponseMs}
       forms={forms || []}
       employees={employees || []}
       teams={teams}

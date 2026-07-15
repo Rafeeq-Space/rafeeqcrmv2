@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { fetchVisibleLeads, type Viewer } from '@/lib/leads/access'
+import { adminSupabase, fetchVisibleLeads, type Viewer } from '@/lib/leads/access'
+import { avgResponseGapMs } from '@/lib/leads/stats'
 import SalesDashboard from '@/components/app/SalesDashboard'
 
 export default async function DashboardPage() {
@@ -25,10 +26,22 @@ export default async function DashboardPage() {
   }
   const leads = await fetchVisibleLeads(viewer)
 
+  // Average gap between timeline updates across the visible leads.
+  let avgResponseMs: number | null = null
+  const leadIds = leads.map(l => l.id)
+  if (leadIds.length) {
+    const { data: acts } = await adminSupabase()
+      .from('lead_activities')
+      .select('lead_id, created_at')
+      .in('lead_id', leadIds)
+    avgResponseMs = avgResponseGapMs(acts || [])
+  }
+
   return (
     <SalesDashboard
       leads={leads}
       fullName={profile.full_name || 'موظف'}
+      avgResponseMs={avgResponseMs}
     />
   )
 }

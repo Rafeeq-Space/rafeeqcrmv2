@@ -12,6 +12,7 @@ import { LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
 import { computeLeadStats } from '@/lib/leads/stats'
 import CampaignsList from './CampaignsList'
 import LeadsTable from './LeadsTable'
+import LeadStatCards from './LeadStatCards'
 import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface Option { id: string; name: string }
@@ -32,6 +33,7 @@ interface Props {
   employeesCount?: number
   adConnections?: AdConnection[]
   campaignConnectionMap?: Record<string, string[]>
+  avgResponseMs?: number | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -120,7 +122,7 @@ function buildTrend(items: Lead[], start: Date | null, end: Date | null): { day:
 export default function DashboardView({
   campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs,
   isAdmin = true, role = 'client_admin', teams = [], members = [], teamsCount, employeesCount,
-  adConnections = [], campaignConnectionMap = {},
+  adConnections = [], campaignConnectionMap = {}, avgResponseMs = null,
 }: Props) {
   const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
   const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
@@ -286,6 +288,9 @@ export default function DashboardView({
             )}
             <span className="ms-auto text-xs text-muted2 px-1">{filteredLeads.length} عميل خلال الفترة</span>
           </div>
+
+          {/* Detailed status + response cards */}
+          <LeadStatCards leads={filteredLeads} avgResponseMs={avgResponseMs} href="/client-admin/leads" />
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

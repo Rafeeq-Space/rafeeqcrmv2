@@ -9,7 +9,7 @@ import LeadDistribution from './LeadDistribution'
 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
 
 // STATUS_LABELS must match LEAD_STATUS_LABELS in src/lib/utils.ts exactly.
-const STATUS_LABELS = ['جديد', 'تم التواصل', 'مؤهل', 'تم التحويل', 'خسارة']
+const STATUS_LABELS = ['جديد', 'تم التواصل', 'مؤهل', 'تم التحويل', 'غير مؤهل']
 
 function appsScript(webhookUrl: string, statusWebhookUrl: string, secret: string) {
   const statusList = STATUS_LABELS.map(s => `'${s}'`).join(', ')
