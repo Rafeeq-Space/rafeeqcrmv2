@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import {
-  Target, FileText, Users, TrendingUp, Users2, UserCheck,
+  Target, FileText, TrendingUp, Users2, UserCheck,
   CheckCircle2, Clock, XCircle, Megaphone, Plus,
 } from 'lucide-react'
 import type { AdConnection, Campaign, Form, Lead, Employee, TeamWithMembers } from '@/lib/types'
@@ -175,7 +175,6 @@ export default function DashboardView({
   // Stat cards differ by role: admins get org totals, managers get team lead metrics.
   const cards = isManager
     ? [
-        { label: 'عملاء الفريق', value: stats.total, icon: Users, color: 'blue', href: '/client-admin/leads' },
         { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green', href: '/client-admin/leads' },
         { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning', href: '/client-admin/leads' },
         { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger', href: '/client-admin/leads' },
@@ -183,7 +182,6 @@ export default function DashboardView({
         { label: 'أعضاء الفريق', value: employeesCount ?? members.length, icon: UserCheck, color: 'sky', href: '/client-admin/teams' },
       ]
     : [
-        { label: 'إجمالي العملاء', value: stats.total, icon: Users, color: 'blue', href: '/client-admin/leads' },
         { label: 'الحملات', value: campaigns.length, icon: Target, color: 'purple', href: '/client-admin/campaigns' },
         { label: 'النماذج', value: forms.length, icon: FileText, color: 'warning', href: '/client-admin/campaigns' },
         { label: 'الفِرَق', value: teamsCount ?? teams.length, icon: Users2, color: 'sky', href: '/client-admin/teams' },
