@@ -6,11 +6,11 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
-  Paperclip, ImageIcon, ExternalLink, Calendar,
+  Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
-import { SUB_STATUS_GROUPS, subStatusByKey } from '@/lib/leads/subStatus'
+import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
 
 interface Option { id: string; name: string }
 
@@ -161,24 +161,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               </div>
             )}
 
-            {/* Status changer — detailed sub-status grouped by canonical status */}
+            {/* Status changer — styled picker, flat list (no parent names) */}
             <div className="mb-4">
-              <p className="text-xs text-muted2 mb-1">الحالة</p>
-              <select
-                disabled={busy}
-                value={lead.sub_status || ''}
-                onChange={e => changeSubStatus(e.target.value)}
-                className="input w-full"
-              >
-                <option value="" disabled>اختر الحالة...</option>
-                {SUB_STATUS_GROUPS.map(g => (
-                  <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
-                    {g.items.map(s => (
-                      <option key={s.key} value={s.key}>{s.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <StatusPicker currentKey={lead.sub_status || null} busy={busy} onPick={changeSubStatus} />
             </div>
 
             <div className="space-y-2.5 text-sm border-t border-border pt-4">
@@ -349,6 +334,61 @@ function AssignForm({ members, teams, lead, busy, onSubmit }: {
         </select>
       </label>
       <button disabled={busy} onClick={() => onSubmit(sales, team)} className="btn btn-primary w-full">حفظ الإسناد</button>
+    </div>
+  )
+}
+
+// Status accent color per canonical status, for the picker dot.
+const STATUS_DOT: Record<string, string> = {
+  new: 'var(--primary)', contacted: 'var(--warning)', qualified: 'var(--purple)',
+  converted: 'var(--success)', lost: 'var(--danger)',
+}
+
+// A button-styled status picker: shows the current status like the call/WhatsApp
+// buttons, and opens a flat menu of all detailed statuses (no parent headers).
+function StatusPicker({ currentKey, busy, onPick }: { currentKey: string | null; busy: boolean; onPick: (key: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const current = subStatusByKey(currentKey || undefined)
+  const dot = current ? STATUS_DOT[current.status] : 'var(--muted2)'
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen(v => !v)}
+        className="btn w-full flex items-center justify-between gap-2 border border-border"
+        style={{ background: 'var(--surface2)' }}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <Tag size={16} style={{ color: dot }} />
+          <span className="font-semibold truncate">{current ? current.label : 'اختر الحالة'}</span>
+        </span>
+        <ChevronDown size={16} className={`text-muted2 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg p-1">
+            {SUB_STATUSES.map(s => {
+              const active = s.key === currentKey
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => { setOpen(false); onPick(s.key) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-start transition ${active ? 'bg-primary-soft text-foreground font-semibold' : 'text-muted hover:bg-surface2 hover:text-foreground'}`}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_DOT[s.status] }} />
+                  <span className="truncate">{s.label}</span>
+                  {active && <Check size={14} className="ms-auto shrink-0" style={{ color: 'var(--primary)' }} />}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
