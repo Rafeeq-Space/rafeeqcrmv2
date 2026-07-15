@@ -127,6 +127,31 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
     }
   }
 
+  // One-time backfill: assign existing unassigned Bevatel leads from their
+  // Bevatel conversation owner. Runs in bounded batches; re-run until done.
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillMsg, setBackfillMsg] = useState('')
+
+  async function runBackfill() {
+    setBackfilling(true)
+    setBackfillMsg('')
+    try {
+      const res = await fetch('/api/client-admin/bevatel/backfill', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) {
+        setBackfillMsg(d.error || 'تعذّر التشغيل')
+      } else {
+        setBackfillMsg(
+          `تمّت مراجعة ${d.reviewed} ليد — أُسند ${d.assigned}، بدون مسؤول ${d.noAssignee}، موظف غير مربوط ${d.unmatched}. متبقّي ${d.remaining}.`
+        )
+      }
+    } catch {
+      setBackfillMsg('تعذّر الاتصال')
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const chatUrl = `${origin}/api/integrations/bevatel/chat/${tenantId}/${currentSecret}`
   const callsUrl = `${origin}/api/integrations/bevatel/calls/${tenantId}/${currentSecret}`
@@ -217,13 +242,21 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
         </div>
 
         <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-2">مطابقة الحالات ↔ الوسوم:</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted">
-            <div className="flex justify-between"><span>جديد</span><span dir="ltr" className="text-muted2">جديد</span></div>
-            <div className="flex justify-between"><span>تم التواصل</span><span dir="ltr" className="text-muted2">تم_التواصل</span></div>
-            <div className="flex justify-between"><span>مؤهل</span><span dir="ltr" className="text-muted2">مؤهلين</span></div>
-            <div className="flex justify-between"><span>تم التحويل</span><span dir="ltr" className="text-muted2">تم_التحويل</span></div>
-            <div className="flex justify-between"><span>خسارة</span><span dir="ltr" className="text-muted2">غير_مؤهلين</span></div>
+          <p className="text-xs text-muted mb-1">
+            الحالة تتزامن عبر سمة العميل <span dir="ltr" className="font-mono text-muted2">crm_status</span> في بيفاتيل — أي تغيير على أي جهة يظهر في الجهة الأخرى.
+          </p>
+        </div>
+
+        <div className="border-t border-[var(--border)] pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة</p>
+          <p className="text-xs text-muted2 mb-2">
+            يمرّ على الليدز غير المُسندة ويسندها للموظف المسؤول عنها في بيفاتيل. آمن للتكرار — اضغطه حتى يصبح المتبقّي صفرًا.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={runBackfill} disabled={backfilling} className="btn btn-outline text-xs !py-1.5 gap-2">
+              <RefreshCw size={14} className={backfilling ? 'animate-spin' : ''} /> مزامنة إسناد الليدز القديمة
+            </button>
+            {backfillMsg && <span className="text-xs text-muted">{backfillMsg}</span>}
           </div>
         </div>
       </div>
