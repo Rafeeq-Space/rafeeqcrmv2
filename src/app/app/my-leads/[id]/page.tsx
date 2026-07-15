@@ -31,6 +31,15 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
     .eq('tenant_id', viewer.tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
 
+  const { data: tenant } = await supa
+    .from('tenants')
+    .select('bevatel_api_host, bevatel_account_id')
+    .eq('id', viewer.tenantId)
+    .single()
+  const bevatel = tenant?.bevatel_account_id
+    ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
+    : null
+
   return (
     <LeadProfile
       lead={lead as Lead}
@@ -40,6 +49,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
       tenantId={viewer.tenantId}
       viewerId={viewer.id}
       members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
+      bevatel={bevatel}
     />
   )
 }

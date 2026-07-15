@@ -39,6 +39,15 @@ export default async function ClientAdminLeadProfilePage({ params }: { params: P
   }
   const { data: members } = await membersQuery
 
+  const { data: tenant } = await supa
+    .from('tenants')
+    .select('bevatel_api_host, bevatel_account_id')
+    .eq('id', viewer.tenantId)
+    .single()
+  const bevatel = tenant?.bevatel_account_id
+    ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
+    : null
+
   return (
     <LeadProfile
       lead={lead as Lead}
@@ -49,6 +58,7 @@ export default async function ClientAdminLeadProfilePage({ params }: { params: P
       viewerId={viewer.id}
       members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
       teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
+      bevatel={bevatel}
     />
   )
 }

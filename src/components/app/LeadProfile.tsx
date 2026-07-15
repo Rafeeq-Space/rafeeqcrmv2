@@ -23,19 +23,21 @@ interface Props {
   viewerId: string
   members?: Option[]
   teams?: Option[]
+  bevatel?: { host: string; accountId: string } | null
 }
 
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
-export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [] }: Props) {
+export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null }: Props) {
   const [lead, setLead] = useState(initialLead)
   const [activities, setActivities] = useState<LeadActivity[]>(initialActivities)
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [callPrompt, setCallPrompt] = useState(false)
+  const [contactMenu, setContactMenu] = useState<'call' | 'wa' | null>(null)
   const [comment, setComment] = useState('')
   const [mentionId, setMentionId] = useState('')
   const [showAssign, setShowAssign] = useState(false)
@@ -146,12 +148,55 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               </div>
             </div>
 
-            {phone && (
-              <div className="flex items-center gap-2 mb-4">
-                <a href={`tel:${digits(phone)}`} onClick={() => setTimeout(() => setCallPrompt(true), 300)} className="btn btn-primary flex-1 flex items-center justify-center gap-2"><Phone size={16} /> اتصال</a>
-                <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer" className="btn flex-1 flex items-center justify-center gap-2" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}><MessageCircle size={16} /> واتساب</a>
-              </div>
-            )}
+            {phone && (() => {
+              const convUrl = bevatel && lead.bevatel_conversation_id
+                ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/conversations/${lead.bevatel_conversation_id}`
+                : (bevatel ? bevatel.host.replace(/\/+$/, '') : null)
+              const close = () => setContactMenu(null)
+              return (
+                <div className="relative mb-4">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setContactMenu(m => m === 'call' ? null : 'call')} className="btn btn-primary flex-1 flex items-center justify-center gap-2"><Phone size={16} /> اتصال</button>
+                    <button onClick={() => setContactMenu(m => m === 'wa' ? null : 'wa')} className="btn flex-1 flex items-center justify-center gap-2" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}><MessageCircle size={16} /> واتساب</button>
+                  </div>
+
+                  {contactMenu && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={close} />
+                      <div className="absolute z-30 mt-1 w-full rounded-xl border border-border bg-surface shadow-lg p-1">
+                        {contactMenu === 'call' ? (
+                          <>
+                            <a href={`tel:${digits(phone)}`} onClick={() => { close(); setTimeout(() => setCallPrompt(true), 300) }}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                              <Phone size={15} /> اتصال هاتفي
+                            </a>
+                            {convUrl && (
+                              <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                                <ExternalLink size={15} /> لوحة اتصال بيفاتيل
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer" onClick={close}
+                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                              <MessageCircle size={15} /> واتساب
+                            </a>
+                            {convUrl && (
+                              <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                                <ExternalLink size={15} /> شات بيفاتيل
+                              </a>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
 
             {callPrompt && (
               <div className="mb-4 p-3 rounded-xl bg-surface2 border border-border flex flex-wrap items-center gap-2">
