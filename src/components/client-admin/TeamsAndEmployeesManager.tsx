@@ -83,7 +83,7 @@ function MemberModal({
   const initialCode = initialPhone.code === '+20' ? '+20' : '+966'
   const [form, setForm] = useState({
     full_name: member?.full_name || '',
-    email: '',
+    email: member?.email || '',
     password: '',
     job_title: member?.job_title || '',
     role: (member?.role === 'client_sales_manager' ? 'client_sales_manager' : 'client_user') as 'client_user' | 'client_sales_manager',
@@ -111,6 +111,7 @@ function MemberModal({
       if (editing) {
         const payload: Record<string, unknown> = {
           full_name: form.full_name,
+          email: form.email,
           job_title: form.job_title,
           role: form.role,
           phone,
@@ -163,12 +164,10 @@ function MemberModal({
             <input className="input" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
           </div>
 
-          {!editing && (
-            <div>
-              <label className="label">البريد الإلكتروني * (للدخول)</label>
-              <input type="email" dir="ltr" className="input text-start" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-            </div>
-          )}
+          <div>
+            <label className="label">البريد الإلكتروني * (للدخول)</label>
+            <input type="email" dir="ltr" className="input text-start" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+          </div>
 
           <div>
             <label className="label">{editing ? 'كلمة سر جديدة (اختياري)' : 'كلمة السر *'}</label>

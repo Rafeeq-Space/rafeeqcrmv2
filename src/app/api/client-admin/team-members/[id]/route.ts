@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, email } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -65,8 +65,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  if (password) {
-    const { error } = await supabase.auth.admin.updateUserById(id, { password })
+  // Auth account updates (email / password) live in auth.users, not profiles.
+  const authUpdates: { email?: string; password?: string } = {}
+  if (typeof email === 'string' && email.trim()) authUpdates.email = email.trim()
+  if (password) authUpdates.password = password
+  if (Object.keys(authUpdates).length > 0) {
+    const { error } = await supabase.auth.admin.updateUserById(id, {
+      ...authUpdates,
+      ...(authUpdates.email ? { email_confirm: true } : {}),
+    })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
