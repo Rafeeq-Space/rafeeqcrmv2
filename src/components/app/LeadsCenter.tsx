@@ -123,14 +123,20 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const scoped = useMemo(() => {
     // Date bounds for the selected period (null = unbounded on that side).
     const now = Date.now()
-    const span: Record<'day' | 'week' | 'month', number> = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }
     let minTime: number | null = null
     let maxTime: number | null = null
     if (period === 'range') {
       if (customFrom) minTime = new Date(`${customFrom}T00:00:00`).getTime()
       if (customTo) maxTime = new Date(`${customTo}T23:59:59`).getTime()
-    } else if (period !== 'all') {
-      minTime = now - span[period]
+    } else if (period === 'day') {
+      // "اليوم" = since midnight today, not the last 24 hours.
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      minTime = d.getTime()
+    } else if (period === 'week') {
+      minTime = now - 7 * 86400000
+    } else if (period === 'month') {
+      minTime = now - 30 * 86400000
     }
     const q = search.trim().toLowerCase()
 
