@@ -50,6 +50,20 @@ function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
+// Page numbers to show, collapsing long ranges with ellipsis:
+// 1 … 4 5 6 … 20
+function pageWindow(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | '…')[] = [1]
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  if (start > 2) pages.push('…')
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < total - 1) pages.push('…')
+  pages.push(total)
+  return pages
+}
+
 // Creation date is shown as a plain day; last-update also shows the time, since
 // it can change multiple times within the same day.
 function fmtDate(d?: string) {
@@ -356,22 +370,46 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
 
       {/* Pagination */}
       {filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-center gap-2 pt-2">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={safePage <= 1}
-            className="btn btn-outline text-sm !py-1.5 !px-3 gap-1 disabled:opacity-40"
-          >
-            <ChevronRight size={15} /> السابق
-          </button>
-          <span className="text-sm text-muted2 px-2">صفحة {safePage} من {totalPages}</span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={safePage >= totalPages}
-            className="btn btn-outline text-sm !py-1.5 !px-3 gap-1 disabled:opacity-40"
-          >
-            التالي <ChevronLeft size={15} />
-          </button>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <span className="text-xs text-muted2">
+            عرض {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} من {filtered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              className="w-9 h-9 flex items-center justify-center rounded-lg border border-border text-muted hover:text-foreground hover:bg-surface2 transition disabled:opacity-40 disabled:pointer-events-none"
+              aria-label="السابق"
+            >
+              <ChevronRight size={16} />
+            </button>
+            {pageWindow(safePage, totalPages).map((p, i) =>
+              p === '…' ? (
+                <span key={`e${i}`} className="w-9 h-9 flex items-center justify-center text-muted2">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  aria-current={p === safePage}
+                  className={`min-w-9 h-9 px-2 flex items-center justify-center rounded-lg text-sm font-semibold transition border ${
+                    p === safePage
+                      ? 'bg-primary text-primary-fg border-transparent'
+                      : 'border-border text-muted hover:text-foreground hover:bg-surface2'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              className="w-9 h-9 flex items-center justify-center rounded-lg border border-border text-muted hover:text-foreground hover:bg-surface2 transition disabled:opacity-40 disabled:pointer-events-none"
+              aria-label="التالي"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
         </div>
       )}
 
