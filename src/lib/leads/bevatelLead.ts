@@ -448,7 +448,9 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   const direction = (data.direction as string) || ''
   const inbound = direction.toLowerCase().includes('in')
   const eventType = ((payload.event_type as string) || '').toLowerCase()
-  const abandoned = eventType.includes('abandon') || eventType.includes('missed') || eventType.includes('no_answer')
+  // A call counts as "not answered" for abandoned/missed/timeout/cancelled
+  // events — none of these reach an agent, so the lead stays unassigned.
+  const abandoned = /abandon|missed|no_answer|timeout|cancel|unanswer/.test(eventType)
 
   // Duration may arrive under several names depending on the exact event.
   const durRaw = data.duration ?? data.talk_time ?? data.call_duration ?? data.billsec
