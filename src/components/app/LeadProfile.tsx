@@ -64,6 +64,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
     if (!key || key === lead.sub_status) return
     const sub = subStatusByKey(key)
     if (!sub) return
+    if (!confirm('هل أنت متأكد أنك تريد تغيير الحالة؟')) return
     const r = await post(`/api/leads/${lead.id}/activity`, { type: 'status_change', sub_status: key })
     if (r?.activity) {
       setLead(prev => ({ ...prev, status: sub.status, sub_status: key }))
@@ -238,9 +239,6 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                 </optgroup>
               ))}
             </select>
-            <p className="text-xs text-muted2 mt-2">
-              المجموعة: <span className="font-semibold text-foreground">{LEAD_STATUS_LABELS[lead.status]}</span>
-            </p>
           </div>
         </aside>
 
