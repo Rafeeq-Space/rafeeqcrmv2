@@ -127,8 +127,9 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
     }
   }
 
-  // One-time backfill: assign existing unassigned Bevatel leads from their
-  // Bevatel conversation owner. Runs in bounded batches; re-run until done.
+  // Assign existing unassigned leads tenant-wide: first match Bevatel leads to
+  // their conversation owner (bounded batch; re-run until done), then
+  // round-robin anything still unassigned — any source — across active reps.
   const [backfilling, setBackfilling] = useState(false)
   const [backfillMsg, setBackfillMsg] = useState('')
 
@@ -141,9 +142,11 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
       if (!res.ok) {
         setBackfillMsg(d.error || 'تعذّر التشغيل')
       } else {
-        setBackfillMsg(
-          `تمّت مراجعة ${d.reviewed} ليد — أُسند ${d.assigned}، بدون مسؤول ${d.noAssignee}، موظف غير مربوط ${d.unmatched}. متبقّي ${d.remaining}.`
-        )
+        const parts = [
+          `تمّت مراجعة ${d.reviewed} ليد من بيفاتيل — أُسند ${d.assigned}، بدون مسؤول ${d.noAssignee}، موظف غير مربوط ${d.unmatched}. متبقّي ${d.remaining}.`,
+          `توزيع بالدور: أُسند ${d.roundRobinAssigned} ليد إضافية على الفريق${d.stillUnassigned ? ` — ${d.stillUnassigned} بلا موظفين نشطين لإسنادها إليهم` : ''}.`,
+        ]
+        setBackfillMsg(parts.join(' '))
       }
     } catch {
       setBackfillMsg('تعذّر الاتصال')
@@ -248,9 +251,9 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
         </div>
 
         <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة</p>
+          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة (كل المصادر)</p>
           <p className="text-xs text-muted2 mb-2">
-            يمرّ على الليدز غير المُسندة ويسندها للموظف المسؤول عنها في بيفاتيل. آمن للتكرار — اضغطه حتى يصبح المتبقّي صفرًا.
+            يمرّ على كل الليدز غير المُسندة — من بيفاتيل أو فيسبوك أو تيك توك أو سناب شات أو أي مصدر آخر. يحاول أولًا إسناد ليدز بيفاتيل لموظفها المسؤول هناك، ثم يوزّع أي ليد تبقى بدون إسناد بالدور على فريق المبيعات. آمن للتكرار — اضغطه حتى يصبح المتبقّي صفرًا.
           </p>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={runBackfill} disabled={backfilling} className="btn btn-outline text-xs !py-1.5 gap-2">
