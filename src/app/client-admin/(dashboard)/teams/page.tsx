@@ -53,16 +53,18 @@ export default async function ClientAdminTeamsPage() {
     .eq('tenant_id', tenantId)
 
   const memberTeam = new Map(members.map(m => [m.id, m.team_id]))
-  const leadStats: Record<string, { open: number; pending: number }> = {}
+  // Team-card counters: new / contacted / unqualified (lost).
+  const leadStats: Record<string, { new: number; contacted: number; unqualified: number }> = {}
   // Per-member counters (by assigned_sales_id) — used by the delete-member flow
   // to show how many open/pending leads would need reassigning.
   const memberLeadStats: Record<string, { open: number; pending: number }> = {}
   for (const lead of leads || []) {
     const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
     if (teamId) {
-      if (!leadStats[teamId]) leadStats[teamId] = { open: 0, pending: 0 }
-      if (lead.status === 'new') leadStats[teamId].open++
-      else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
+      if (!leadStats[teamId]) leadStats[teamId] = { new: 0, contacted: 0, unqualified: 0 }
+      if (lead.status === 'new') leadStats[teamId].new++
+      else if (lead.status === 'contacted') leadStats[teamId].contacted++
+      else if (lead.status === 'lost') leadStats[teamId].unqualified++
     }
     if (lead.assigned_sales_id) {
       if (!memberLeadStats[lead.assigned_sales_id]) memberLeadStats[lead.assigned_sales_id] = { open: 0, pending: 0 }

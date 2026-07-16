@@ -36,13 +36,14 @@ export default async function AppTeamPage() {
     .eq('tenant_id', tenantId)
 
   const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
-  const leadStats: Record<string, { open: number; pending: number }> = {}
+  const leadStats: Record<string, { new: number; contacted: number; unqualified: number }> = {}
   for (const lead of leads || []) {
     const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
     if (!teamId) continue
-    if (!leadStats[teamId]) leadStats[teamId] = { open: 0, pending: 0 }
-    if (lead.status === 'new') leadStats[teamId].open++
-    else if (lead.status === 'contacted' || lead.status === 'qualified') leadStats[teamId].pending++
+    if (!leadStats[teamId]) leadStats[teamId] = { new: 0, contacted: 0, unqualified: 0 }
+    if (lead.status === 'new') leadStats[teamId].new++
+    else if (lead.status === 'contacted') leadStats[teamId].contacted++
+    else if (lead.status === 'lost') leadStats[teamId].unqualified++
   }
 
   return (

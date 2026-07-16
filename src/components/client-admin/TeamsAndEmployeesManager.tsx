@@ -14,6 +14,13 @@ export interface TeamLeadStats {
   pending: number
 }
 
+// Team-card counters: new / contacted / unqualified (lost).
+export interface TeamCardStats {
+  new: number
+  contacted: number
+  unqualified: number
+}
+
 type MemberRow = TeamMember & { email?: string }
 
 interface Props {
@@ -23,7 +30,7 @@ interface Props {
   currentRole: UserRole
   currentUserId?: string
   currentTeamId?: string | null
-  leadStats?: Record<string, TeamLeadStats>
+  leadStats?: Record<string, TeamCardStats>
   memberLeadStats?: Record<string, TeamLeadStats>
   readOnly?: boolean
 }
@@ -826,7 +833,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           {teams.map(team => {
             const count = members.filter(m => m.team_id === team.id).length
             const manager = members.find(m => m.id === team.manager_id)
-            const stats = leadStats[team.id] || { open: 0, pending: 0 }
+            const stats = leadStats[team.id] || { new: 0, contacted: 0, unqualified: 0 }
             return (
               <button key={team.id} onClick={() => setOpenTeam(team)}
                 className="card p-5 text-start hover:shadow-md hover:-translate-y-0.5 transition group">
@@ -841,14 +848,18 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                 <p className="text-sm text-muted mt-1">عدد الأعضاء: {count}</p>
 
                 {/* Lead counters */}
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--primary-soft)' }}>
-                    <p className="text-lg font-extrabold" style={{ color: 'var(--primary)' }}>{stats.open}</p>
-                    <p className="text-[0.68rem] font-semibold" style={{ color: 'var(--primary)' }}>عملاء مفتوحة</p>
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <div className="rounded-xl px-2 py-2 text-center" style={{ background: 'var(--primary-soft)' }}>
+                    <p className="text-lg font-extrabold" style={{ color: 'var(--primary)' }}>{stats.new}</p>
+                    <p className="text-[0.65rem] font-semibold" style={{ color: 'var(--primary)' }}>جديد</p>
                   </div>
-                  <div className="rounded-xl px-3 py-2 text-center" style={{ background: 'var(--warning-soft)' }}>
-                    <p className="text-lg font-extrabold" style={{ color: 'var(--warning)' }}>{stats.pending}</p>
-                    <p className="text-[0.68rem] font-semibold" style={{ color: 'var(--warning)' }}>عملاء معلّقة</p>
+                  <div className="rounded-xl px-2 py-2 text-center" style={{ background: 'var(--warning-soft)' }}>
+                    <p className="text-lg font-extrabold" style={{ color: 'var(--warning)' }}>{stats.contacted}</p>
+                    <p className="text-[0.65rem] font-semibold" style={{ color: 'var(--warning)' }}>تم التواصل</p>
+                  </div>
+                  <div className="rounded-xl px-2 py-2 text-center" style={{ background: 'var(--danger-soft)' }}>
+                    <p className="text-lg font-extrabold" style={{ color: 'var(--danger)' }}>{stats.unqualified}</p>
+                    <p className="text-[0.65rem] font-semibold" style={{ color: 'var(--danger)' }}>غير مؤهل</p>
                   </div>
                 </div>
 
