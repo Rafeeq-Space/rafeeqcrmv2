@@ -443,7 +443,13 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   const data = (payload.data as Record<string, unknown>) || {}
 
   const phone = (data.caller_number as string) || (data.customer_number as string) || ''
-  if (!phone) return { ok: false as const, reason: 'no_phone' }
+  if (!phone) {
+    await recordEvent(tenantId, {
+      kind: 'call', event: (payload.event_type as string) || 'unknown', direction: 'in', phone: 'بدون رقم',
+      agentHint: 'none', matched: false, created: false, assigned: false, leadId: null, raw: payload,
+    })
+    return { ok: false as const, reason: 'no_phone' }
+  }
 
   const direction = (data.direction as string) || ''
   const inbound = direction.toLowerCase().includes('in')
@@ -474,11 +480,17 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     name: (data.agent_name as string) || undefined,
   }
 
+  // Bevatel fires one call.timeout per queue extension while a call rings,
+  // then a final call.abandoned/call.ended — same call_id every time. Dedupe
+  // on it so one physical call doesn't post several "missed call" comments.
+  const callId = data.call_id != null ? String(data.call_id) : undefined
+
   const res = await appendToLead({
     tenantId,
     phone,
     source: 'bevatel_call',
     activityBody: body,
+    activityExternalId: callId ? `bevatel_call_${callId}` : undefined,
     agent,
   })
 
