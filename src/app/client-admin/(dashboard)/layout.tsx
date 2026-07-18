@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ClientAdminNav from '@/components/client-admin/ClientAdminNav'
+import { getCurrentAal, roleRequiresMfa } from '@/lib/auth/mfa'
 
 export default async function ClientAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -15,6 +16,11 @@ export default async function ClientAdminLayout({ children }: { children: React.
     .single()
 
   if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') redirect('/login')
+
+  // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or verify).
+  if (roleRequiresMfa(profile?.role) && (await getCurrentAal(supabase)) !== 'aal2') {
+    redirect('/two-factor?next=%2Fclient-admin%2Fdashboard')
+  }
 
   return (
     <div className="min-h-screen">

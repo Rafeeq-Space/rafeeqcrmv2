@@ -92,13 +92,16 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         return
       }
 
-      // Route by role within the correct tenant.
-      if (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') {
-        router.push('/client-admin/dashboard')
-        return
-      }
+      // Route by role within the correct tenant — but tenant users must pass
+      // two-factor first. /two-factor decides enrol-vs-verify then forwards to
+      // `next`. super_admin (handled above) is exempt.
+      const dest = profile?.role === 'client_admin' || profile?.role === 'client_sales_manager'
+        ? '/client-admin/dashboard'
+        : '/app/dashboard'
+      router.push(`/two-factor?next=${encodeURIComponent(dest)}`)
+      return
     }
-    router.push('/app/dashboard')
+    router.push('/two-factor?next=%2Fapp%2Fdashboard')
   }
 
   return (

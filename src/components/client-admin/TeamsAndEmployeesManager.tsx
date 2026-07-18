@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Users, UserPlus, Plus, Trash2, X, Phone, MessageCircle,
-  Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal,
+  Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal, ShieldCheck,
 } from 'lucide-react'
 import type { Team, TeamMember, UserRole } from '@/lib/types'
 import { MEMBER_COUNTRY_CODES, PHONE_RULES, splitPhone, validateLocalPhone, waNumber } from '@/lib/countryCodes'
@@ -102,6 +102,25 @@ function MemberModal({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resetting2fa, setResetting2fa] = useState(false)
+  const [reset2faDone, setReset2faDone] = useState(false)
+
+  async function resetTwoFactor() {
+    if (!member) return
+    if (!confirm(`إعادة تعيين المصادقة الثنائية لـ «${member.full_name}»؟ سيُطلب منه إعداد تطبيق المصادقة من جديد عند أول دخول.`)) return
+    setResetting2fa(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/client-admin/team-members/${member.id}/reset-2fa`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      setReset2faDone(true)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setResetting2fa(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -254,6 +273,20 @@ function MemberModal({
                 <option value="">-- بدون فريق --</option>
                 {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+            </div>
+          )}
+
+          {editing && (
+            <div className="pt-1">
+              <label className="label">المصادقة الثنائية (Google Authenticator)</label>
+              {reset2faDone ? (
+                <p className="text-sm" style={{ color: 'var(--success)' }}>تمت إعادة التعيين — سيُعيد الموظف الإعداد عند أول دخول.</p>
+              ) : (
+                <button type="button" onClick={resetTwoFactor} disabled={resetting2fa} className="btn btn-outline w-full gap-2">
+                  <ShieldCheck size={15} /> {resetting2fa ? 'جارٍ إعادة التعيين...' : 'إعادة تعيين المصادقة الثنائية'}
+                </button>
+              )}
+              <p className="text-xs text-muted2 mt-1">استخدمها لو فقد الموظف تطبيق المصادقة أو جهازه.</p>
             </div>
           )}
 
