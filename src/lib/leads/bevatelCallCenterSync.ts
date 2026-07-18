@@ -12,11 +12,10 @@ import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
 // dedupe on (agent + phone + timestamp), which is stable across re-syncs of
 // the same date range since these are historical, immutable rows.
 //
-// cloud16.bevatel.com silently connect-times-out for our own server (a cloud/
-// datacenter IP) while responding instantly to everything else — almost
-// certainly a Bevatel-side IP allowlist. If BEVATEL_CALLCENTER_PROXY_URL is
-// set (an HTTP proxy URL, e.g. from Fixie), requests are routed through it so
-// they leave from that proxy's static IP instead of Vercel's own.
+// Optional escape hatch: if some other Bevatel host/environment ever needs
+// routing through a fixed-IP proxy (e.g. Fixie) for an IP allowlist, set
+// BEVATEL_CALLCENTER_PROXY_URL and requests go through it. Unset by default —
+// api.bevatel.com (the officially documented Base URL) has no such issue.
 const proxyDispatcher = process.env.BEVATEL_CALLCENTER_PROXY_URL
   ? new ProxyAgent(process.env.BEVATEL_CALLCENTER_PROXY_URL)
   : undefined
@@ -61,15 +60,14 @@ function formatDate(d: Date): string {
   return `${dd}-${mm}-${d.getFullYear()}`
 }
 
-// The tenant-specific host (e.g. cloud16.bevatel.com) + /api/developer/v1/...
-// path is the one confirmed to return real data (verified against the docs'
-// own "Send API Request" tester). The generic api.bevatel.com + bare /v1/...
-// shown in the docs' curl sample looks like a documentation placeholder —
-// it 500s rather than returning data. Calling cloud16 from our own server
-// (rather than Bevatel's docs tester) currently connect-times-out, which
-// looks like an IP allowlist on their side — pending their support's answer.
+// https://api.bevatel.com is the officially documented Base URL (Bevatel API
+// Documentation home page) — cloud16.bevatel.com, seen only in a leaked
+// pagination link from the docs' own request tester, isn't a real external
+// endpoint (404s for every path tried). time_zone is required by this
+// endpoint specifically (unlike the sibling "answered calls" report, where
+// it's optional) — omitting it fails validation with a 400.
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
-  const url = `${creds.host}/api/developer/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
+  const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&time_zone=${encodeURIComponent('+03:00')}&page=${page}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
     // @ts-expect-error — `dispatcher` is an undici/Node-fetch extension, not
