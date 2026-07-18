@@ -37,10 +37,11 @@ async function tenantCallCenterCreds(tenantId: string): Promise<CallCenterCreds 
     .eq('id', tenantId)
     .single()
   if (!data?.bevatel_callcenter_api_key || !data.bevatel_callcenter_host) return null
-  return {
-    apiKey: data.bevatel_callcenter_api_key,
-    host: (data.bevatel_callcenter_host as string).replace(/\/+$/, ''),
-  }
+  let host = (data.bevatel_callcenter_host as string).trim().replace(/\/+$/, '')
+  // A host saved without a scheme (e.g. "api.bevatel.com") isn't a valid
+  // absolute URL and fetch() rejects it outright — assume https.
+  if (host && !/^https?:\/\//i.test(host)) host = `https://${host}`
+  return { apiKey: data.bevatel_callcenter_api_key, host }
 }
 
 // DD-MM-YYYY, as required by the report API.
@@ -50,14 +51,15 @@ function formatDate(d: Date): string {
   return `${dd}-${mm}-${d.getFullYear()}`
 }
 
-// The docs' own "Send API Request" tester runs server-side from Bevatel's
-// infrastructure and happened to return links pointing at an internal host
-// (cloud16.bevatel.com/api/developer/v1/...) — that host silently times out
-// for outside callers (likely an internal-only instance, not the public
-// gateway). The officially documented curl sample uses api.bevatel.com with
-// a bare /v1/... path instead; that's the one meant for external clients.
+// The tenant-specific host (e.g. cloud16.bevatel.com) + /api/developer/v1/...
+// path is the one confirmed to return real data (verified against the docs'
+// own "Send API Request" tester). The generic api.bevatel.com + bare /v1/...
+// shown in the docs' curl sample looks like a documentation placeholder —
+// it 500s rather than returning data. Calling cloud16 from our own server
+// (rather than Bevatel's docs tester) currently connect-times-out, which
+// looks like an IP allowlist on their side — pending their support's answer.
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
-  const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
+  const url = `${creds.host}/api/developer/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
   })
