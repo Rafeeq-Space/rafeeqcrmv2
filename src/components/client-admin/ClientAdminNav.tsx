@@ -49,8 +49,8 @@ const navItems = [
   },
   {
     href: '/client-admin/targets',
-    label: 'الأهداف',
-    desc: 'أهداف المبيعات للموظفين والفِرَق',
+    label: 'التارجت الشهري',
+    desc: 'تارجت المبيعات الشهري للموظفين والفِرَق',
     icon: Goal,
   },
   {

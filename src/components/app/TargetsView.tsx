@@ -70,7 +70,7 @@ export default function TargetsView({ role, self, teams, monthLabel }: Props) {
       <div className="flex flex-wrap items-center gap-3">
         <div className="me-auto">
           <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            <Goal size={24} style={{ color: 'var(--primary)' }} /> الأهداف
+            <Goal size={24} style={{ color: 'var(--primary)' }} /> التارجت الشهري
           </h1>
           <p className="text-muted text-sm mt-1">
             التقدّم محسوب على عدد العملاء الذين تم تحويلهم إلى «تم البيع» خلال {monthLabel}.
