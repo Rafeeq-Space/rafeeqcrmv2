@@ -231,6 +231,30 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
     }
   }
 
+  // Bevatel Business Chat agents (id/name/email) — fetched on demand so an
+  // admin can copy the exact email into an employee's "bevatel_agent_id".
+  const [agents, setAgents] = useState<{ id: number; name?: string; email?: string }[] | null>(null)
+  const [loadingAgents, setLoadingAgents] = useState(false)
+  const [agentsError, setAgentsError] = useState('')
+
+  async function loadAgents() {
+    setLoadingAgents(true)
+    setAgentsError('')
+    try {
+      const res = await fetch('/api/client-admin/bevatel/agents')
+      const d = await res.json()
+      if (!res.ok) {
+        setAgentsError(d.error || 'تعذّر الجلب')
+      } else {
+        setAgents(d.agents || [])
+      }
+    } catch {
+      setAgentsError('تعذّر الاتصال')
+    } finally {
+      setLoadingAgents(false)
+    }
+  }
+
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const chatUrl = `${origin}/api/integrations/bevatel/chat/${tenantId}/${currentSecret}`
   const callsUrl = `${origin}/api/integrations/bevatel/calls/${tenantId}/${currentSecret}`
@@ -324,6 +348,42 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
           <p className="text-xs text-muted mb-1">
             الحالة تتزامن عبر سمة العميل <span dir="ltr" className="font-mono text-muted2">crm_status</span> في بيفاتيل — أي تغيير على أي جهة يظهر في الجهة الأخرى.
           </p>
+        </div>
+
+        <div className="border-t border-[var(--border)] pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">موظفو بيفاتيل شات — لمعرفة الإيميل الصحيح لكل موظف</p>
+          <p className="text-xs text-muted2 mb-2">
+            يجيب قائمة الموظفين المسجّلين في حساب بيفاتيل شات (بالإيميل)، عشان تنسخيه بالظبط في حقل
+            &quot;معرّف الموظف في بيفاتيل&quot; بملف كل موظف.
+          </p>
+          <button onClick={loadAgents} disabled={loadingAgents || !hasToken} className="btn btn-outline text-xs !py-1.5 gap-2">
+            <RefreshCw size={14} className={loadingAgents ? 'animate-spin' : ''} /> عرض موظفي بيفاتيل شات
+          </button>
+          {!hasToken && <p className="text-xs text-muted2 mt-1">احفظي مفتاح API فوق الأول</p>}
+          {agentsError && <p className="text-xs mt-1" style={{ color: 'var(--danger, #dc2626)' }}>{agentsError}</p>}
+          {agents && (
+            <div className="mt-2 rounded-xl border border-[var(--border)] overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border)] bg-surface2">
+                    <th className="text-start font-medium px-3 py-1.5">الاسم</th>
+                    <th className="text-start font-medium px-3 py-1.5">الإيميل (انسخيه)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agents.map(a => (
+                    <tr key={a.id} className="border-t border-[var(--border)]">
+                      <td className="px-3 py-1.5">{a.name || '—'}</td>
+                      <td className="px-3 py-1.5" dir="ltr">{a.email || '—'}</td>
+                    </tr>
+                  ))}
+                  {agents.length === 0 && (
+                    <tr><td colSpan={2} className="px-3 py-3 text-center text-muted2">لا يوجد موظفون</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-[var(--border)] pt-3">

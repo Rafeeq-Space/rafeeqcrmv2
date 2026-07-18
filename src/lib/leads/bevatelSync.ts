@@ -74,6 +74,24 @@ export async function pushNoteToBevatel(lead: Lead, content: string): Promise<st
   }
 }
 
+// Lists every agent in the tenant's Bevatel Business Chat account — so an
+// admin can copy the exact email to type into an employee's "bevatel_agent_id"
+// field without hunting through Bevatel's own dashboard.
+export async function fetchBevatelAgents(tenantId: string): Promise<{ id: number; name?: string; email?: string }[] | null> {
+  const creds = await tenantCreds(tenantId)
+  if (!creds) return null
+
+  const url = `${creds.host}/api/v1/accounts/${creds.accountId}/agents`
+  try {
+    const res = await fetch(url, { headers: { api_access_token: creds.token, 'Content-Type': 'application/json' } })
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error('fetchBevatelAgents failed', err)
+    return null
+  }
+}
+
 // CRM assignment → set the Bevatel conversation's assignee to the matching agent.
 // Resolves the Bevatel agent by the rep's bevatel_agent_id (their Bevatel email).
 export async function pushAssigneeToBevatel(lead: Lead, salesId: string | null): Promise<void> {
