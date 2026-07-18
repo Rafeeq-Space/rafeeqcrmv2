@@ -418,7 +418,7 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
           <div>
             <p className="text-xs text-muted2 mb-1">رابط الـ API (Host)</p>
             <input dir="ltr" value={ccHost} onChange={e => setCcHost(e.target.value)}
-              placeholder="مثال: https://cloud16.bevatel.com" className="input text-xs py-1.5 w-full" />
+              placeholder="مثال: https://api.bevatel.com" className="input text-xs py-1.5 w-full" />
           </div>
           <div>
             <p className="text-xs text-muted2 mb-1">Workspace ID (اختياري)</p>

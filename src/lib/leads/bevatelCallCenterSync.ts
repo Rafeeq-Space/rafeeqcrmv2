@@ -50,8 +50,14 @@ function formatDate(d: Date): string {
   return `${dd}-${mm}-${d.getFullYear()}`
 }
 
+// The docs' own "Send API Request" tester runs server-side from Bevatel's
+// infrastructure and happened to return links pointing at an internal host
+// (cloud16.bevatel.com/api/developer/v1/...) — that host silently times out
+// for outside callers (likely an internal-only instance, not the public
+// gateway). The officially documented curl sample uses api.bevatel.com with
+// a bare /v1/... path instead; that's the one meant for external clients.
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
-  const url = `${creds.host}/api/developer/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
+  const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
   })
