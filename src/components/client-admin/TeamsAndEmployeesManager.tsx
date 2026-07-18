@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   Users, UserPlus, Plus, Trash2, X, Phone, MessageCircle,
-  Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft,
+  Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal,
 } from 'lucide-react'
 import type { Team, TeamMember, UserRole } from '@/lib/types'
 import { MEMBER_COUNTRY_CODES, PHONE_RULES, splitPhone, validateLocalPhone, waNumber } from '@/lib/countryCodes'
@@ -290,7 +290,8 @@ function TeamDetailModal({
   const [newManagerId, setNewManagerId] = useState(team.manager_id || '')
   const [saving, setSaving] = useState(false)
   const [editingTeam, setEditingTeam] = useState(false)
-  const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '', monthly_target: team.monthly_target != null ? String(team.monthly_target) : '' })
+  const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '' })
+  const [savingTarget, setSavingTarget] = useState(false)
   const [adding, setAdding] = useState(false)
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([])
   const [addingSaving, setAddingSaving] = useState(false)
@@ -323,10 +324,36 @@ function TeamDetailModal({
     await fetch(`/api/client-admin/teams/${team.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: teamForm.name, description: teamForm.description, monthly_target: teamForm.monthly_target === '' ? null : teamForm.monthly_target }),
+      body: JSON.stringify({ name: teamForm.name, description: teamForm.description }),
     })
     setSaving(false)
     setEditingTeam(false)
+    onChanged()
+  }
+
+  // Inline target editors (admin only). Both no-op when the value is unchanged
+  // so a blur without an edit doesn't fire a redundant request.
+  async function saveTeamTarget(value: string) {
+    const trimmed = value.trim()
+    if (trimmed === String(team.monthly_target ?? '')) return
+    setSavingTarget(true)
+    await fetch(`/api/client-admin/teams/${team.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ monthly_target: trimmed === '' ? null : trimmed }),
+    })
+    setSavingTarget(false)
+    onChanged()
+  }
+
+  async function saveMemberTarget(member: TeamMember, value: string) {
+    const trimmed = value.trim()
+    if (trimmed === String(member.monthly_target ?? '')) return
+    await fetch(`/api/client-admin/team-members/${member.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ monthly_target: trimmed === '' ? null : trimmed }),
+    })
     onChanged()
   }
 
@@ -396,12 +423,8 @@ function TeamDetailModal({
               <label className="label">وصف الفريق</label>
               <textarea className="input resize-none h-20" value={teamForm.description} onChange={e => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="وصف مختصر للفريق" />
             </div>
-            <div>
-              <label className="label">الهدف الشهري (عدد المبيعات)</label>
-              <input type="number" min={0} className="input" value={teamForm.monthly_target} onChange={e => setTeamForm({ ...teamForm, monthly_target: e.target.value })} placeholder="مثال: 20" />
-            </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => { setEditingTeam(false); setTeamForm({ name: team.name, description: team.description || '', monthly_target: team.monthly_target != null ? String(team.monthly_target) : '' }) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
+              <button type="button" onClick={() => { setEditingTeam(false); setTeamForm({ name: team.name, description: team.description || '' }) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
               <button type="submit" disabled={saving} className="btn btn-primary flex-1 !py-2">{saving ? 'جارٍ الحفظ...' : 'حفظ'}</button>
             </div>
           </form>
@@ -421,6 +444,32 @@ function TeamDetailModal({
             <button onClick={() => setAssigning(true)} className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>
               تغيير المدير
             </button>
+          )}
+        </div>
+
+        {/* Team monthly target — editable inline by admins. */}
+        <div className="flex items-center justify-between gap-3 bg-surface2 rounded-xl px-4 py-3 border border-border mb-5">
+          <div className="flex items-center gap-2">
+            <Goal size={16} style={{ color: 'var(--primary)' }} />
+            <span className="text-sm font-semibold text-foreground">التارجت الشهري للفريق</span>
+          </div>
+          {canManageTeam ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                defaultValue={team.monthly_target ?? ''}
+                onBlur={e => saveTeamTarget(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                disabled={savingTarget}
+                className="input !py-1 !w-24 text-center"
+                placeholder="—"
+                aria-label="التارجت الشهري للفريق"
+              />
+              <span className="text-xs text-muted2">مبيعة/شهر</span>
+            </div>
+          ) : (
+            <span className="text-sm font-bold text-foreground">{team.monthly_target ?? '—'}</span>
           )}
         </div>
 
@@ -492,6 +541,7 @@ function TeamDetailModal({
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">العضو</th>
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">المسمى الوظيفي</th>
                 <th className="text-start px-4 py-2.5 text-muted2 font-semibold">اتصال</th>
+                {canManageTeam && <th className="text-start px-4 py-2.5 text-muted2 font-semibold">التارجت</th>}
                 {canManageAny && <th className="px-4 py-2.5" />}
               </tr>
             </thead>
@@ -509,6 +559,20 @@ function TeamDetailModal({
                   </td>
                   <td className="px-4 py-2.5 text-muted">{m.job_title || '—'}</td>
                   <td className="px-4 py-2.5"><ContactIcons phone={m.phone} /></td>
+                  {canManageTeam && (
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={m.monthly_target ?? ''}
+                        onBlur={e => saveMemberTarget(m, e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        className="input !py-1 !w-20 text-center"
+                        placeholder="—"
+                        aria-label={`التارجت الشهري لـ ${m.full_name}`}
+                      />
+                    </td>
+                  )}
                   {canManageAny && (
                     <td className="px-4 py-2.5">
                       {(canEditMember(m) || canRemoveMember(m)) && (
@@ -540,7 +604,7 @@ function TeamDetailModal({
                 </tr>
               ))}
               {teamMembers.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-muted2">لا يوجد أعضاء في هذا الفريق.</td></tr>
+                <tr><td colSpan={3 + (canManageTeam ? 1 : 0) + (canManageAny ? 1 : 0)} className="px-4 py-8 text-center text-muted2">لا يوجد أعضاء في هذا الفريق.</td></tr>
               )}
             </tbody>
           </table>
