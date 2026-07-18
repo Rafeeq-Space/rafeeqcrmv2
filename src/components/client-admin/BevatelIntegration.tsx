@@ -56,11 +56,19 @@ function CopyField({ label, url }: { label: string; url: string }) {
 function LogRow({ log }: { log: BevatelLog }) {
   // Explain the outcome in one plain-Arabic phrase so the reason a lead did or
   // didn't get assigned is obvious without reading the raw fields.
+  // Bevatel's own call-leg lifecycle events (rings starting/stopping on each
+  // extension) never carry a customer number by design — harmless noise, not
+  // a delivery problem. Anything else missing a phone is a real issue.
+  const isHarmlessCallLifecycle = log.kind === 'call' && (log.event === 'call.started' || log.event === 'call.ended')
+
   let status: string
   let tone: 'ok' | 'warn' | 'bad'
   if (log.assigned) {
     status = 'أُسنِد لموظف ✓'
     tone = 'ok'
+  } else if (log.phone === 'بدون رقم' && isHarmlessCallLifecycle) {
+    status = 'حدث نظامي (بداية/نهاية رنة) — لا يحمل رقم عميل'
+    tone = 'warn'
   } else if (log.phone === 'بدون رقم') {
     status = 'حدث بدون رقم — تم تجاهله'
     tone = 'bad'
@@ -88,6 +96,7 @@ function LogRow({ log }: { log: BevatelLog }) {
         </span>
       </td>
       <td className="py-2 px-2 whitespace-nowrap">{log.direction === 'in' ? 'واردة' : 'صادرة'}</td>
+      <td className="py-2 px-2 whitespace-nowrap text-muted2" dir="ltr">{log.event}</td>
       <td className="py-2 px-2 whitespace-nowrap" dir="ltr">{log.phone === 'بدون رقم' ? '—' : `••••${log.phone.slice(-4)}`}</td>
       <td className="py-2 px-2 font-medium" style={{ color: toneColor }}>{status}</td>
     </tr>
@@ -293,6 +302,7 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
                   <th className="py-1.5 px-2 font-medium text-start">الوقت</th>
                   <th className="py-1.5 px-2 font-medium text-start">النوع</th>
                   <th className="py-1.5 px-2 font-medium text-start">الاتجاه</th>
+                  <th className="py-1.5 px-2 font-medium text-start">الحدث</th>
                   <th className="py-1.5 px-2 font-medium text-start">الرقم</th>
                   <th className="py-1.5 px-2 font-medium text-start">النتيجة</th>
                 </tr>
