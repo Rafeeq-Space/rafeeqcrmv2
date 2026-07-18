@@ -56,15 +56,19 @@ async function matchAgent(
 
   if (!profiles || profiles.length === 0) return null
 
-  // 0) Explicit Bevatel identifier set on the employee — the deterministic
+  // 0) Explicit Bevatel identifier(s) set on the employee — the deterministic
   // match. Compared against every identifier Bevatel sent (email/name/phone).
+  // An employee can carry more than one Bevatel identity (their Business Chat
+  // email AND their Call Center extension aren't the same value) — the field
+  // accepts a comma/semicolon-separated list for exactly that case.
   const hintValues = [hint.email, hint.name, hint.phone]
     .filter((v): v is string => !!v)
     .map(v => normName(v))
   if (hintValues.length) {
     const byExplicit = profiles.find(p => {
-      const id = (p.bevatel_agent_id as string | null) || ''
-      return id && hintValues.includes(normName(id))
+      const raw = (p.bevatel_agent_id as string | null) || ''
+      const ids = raw.split(/[,;]/).map(s => normName(s)).filter(Boolean)
+      return ids.some(id => hintValues.includes(id))
     })
     if (byExplicit) return { id: byExplicit.id, team_id: byExplicit.team_id ?? null }
   }

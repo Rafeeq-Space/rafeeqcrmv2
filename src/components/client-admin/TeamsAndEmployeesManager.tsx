@@ -259,10 +259,11 @@ function MemberModal({
               className="input text-start"
               value={form.bevatel_agent_id}
               onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
-              placeholder="نفس إيميل أو اسم الموظف في بيفاتيل"
+              placeholder="مثال: ahmed@email.com, 7492"
             />
             <p className="text-xs text-muted2 mt-1">
-              لربط ليدز الشات والمكالمات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتبه كما يظهر في بيفاتيل بالضبط.
+              لربط ليدز الشات والمكالمات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات
+              ورقم الـ extension بتاعه في Call Center مفصولين بفاصلة (كل واحد مختلف عن التاني عادةً).
             </p>
           </div>
 
