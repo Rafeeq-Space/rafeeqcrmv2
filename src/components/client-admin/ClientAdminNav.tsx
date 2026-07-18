@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, BookOpen, Users, Target, Contact,
-  LogOut, Menu, X, Radio, Bell, ChevronsLeft, ChevronsRight
+  LogOut, Menu, X, Radio, Bell, ChevronsLeft, ChevronsRight,
+  FileBarChart, Goal
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -45,6 +46,19 @@ const navItems = [
     label: 'مركز العملاء',
     desc: 'إدارة ومتابعة العملاء المحتملين',
     icon: Contact,
+  },
+  {
+    href: '/client-admin/targets',
+    label: 'الأهداف',
+    desc: 'أهداف المبيعات للموظفين والفِرَق',
+    icon: Goal,
+  },
+  {
+    href: '/client-admin/reports',
+    label: 'التقارير',
+    desc: 'تقارير أداء الموظفين والفرق والحملات',
+    icon: FileBarChart,
+    adminOnly: true,
   },
   {
     href: '/client-admin/notifications',
