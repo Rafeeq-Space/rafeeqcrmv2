@@ -77,9 +77,12 @@ async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: strin
   if (!res.ok) {
     // Surface Bevatel's own error body (e.g. "invalid API key") instead of
     // just the status code, so a failed sync is diagnosable from the message
-    // alone rather than crashing with no explanation.
+    // alone rather than crashing with no explanation. The query string (no
+    // secret lives there — the key is only in the Authorization header) is
+    // included too, since a generic 500 can hide a request-shape difference
+    // (dates, encoding, ...) that isn't obvious from the status code alone.
     const body = await res.text().catch(() => '')
-    throw new Error(`bevatel call center api ${res.status}: ${body.slice(0, 300)}`)
+    throw new Error(`bevatel call center api ${res.status} for ${url}: ${body.slice(0, 300)}`)
   }
   return res.json()
 }
