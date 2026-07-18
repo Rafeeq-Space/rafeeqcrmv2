@@ -69,7 +69,15 @@ function formatDate(d: Date): string {
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
   const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&time_zone=${encodeURIComponent('+03:00')}&page=${page}`
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${creds.apiKey}`,
+      'Content-Type': 'application/json',
+      // Node's fetch sends no real User-Agent by default; some WAFs quietly
+      // 500 requests that look bot-like instead of a clear 403. curl's
+      // default UA is what worked when this exact request was tested by
+      // hand, so it's mimicked here rather than left blank.
+      'User-Agent': 'curl/8.7.1',
+    },
     // @ts-expect-error — `dispatcher` is an undici/Node-fetch extension, not
     // part of the standard fetch() typings, but Next.js's runtime honors it.
     dispatcher: proxyDispatcher,
