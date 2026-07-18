@@ -1,3 +1,4 @@
+import { ProxyAgent } from 'undici'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
 
@@ -10,6 +11,15 @@ import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
 // `data` field holds the customer's number. There is no call_id here, so we
 // dedupe on (agent + phone + timestamp), which is stable across re-syncs of
 // the same date range since these are historical, immutable rows.
+//
+// cloud16.bevatel.com silently connect-times-out for our own server (a cloud/
+// datacenter IP) while responding instantly to everything else — almost
+// certainly a Bevatel-side IP allowlist. If BEVATEL_CALLCENTER_PROXY_URL is
+// set (an HTTP proxy URL, e.g. from Fixie), requests are routed through it so
+// they leave from that proxy's static IP instead of Vercel's own.
+const proxyDispatcher = process.env.BEVATEL_CALLCENTER_PROXY_URL
+  ? new ProxyAgent(process.env.BEVATEL_CALLCENTER_PROXY_URL)
+  : undefined
 
 interface AvailabilityRow {
   date: string
@@ -62,6 +72,9 @@ async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: strin
   const url = `${creds.host}/api/developer/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&page=${page}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
+    // @ts-expect-error — `dispatcher` is an undici/Node-fetch extension, not
+    // part of the standard fetch() typings, but Next.js's runtime honors it.
+    dispatcher: proxyDispatcher,
   })
   if (!res.ok) {
     // Surface Bevatel's own error body (e.g. "invalid API key") instead of
