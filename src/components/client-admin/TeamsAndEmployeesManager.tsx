@@ -98,6 +98,7 @@ function MemberModal({
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
     bevatel_agent_id: member?.bevatel_agent_id || '',
+    monthly_target: member?.monthly_target != null ? String(member.monthly_target) : '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -124,6 +125,7 @@ function MemberModal({
           phone,
           team_id: form.team_id || null,
           bevatel_agent_id: form.bevatel_agent_id,
+          monthly_target: form.monthly_target === '' ? null : form.monthly_target,
         }
         if (form.password) payload.password = form.password
         res = await fetch(`/api/client-admin/team-members/${member!.id}`, {
@@ -144,6 +146,7 @@ function MemberModal({
             phone,
             team_id: form.team_id || null,
             bevatel_agent_id: form.bevatel_agent_id,
+            monthly_target: form.monthly_target === '' ? null : form.monthly_target,
           }),
         })
       }
@@ -203,6 +206,18 @@ function MemberModal({
             >
               {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="label">الهدف الشهري (عدد المبيعات)</label>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              value={form.monthly_target}
+              onChange={e => setForm({ ...form, monthly_target: e.target.value })}
+              placeholder="عدد العملاء المطلوب تحويلهم للبيع شهرياً"
+            />
           </div>
 
           <div>
@@ -275,7 +290,7 @@ function TeamDetailModal({
   const [newManagerId, setNewManagerId] = useState(team.manager_id || '')
   const [saving, setSaving] = useState(false)
   const [editingTeam, setEditingTeam] = useState(false)
-  const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '' })
+  const [teamForm, setTeamForm] = useState({ name: team.name, description: team.description || '', monthly_target: team.monthly_target != null ? String(team.monthly_target) : '' })
   const [adding, setAdding] = useState(false)
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([])
   const [addingSaving, setAddingSaving] = useState(false)
@@ -308,7 +323,7 @@ function TeamDetailModal({
     await fetch(`/api/client-admin/teams/${team.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: teamForm.name, description: teamForm.description }),
+      body: JSON.stringify({ name: teamForm.name, description: teamForm.description, monthly_target: teamForm.monthly_target === '' ? null : teamForm.monthly_target }),
     })
     setSaving(false)
     setEditingTeam(false)
@@ -381,8 +396,12 @@ function TeamDetailModal({
               <label className="label">وصف الفريق</label>
               <textarea className="input resize-none h-20" value={teamForm.description} onChange={e => setTeamForm({ ...teamForm, description: e.target.value })} placeholder="وصف مختصر للفريق" />
             </div>
+            <div>
+              <label className="label">الهدف الشهري (عدد المبيعات)</label>
+              <input type="number" min={0} className="input" value={teamForm.monthly_target} onChange={e => setTeamForm({ ...teamForm, monthly_target: e.target.value })} placeholder="مثال: 20" />
+            </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => { setEditingTeam(false); setTeamForm({ name: team.name, description: team.description || '' }) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
+              <button type="button" onClick={() => { setEditingTeam(false); setTeamForm({ name: team.name, description: team.description || '', monthly_target: team.monthly_target != null ? String(team.monthly_target) : '' }) }} className="btn btn-outline flex-1 !py-2">إلغاء</button>
               <button type="submit" disabled={saving} className="btn btn-primary flex-1 !py-2">{saving ? 'جارٍ الحفظ...' : 'حفظ'}</button>
             </div>
           </form>
@@ -656,7 +675,7 @@ function DeleteMemberModal({
 
 // ─── Add Team Modal ───────────────────────────────────────────────
 function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: '', description: '' })
+  const [form, setForm] = useState({ name: '', description: '', monthly_target: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -691,6 +710,7 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
         <form onSubmit={handleSubmit} className="space-y-3">
           <input placeholder="اسم الفريق *" className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="الوصف (اختياري)" className="input" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          <input type="number" min={0} placeholder="الهدف الشهري — عدد المبيعات (اختياري)" className="input" value={form.monthly_target} onChange={e => setForm({ ...form, monthly_target: e.target.value })} />
           {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
