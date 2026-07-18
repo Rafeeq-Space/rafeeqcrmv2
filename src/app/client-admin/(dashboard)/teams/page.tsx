@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
@@ -11,6 +12,9 @@ export default async function ClientAdminTeamsPage() {
     .select('tenant_id, role, team_id')
     .eq('id', user!.id)
     .single()
+
+  // Teams & Employees management is client_admin only.
+  if (profile?.role !== 'client_admin') redirect('/client-admin/dashboard')
 
   const tenantId = profile?.tenant_id || ''
   const role = (profile?.role || 'client_user') as UserRole

@@ -34,6 +34,7 @@ const navItems = [
     label: 'فريق العمل',
     desc: 'إدارة الفِرَق والموظفين',
     icon: Users,
+    adminOnly: true,
   },
   {
     href: '/client-admin/campaigns',
