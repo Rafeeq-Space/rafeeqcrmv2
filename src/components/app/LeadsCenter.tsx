@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
+import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
 import AddLeadModal from './AddLeadModal'
 
 interface FilterOption {
@@ -22,8 +23,6 @@ interface Props {
   teams?: FilterOption[]
   members?: FilterOption[]
 }
-
-const STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const
 
 // Overview stat cards (also act as quick status filters) shown at the top of
 // the leads center. Colors mirror the status badge palette.
@@ -103,6 +102,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const router = useRouter()
   const [view, setView] = useState<'cards' | 'table'>('table')
   const [status, setStatus] = useState('all')
+  const [subStatus, setSubStatus] = useState('all')
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
@@ -174,8 +174,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   }, [leads, campaign, team, member, period, customFrom, customTo, search])
 
   const filtered = useMemo(
-    () => scoped.filter(l => status === 'all' || l.status === status),
-    [scoped, status],
+    () => scoped.filter(l =>
+      (status === 'all' || l.status === status) &&
+      (subStatus === 'all' || l.sub_status === subStatus)
+    ),
+    [scoped, status, subStatus],
   )
 
   // Pagination — show a bounded page of leads instead of the whole list.
@@ -183,7 +186,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   // Snap back to a valid page whenever filters shrink the list.
-  useEffect(() => { setPage(1) }, [status, campaign, team, member, period, customFrom, customTo, search])
+  useEffect(() => { setPage(1) }, [status, subStatus, campaign, team, member, period, customFrom, customTo, search])
   const safePage = Math.min(page, totalPages)
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
@@ -262,9 +265,13 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
 
       {/* Filters + view toggle */}
       <div className="flex flex-wrap gap-3 items-center">
-        <select className="input !w-auto" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="all">كل الحالات</option>
-          {STATUSES.map(s => <option key={s} value={s}>{LEAD_STATUS_LABELS[s]}</option>)}
+        <select className="input !w-auto" value={subStatus} onChange={e => setSubStatus(e.target.value)}>
+          <option value="all">اختر الحالة</option>
+          {SUB_STATUS_GROUPS.map(g => (
+            <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
+              {g.items.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </optgroup>
+          ))}
         </select>
         {(isAdmin || isManager) && campaigns.length > 0 && (
           <select className="input !w-auto" value={campaign} onChange={e => setCampaign(e.target.value)}>
