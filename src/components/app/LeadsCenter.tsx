@@ -37,12 +37,13 @@ const STAT_CARDS: { key: string; label: string; color: string }[] = [
 ]
 
 // Period quick-filter over the lead creation date.
-type PeriodKey = 'all' | 'day' | 'week' | 'month' | 'range'
+type PeriodKey = 'all' | 'day' | 'week' | 'month' | 'thisMonth' | 'range'
 const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: 'all', label: 'الكل' },
   { key: 'day', label: 'اليوم' },
   { key: 'week', label: 'آخر أسبوع' },
   { key: 'month', label: 'آخر شهر' },
+  { key: 'thisMonth', label: 'الشهر الحالي' },
   { key: 'range', label: 'نطاق' },
 ]
 
@@ -151,6 +152,9 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       minTime = now - 7 * 86400000
     } else if (period === 'month') {
       minTime = now - 30 * 86400000
+    } else if (period === 'thisMonth') {
+      const d = new Date()
+      minTime = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
     }
     const q = search.trim().toLowerCase()
 

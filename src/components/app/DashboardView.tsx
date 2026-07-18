@@ -55,11 +55,12 @@ const TABS = [
 const ARABIC_DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
 // Period filter for the overview statistics.
-type RangeKey = 'day' | 'week' | 'month' | 'all' | 'custom'
+type RangeKey = 'day' | 'week' | 'month' | 'thisMonth' | 'all' | 'custom'
 const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: 'day', label: 'اليوم' },
   { key: 'week', label: 'آخر أسبوع' },
   { key: 'month', label: 'آخر شهر' },
+  { key: 'thisMonth', label: 'الشهر الحالي' },
   { key: 'all', label: 'الكل' },
   { key: 'custom', label: 'مخصص' },
 ]
@@ -150,6 +151,9 @@ export default function DashboardView({
         end: customTo ? new Date(`${customTo}T23:59:59`) : null,
       }
     }
+    if (rangeKey === 'thisMonth') {
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }
+    }
     const s = new Date(now)
     if (rangeKey === 'day') s.setDate(now.getDate() - 1)
     else if (rangeKey === 'week') s.setDate(now.getDate() - 7)
@@ -173,21 +177,28 @@ export default function DashboardView({
   const stats = useMemo(() => computeLeadStats(filteredLeads), [filteredLeads])
 
   // Stat cards differ by role: admins get org totals, managers get team lead metrics.
+  // Team/employee counts are only shown to client_admin — a plain rep has no
+  // business seeing headcount or team structure.
   const cards = isManager
     ? [
         { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green', href: '/client-admin/leads' },
         { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning', href: '/client-admin/leads' },
         { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger', href: '/client-admin/leads' },
-        { label: 'نسبة العملاء المكتملين', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'purple', href: '/client-admin/leads' },
         { label: 'أعضاء الفريق', value: employeesCount ?? members.length, icon: UserCheck, color: 'sky', href: '/client-admin/teams' },
       ]
     : [
         { label: 'الحملات', value: campaigns.length, icon: Target, color: 'purple', href: '/client-admin/campaigns' },
         { label: 'النماذج', value: forms.length, icon: FileText, color: 'warning', href: '/client-admin/campaigns' },
-        { label: 'الفِرَق', value: teamsCount ?? teams.length, icon: Users2, color: 'sky', href: '/client-admin/teams' },
-        { label: 'الموظفون', value: employeesCount ?? members.length, icon: UserCheck, color: 'green', href: '/client-admin/teams' },
-        { label: 'نسبة العملاء المكتملين', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'danger', href: '/client-admin/leads' },
+        ...(isAdmin ? [
+          { label: 'الفِرَق', value: teamsCount ?? teams.length, icon: Users2, color: 'sky', href: '/client-admin/teams' },
+          { label: 'الموظفون', value: employeesCount ?? members.length, icon: UserCheck, color: 'green', href: '/client-admin/teams' },
+        ] : []),
       ]
+
+  const completionCard = {
+    label: 'نسبة العملاء المكتملين', value: `${stats.conversionRate}%`, icon: TrendingUp,
+    color: isManager ? 'purple' : 'danger', href: '/client-admin/leads',
+  }
 
   const statusData = Object.entries(
     filteredLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {} as Record<string, number>)
@@ -291,7 +302,7 @@ export default function DashboardView({
           <LeadStatCards leads={filteredLeads} avgResponseMs={avgResponseMs} href="/client-admin/leads" />
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {cards.map(({ label, value, icon: Icon, color, href }) => (
               <Link key={label} href={href} className="card card-hover p-5 transition hover:border-primary">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: STAT_SOFT[color] }}>
@@ -302,6 +313,17 @@ export default function DashboardView({
               </Link>
             ))}
           </div>
+
+          {/* Completion rate — full width, below the stat cards */}
+          <Link href={completionCard.href} className="card card-hover p-5 flex items-center gap-4 transition hover:border-primary">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: STAT_SOFT[completionCard.color] }}>
+              <completionCard.icon size={21} style={{ color: STAT_COLORS[completionCard.color] }} />
+            </div>
+            <div>
+              <p className="text-2xl font-extrabold text-foreground">{completionCard.value}</p>
+              <p className="text-sm text-muted mt-0.5">{completionCard.label}</p>
+            </div>
+          </Link>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
