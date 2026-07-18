@@ -30,6 +30,7 @@ interface BevatelApi {
 interface BevatelCallCenterApi {
   hasKey: boolean
   workspaceId: string
+  host: string
 }
 
 interface Props {
@@ -145,9 +146,10 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
     }
   }
 
-  // Call Center API credentials — separate service, separate key/workspace.
+  // Call Center API credentials — separate service, separate key/workspace/host.
   const [ccApiKey, setCcApiKey] = useState('')
   const [ccWorkspaceId, setCcWorkspaceId] = useState(callCenterApi.workspaceId || '')
+  const [ccHost, setCcHost] = useState(callCenterApi.host || '')
   const [savingCcApi, setSavingCcApi] = useState(false)
   const [ccApiSaved, setCcApiSaved] = useState(false)
   const [hasCcKey, setHasCcKey] = useState(callCenterApi.hasKey)
@@ -160,7 +162,7 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         // Keep the stored key if the field is left blank (already saved).
-        body: JSON.stringify({ apiKey: ccApiKey || undefined, workspaceId: ccWorkspaceId }),
+        body: JSON.stringify({ apiKey: ccApiKey || undefined, workspaceId: ccWorkspaceId, host: ccHost }),
       })
       if (res.ok) {
         setCcApiSaved(true)
@@ -170,6 +172,34 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
       }
     } finally {
       setSavingCcApi(false)
+    }
+  }
+
+  const [ccSyncing, setCcSyncing] = useState(false)
+  const [ccSyncMsg, setCcSyncMsg] = useState('')
+
+  async function runCcSync() {
+    setCcSyncing(true)
+    setCcSyncMsg('')
+    try {
+      const res = await fetch('/api/client-admin/bevatel/callcenter-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: 3 }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        setCcSyncMsg(d.error || 'تعذّر التشغيل')
+      } else {
+        setCcSyncMsg(
+          `تمت مراجعة ${d.fetched} حدث — ${d.processed} مكالمة منتهية، ${d.matched} منها اتربطت بموظف، ` +
+          `و${d.leadsTouched} عميل اتحدّث تايم لاينه.`
+        )
+      }
+    } catch {
+      setCcSyncMsg('تعذّر الاتصال')
+    } finally {
+      setCcSyncing(false)
     }
   }
 
@@ -319,14 +349,19 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <p className="text-xs text-muted2 mb-1">مفتاح API {hasCcKey && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
             <input dir="ltr" type="password" value={ccApiKey} onChange={e => setCcApiKey(e.target.value)}
               placeholder={hasCcKey ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق مفتاح API الخاص بمركز الاتصال'} className="input text-xs py-1.5 w-full" />
           </div>
           <div>
-            <p className="text-xs text-muted2 mb-1">Workspace ID</p>
+            <p className="text-xs text-muted2 mb-1">رابط الـ API (Host)</p>
+            <input dir="ltr" value={ccHost} onChange={e => setCcHost(e.target.value)}
+              placeholder="مثال: https://cloud16.bevatel.com" className="input text-xs py-1.5 w-full" />
+          </div>
+          <div>
+            <p className="text-xs text-muted2 mb-1">Workspace ID (اختياري)</p>
             <input dir="ltr" value={ccWorkspaceId} onChange={e => setCcWorkspaceId(e.target.value)}
               placeholder="مثال: a1263405-04df-48f8-8fa6-e7325a4d9a5a" className="input text-xs py-1.5 w-full" />
           </div>
@@ -336,6 +371,20 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
             {savingCcApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
           </button>
           {ccApiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+        </div>
+
+        <div className="border-t border-[var(--border)] pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">مزامنة المكالمات المردود عليها (آخر 3 أيام)</p>
+          <p className="text-xs text-muted2 mb-2">
+            تسحب تقرير مركز الاتصال وتربط كل مكالمة منتهية بالعميل (بالرقم) والموظف (بالاسم)، وتضيفها لتايم لاين العميل.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={runCcSync} disabled={ccSyncing || !hasCcKey} className="btn btn-outline text-xs !py-1.5 gap-2">
+              <RefreshCw size={14} className={ccSyncing ? 'animate-spin' : ''} /> مزامنة الآن
+            </button>
+            {!hasCcKey && <span className="text-xs text-muted2">احفظ مفتاح API الأول</span>}
+            {ccSyncMsg && <span className="text-xs text-muted">{ccSyncMsg}</span>}
+          </div>
         </div>
       </div>
 

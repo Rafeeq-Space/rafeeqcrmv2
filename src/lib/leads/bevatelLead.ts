@@ -34,7 +34,7 @@ function normName(s: string): string {
 // Reduce a phone number to its last 9 significant digits so numbers written in
 // different formats still match, e.g. "00201018305632", "+201018305632" and
 // "01018305632" all collapse to "018305632".
-function phoneKey(raw?: string | null): string {
+export function phoneKey(raw?: string | null): string {
   if (!raw) return ''
   const digits = String(raw).replace(/\D/g, '')
   return digits.length >= 9 ? digits.slice(-9) : digits
@@ -111,7 +111,7 @@ async function matchAgent(
   return null
 }
 
-interface AppendArgs {
+export interface AppendArgs {
   tenantId: string
   phone: string
   name?: string
@@ -124,14 +124,14 @@ interface AppendArgs {
   agent: AgentHint
 }
 
-interface AppendResult {
+export interface AppendResult {
   leadId: string | null
   created: boolean
   assigned: boolean
   agentMatched: boolean
 }
 
-interface EventLog {
+export interface EventLog {
   kind: 'chat' | 'call'
   event: string
   direction: 'in' | 'out'
@@ -147,7 +147,7 @@ interface EventLog {
 // Persist a one-line summary of every processed event so an admin can diagnose
 // unassigned leads from inside the CRM (no server-log access needed). Best
 // effort: if the table is missing or the insert fails we just skip it.
-async function recordEvent(tenantId: string, log: EventLog) {
+export async function recordEvent(tenantId: string, log: EventLog) {
   console.log(
     `[bevatel:${log.kind}] tenant=${tenantId} event=${log.event} dir=${log.direction}` +
     ` phone=*${log.phone} agentHint=${log.agentHint} matched=${log.matched}` +
@@ -177,7 +177,7 @@ async function recordEvent(tenantId: string, log: EventLog) {
 }
 
 // Match-or-create the lead and append the timeline activity.
-async function appendToLead(args: AppendArgs): Promise<AppendResult> {
+export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const { tenantId, phone, source, activityBody, activityExternalId, conversationId, contactId } = args
   const supa = adminSupabase()
 

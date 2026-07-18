@@ -17,7 +17,7 @@ export default async function IntegrationsPage() {
   const supa = adminSupabase()
   const { data: tenant } = await supa
     .from('tenants')
-    .select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id')
+    .select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id, bevatel_callcenter_host')
     .eq('id', tenantId)
     .single()
 
@@ -52,6 +52,7 @@ export default async function IntegrationsPage() {
       callCenterApi={{
         hasKey: !!tenant?.bevatel_callcenter_api_key,
         workspaceId: (tenant?.bevatel_callcenter_workspace_id as string) || '',
+        host: (tenant?.bevatel_callcenter_host as string) || '',
       }}
     />
   )

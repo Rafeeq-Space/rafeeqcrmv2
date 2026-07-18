@@ -95,7 +95,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { apiKey?: string; workspaceId?: string }
+  let body: { apiKey?: string; workspaceId?: string; host?: string }
   try {
     body = await request.json()
   } catch {
@@ -103,8 +103,10 @@ export async function PATCH(request: Request) {
   }
 
   const workspaceId = (body.workspaceId || '').trim()
+  const host = (body.host || '').trim().replace(/\/+$/, '')
   const updates: Record<string, unknown> = {
     bevatel_callcenter_workspace_id: workspaceId || null,
+    bevatel_callcenter_host: host || null,
   }
   // Only overwrite the key when a new one is actually supplied, so saving the
   // workspace id alone doesn't wipe an already-stored key.

@@ -12,7 +12,7 @@ interface BevatelData {
   secret: string
   logs: BevatelLog[]
   api: { hasToken: boolean; host: string; accountId: string }
-  callCenterApi: { hasKey: boolean; workspaceId: string }
+  callCenterApi: { hasKey: boolean; workspaceId: string; host: string }
 }
 
 interface Props {

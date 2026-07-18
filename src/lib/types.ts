@@ -80,11 +80,11 @@ export interface Tenant {
   bevatel_api_host?: string | null
   bevatel_account_id?: string | null
   // Bevatel Call Center API credentials — a separate service/credential from
-  // the chat API above (its own workspace_id, its own expiring API key).
-  // Used to pull full call reports (answered/talk-time/agent) the webhook
-  // itself doesn't carry.
+  // the chat API above (its own host, its own expiring API key). Used to pull
+  // full call reports (customer phone/agent/duration) the webhook can't carry.
   bevatel_callcenter_api_key?: string | null
   bevatel_callcenter_workspace_id?: string | null
+  bevatel_callcenter_host?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
