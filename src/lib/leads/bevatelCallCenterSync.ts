@@ -67,7 +67,11 @@ function formatDate(d: Date): string {
 // endpoint specifically (unlike the sibling "answered calls" report, where
 // it's optional) — omitting it fails validation with a 400.
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
-  const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&time_zone=${encodeURIComponent('+03:00')}&page=${page}`
+  // Only the "+" is escaped (as %2B) — a literal "+" in a query string
+  // decodes to a space. The colon is left as-is: every manually-tested
+  // request that worked used %2B03:00, and full-encoding it to %2B03%3A00
+  // is the one remaining difference from those requests.
+  const url = `${creds.host}/v1/reports/agents/availability/details?from_date=${fromDate}&to_date=${toDate}&time_zone=%2B03:00&page=${page}`
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${creds.apiKey}`,
