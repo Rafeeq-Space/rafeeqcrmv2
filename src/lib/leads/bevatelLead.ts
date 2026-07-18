@@ -51,16 +51,25 @@ async function matchAgent(
 
   const { data: profiles } = await supa
     .from('profiles')
-    .select('id, phone, full_name, bevatel_agent_id, team_id')
+    .select('id, phone, full_name, bevatel_agent_id, bevatel_extension, team_id')
     .eq('tenant_id', tenantId)
 
   if (!profiles || profiles.length === 0) return null
 
-  // 0) Explicit Bevatel identifier(s) set on the employee — the deterministic
-  // match. Compared against every identifier Bevatel sent (email/name/phone).
-  // An employee can carry more than one Bevatel identity (their Business Chat
-  // email AND their Call Center extension aren't the same value) — the field
-  // accepts a comma/semicolon-separated list for exactly that case.
+  // 0) Call Center extension — a dedicated identity, separate from the chat
+  // one below (an employee's Business Chat email and Call Center extension
+  // are never the same value). Matched against whatever Bevatel reported as
+  // the agent's "phone" for a call event (data.agent_number/data.extension).
+  if (hint.phone) {
+    const ext = hint.phone.trim()
+    const byExtension = profiles.find(p => (p.bevatel_extension as string | null)?.trim() === ext)
+    if (byExtension) return { id: byExtension.id, team_id: byExtension.team_id ?? null }
+  }
+
+  // 0.5) Explicit Bevatel Business Chat identifier set on the employee — the
+  // deterministic match for chat events. Compared against every identifier
+  // Bevatel sent (email/name/phone). Accepts a comma/semicolon-separated list
+  // for the rare case an employee has more than one chat-side identifier.
   const hintValues = [hint.email, hint.name, hint.phone]
     .filter((v): v is string => !!v)
     .map(v => normName(v))

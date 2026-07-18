@@ -126,9 +126,12 @@ export interface TeamMember {
   team_id?: string
   suspended?: boolean
   avatar_url?: string
-  // Agent identifier in Bevatel (email/name as shown there) — used to assign
-  // Bevatel chat/call leads to this employee.
+  // Agent identifier in Bevatel Business Chat (email/name as shown there) —
+  // used to assign Bevatel chat leads to this employee.
   bevatel_agent_id?: string | null
+  // Call Center extension (e.g. "7499") — a separate identity from the chat
+  // one above, used to match answered/missed call reports to this employee.
+  bevatel_extension?: string | null
   // Monthly sales target (number of leads to convert to "sold" per calendar month).
   monthly_target?: number | null
   created_at: string

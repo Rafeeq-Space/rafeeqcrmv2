@@ -98,6 +98,7 @@ function MemberModal({
     number: initialPhone.number,
     team_id: lockedTeamId ?? member?.team_id ?? '',
     bevatel_agent_id: member?.bevatel_agent_id || '',
+    bevatel_extension: member?.bevatel_extension || '',
     monthly_target: member?.monthly_target != null ? String(member.monthly_target) : '',
   })
   const [loading, setLoading] = useState(false)
@@ -144,6 +145,7 @@ function MemberModal({
           phone,
           team_id: form.team_id || null,
           bevatel_agent_id: form.bevatel_agent_id,
+          bevatel_extension: form.bevatel_extension,
           monthly_target: form.monthly_target === '' ? null : form.monthly_target,
         }
         if (form.password) payload.password = form.password
@@ -165,6 +167,7 @@ function MemberModal({
             phone,
             team_id: form.team_id || null,
             bevatel_agent_id: form.bevatel_agent_id,
+            bevatel_extension: form.bevatel_extension,
             monthly_target: form.monthly_target === '' ? null : form.monthly_target,
           }),
         })
@@ -253,17 +256,30 @@ function MemberModal({
           </div>
 
           <div>
-            <label className="label">معرّف الموظف في بيفاتيل</label>
+            <label className="label">معرّف الموظف في بيفاتيل (الشات)</label>
             <input
               dir="ltr"
               className="input text-start"
               value={form.bevatel_agent_id}
               onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
-              placeholder="مثال: ahmed@email.com, 7492"
+              placeholder="ahmed@email.com"
             />
             <p className="text-xs text-muted2 mt-1">
-              لربط ليدز الشات والمكالمات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات
-              ورقم الـ extension بتاعه في Call Center مفصولين بفاصلة (كل واحد مختلف عن التاني عادةً).
+              لربط ليدز الشات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات كما يظهر بالضبط.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">رقم الإكستنشن في مركز الاتصال (Call Center)</label>
+            <input
+              dir="ltr"
+              className="input text-start"
+              value={form.bevatel_extension}
+              onChange={e => setForm({ ...form, bevatel_extension: e.target.value })}
+              placeholder="مثال: 7499"
+            />
+            <p className="text-xs text-muted2 mt-1">
+              لربط المكالمات القادمة من مركز الاتصال بهذا الموظف — رقم مختلف عن الإيميل، تلاقيه في إعدادات حسابه هناك.
             </p>
           </div>
 
