@@ -184,15 +184,19 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const key = phoneKey(phone)
   if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false }
 
-  // Look for an existing lead in this tenant with the same phone.
+  // Look for an existing lead in this tenant with the same phone. The
+  // assignee's role is pulled along so an admin-owned lead (created before
+  // any rep touched it — e.g. the first chat message landed on the account
+  // owner) can still be handed to whoever actually engages with it below.
   const { data: leads } = await supa
     .from('leads')
-    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id')
+    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, assigned_sales:profiles!assigned_sales_id(role)')
     .eq('tenant_id', tenantId)
 
   const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
   let leadId = existing?.id || null
   let existingAssignedId: string | null = existing?.assigned_sales_id ?? null
+  let existingAssignedIsAdmin = (existing?.assigned_sales as { role?: string } | null)?.role === 'client_admin'
   let created = false
   let assigned = false
 
@@ -246,7 +250,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
       // duplicate, then fall through to the assignment logic below.
       const { data: dupe } = await supa
         .from('leads')
-        .select('id, assigned_sales_id')
+        .select('id, assigned_sales_id, assigned_sales:profiles!assigned_sales_id(role)')
         .eq('tenant_id', tenantId)
         .eq('phone_key', key)
         .limit(1)
@@ -254,14 +258,16 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
       if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
       leadId = dupe.id
       existingAssignedId = dupe.assigned_sales_id ?? null
+      existingAssignedIsAdmin = (dupe.assigned_sales as { role?: string } | null)?.role === 'client_admin'
     } else {
       return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
     }
   }
 
-  // Existing (or just-adopted) lead with no owner — hand it to the agent who
-  // just replied / answered, and log the assignment on the timeline.
-  if (leadId && !created && agent && !existingAssignedId) {
+  // Existing (or just-adopted) lead with no owner — or one still sitting on
+  // the account owner because the first contact never reached a real rep —
+  // hand it to the agent who just replied / answered, and log it on the timeline.
+  if (leadId && !created && agent && (!existingAssignedId || existingAssignedIsAdmin)) {
     await supa
       .from('leads')
       .update({ assigned_sales_id: agent.id, assigned_team_id: agent.team_id })
