@@ -172,8 +172,10 @@ export async function proxy(request: NextRequest) {
       }
     }
 
-    // Already on /app or /client-admin — no rewrite needed
-    if (pathname.startsWith('/app') || pathname.startsWith('/client-admin')) {
+    // Already on /app or /client-admin, or the shared two-factor gate — serve
+    // as-is. Without listing /two-factor here it would be rewritten to
+    // /app/two-factor (which doesn't exist) and 404 on a tenant subdomain.
+    if (pathname.startsWith('/app') || pathname.startsWith('/client-admin') || pathname.startsWith('/two-factor')) {
       const rewriteResponse = NextResponse.rewrite(request.nextUrl.clone())
       if (subdomain) rewriteResponse.headers.set('x-subdomain', subdomain)
       return rewriteResponse
