@@ -24,11 +24,20 @@ interface BevatelApi {
   accountId: string
 }
 
+// Bevatel Call Center's own API — a separate service/credential from the chat
+// API above (its own workspace_id, its own expiring API key). Used to pull
+// full call reports (answered/talk-time/agent) the webhook doesn't carry.
+interface BevatelCallCenterApi {
+  hasKey: boolean
+  workspaceId: string
+}
+
 interface Props {
   tenantId: string
   secret: string
   logs: BevatelLog[]
   api: BevatelApi
+  callCenterApi: BevatelCallCenterApi
 }
 
 function CopyField({ label, url }: { label: string; url: string }) {
@@ -103,7 +112,7 @@ function LogRow({ log }: { log: BevatelLog }) {
   )
 }
 
-export default function BevatelIntegration({ tenantId, secret, logs, api }: Props) {
+export default function BevatelIntegration({ tenantId, secret, logs, api, callCenterApi }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -133,6 +142,34 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
       }
     } finally {
       setSavingApi(false)
+    }
+  }
+
+  // Call Center API credentials — separate service, separate key/workspace.
+  const [ccApiKey, setCcApiKey] = useState('')
+  const [ccWorkspaceId, setCcWorkspaceId] = useState(callCenterApi.workspaceId || '')
+  const [savingCcApi, setSavingCcApi] = useState(false)
+  const [ccApiSaved, setCcApiSaved] = useState(false)
+  const [hasCcKey, setHasCcKey] = useState(callCenterApi.hasKey)
+
+  async function saveCcApi() {
+    setSavingCcApi(true)
+    setCcApiSaved(false)
+    try {
+      const res = await fetch('/api/client-admin/bevatel', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        // Keep the stored key if the field is left blank (already saved).
+        body: JSON.stringify({ apiKey: ccApiKey || undefined, workspaceId: ccWorkspaceId }),
+      })
+      if (res.ok) {
+        setCcApiSaved(true)
+        if (ccApiKey) setHasCcKey(true)
+        setCcApiKey('')
+        setTimeout(() => setCcApiSaved(false), 2000)
+      }
+    } finally {
+      setSavingCcApi(false)
     }
   }
 
@@ -270,6 +307,35 @@ export default function BevatelIntegration({ tenantId, secret, logs, api }: Prop
             </button>
             {backfillMsg && <span className="text-xs text-muted">{backfillMsg}</span>}
           </div>
+        </div>
+      </div>
+
+      <div className="card p-5 mt-4 space-y-4">
+        <div>
+          <h3 className="font-bold text-foreground text-sm">API مركز الاتصال (Call Center) — منفصل عن مفتاح الشات</h3>
+          <p className="text-xs text-muted2 mt-0.5">
+            الـ webhook بيدّي أحداث بداية/نهاية المكالمة بس (بدون تفاصيل الرد). تفاصيل المكالمة الكاملة
+            (تم الرد، المدة، اسم الموظف) موجودة بس في API مركز الاتصال — من قسم &quot;API Keys&quot; في لوحة بيفاتيل.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-muted2 mb-1">مفتاح API {hasCcKey && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
+            <input dir="ltr" type="password" value={ccApiKey} onChange={e => setCcApiKey(e.target.value)}
+              placeholder={hasCcKey ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق مفتاح API الخاص بمركز الاتصال'} className="input text-xs py-1.5 w-full" />
+          </div>
+          <div>
+            <p className="text-xs text-muted2 mb-1">Workspace ID</p>
+            <input dir="ltr" value={ccWorkspaceId} onChange={e => setCcWorkspaceId(e.target.value)}
+              placeholder="مثال: a1263405-04df-48f8-8fa6-e7325a4d9a5a" className="input text-xs py-1.5 w-full" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveCcApi} disabled={savingCcApi} className="btn btn-primary text-xs !py-1.5">
+            {savingCcApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
+          </button>
+          {ccApiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
         </div>
       </div>
 

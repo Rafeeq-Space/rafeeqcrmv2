@@ -12,6 +12,7 @@ interface BevatelData {
   secret: string
   logs: BevatelLog[]
   api: { hasToken: boolean; host: string; accountId: string }
+  callCenterApi: { hasKey: boolean; workspaceId: string }
 }
 
 interface Props {
@@ -349,7 +350,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
 
       {/* Bevatel integration */}
       {onBevatel && bevatel ? (
-        <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} />
+        <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} callCenterApi={bevatel.callCenterApi} />
       ) : /* Connections list */
       tabConnections.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

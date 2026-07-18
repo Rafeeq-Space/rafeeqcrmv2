@@ -76,3 +76,47 @@ export async function PUT(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }
+
+// Saves the tenant's Bevatel Call Center API credentials (separate service
+// from the chat API above — its own workspace_id and its own expiring key).
+// Admin only. An empty key clears the stored credential.
+export async function PATCH(request: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id, role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'client_admin' || !profile.tenant_id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let body: { apiKey?: string; workspaceId?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+  }
+
+  const workspaceId = (body.workspaceId || '').trim()
+  const updates: Record<string, unknown> = {
+    bevatel_callcenter_workspace_id: workspaceId || null,
+  }
+  // Only overwrite the key when a new one is actually supplied, so saving the
+  // workspace id alone doesn't wipe an already-stored key.
+  if (typeof body.apiKey === 'string' && body.apiKey.trim()) {
+    updates.bevatel_callcenter_api_key = body.apiKey.trim()
+  }
+
+  const { error } = await adminSupabase()
+    .from('tenants')
+    .update(updates)
+    .eq('id', profile.tenant_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
