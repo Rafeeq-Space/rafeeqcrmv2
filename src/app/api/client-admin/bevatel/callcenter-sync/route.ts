@@ -34,7 +34,11 @@ export async function POST(request: Request) {
   from.setDate(from.getDate() - (days - 1))
   from.setHours(0, 0, 0, 0)
 
-  const result = await syncBevatelCallCenter(profile.tenant_id, from, to)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 400 })
-  return NextResponse.json(result)
+  try {
+    const result = await syncBevatelCallCenter(profile.tenant_id, from, to)
+    if (result.error) return NextResponse.json({ error: result.error }, { status: 400 })
+    return NextResponse.json(result)
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'خطأ غير متوقع' }, { status: 500 })
+  }
 }

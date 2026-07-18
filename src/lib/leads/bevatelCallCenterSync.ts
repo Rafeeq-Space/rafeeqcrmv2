@@ -55,7 +55,13 @@ async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: strin
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
   })
-  if (!res.ok) throw new Error(`bevatel call center api ${res.status}`)
+  if (!res.ok) {
+    // Surface Bevatel's own error body (e.g. "invalid API key") instead of
+    // just the status code, so a failed sync is diagnosable from the message
+    // alone rather than crashing with no explanation.
+    const body = await res.text().catch(() => '')
+    throw new Error(`bevatel call center api ${res.status}: ${body.slice(0, 300)}`)
+  }
   return res.json()
 }
 
@@ -85,13 +91,24 @@ export async function syncBevatelCallCenter(tenantId: string, from: Date, to: Da
   const fromDate = formatDate(from)
   const toDate = formatDate(to)
 
+  // Any failure below (wrong host, bad key, Bevatel API error, a bug in the
+  // reconciliation loop) must come back as a readable message instead of an
+  // unhandled exception — the route would otherwise return a non-JSON 500
+  // that the UI can only report as a generic "connection failed".
   const rows: AvailabilityRow[] = []
-  let page = 1
-  for (;;) {
-    const res = await fetchPage(creds, fromDate, toDate, page)
-    rows.push(...(res.data || []))
-    if (!res.meta || page >= res.meta.last_page) break
-    page++
+  try {
+    let page = 1
+    for (;;) {
+      const res = await fetchPage(creds, fromDate, toDate, page)
+      rows.push(...(res.data || []))
+      if (!res.meta || page >= res.meta.last_page) break
+      page++
+    }
+  } catch (err) {
+    return {
+      fetched: 0, processed: 0, matched: 0, leadsTouched: 0,
+      error: err instanceof Error ? err.message : 'تعذّر الاتصال بـ API مركز الاتصال',
+    }
   }
 
   let processed = 0
