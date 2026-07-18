@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, email } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, email, monthly_target } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -55,6 +55,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (suspended !== undefined) updates.suspended = suspended
   if (team_id !== undefined) updates.team_id = team_id || null
   if (bevatel_agent_id !== undefined) updates.bevatel_agent_id = bevatel_agent_id || null
+  // Monthly sales target — non-negative whole number, or null to clear it.
+  if (monthly_target !== undefined) {
+    updates.monthly_target = Number.isFinite(Number(monthly_target)) && Number(monthly_target) >= 0
+      ? Math.round(Number(monthly_target))
+      : null
+  }
   // Permissions/role — only sales user or sales manager can be set here.
   if (role !== undefined && (role === 'client_user' || role === 'client_sales_manager')) {
     updates.role = role

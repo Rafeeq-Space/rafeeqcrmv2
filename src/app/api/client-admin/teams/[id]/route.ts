@@ -17,11 +17,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const body = await request.json()
-  const { name, description, manager_id } = body
+  const { name, description, manager_id, monthly_target } = body
 
   const teamUpdates: Record<string, unknown> = {}
   if (name !== undefined) teamUpdates.name = name
   if (description !== undefined) teamUpdates.description = description || null
+  // Non-negative whole number, or null to clear the target.
+  if (monthly_target !== undefined) {
+    teamUpdates.monthly_target = Number.isFinite(Number(monthly_target)) && Number(monthly_target) >= 0
+      ? Math.round(Number(monthly_target))
+      : null
+  }
 
   // Assign / change / clear the sales manager.
   if (manager_id !== undefined) {

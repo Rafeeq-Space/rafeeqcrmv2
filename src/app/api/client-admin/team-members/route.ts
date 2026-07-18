@@ -12,10 +12,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'ليس لديك صلاحية إضافة موظفين' }, { status: 403 })
   }
 
-  const { full_name, email, password, phone, job_title, team_id, role, bevatel_agent_id } = await request.json()
+  const { full_name, email, password, phone, job_title, team_id, role, bevatel_agent_id, monthly_target } = await request.json()
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'الاسم والبريد وكلمة السر مطلوبة' }, { status: 400 })
   }
+
+  const target = Number.isFinite(Number(monthly_target)) && Number(monthly_target) >= 0
+    ? Math.round(Number(monthly_target))
+    : null
 
   // Permissions/role: only sales user or sales manager may be created here.
   const finalRole: 'client_user' | 'client_sales_manager' =
@@ -45,6 +49,7 @@ export async function POST(request: Request) {
     job_title: job_title || null,
     team_id: finalTeamId,
     bevatel_agent_id: bevatel_agent_id || null,
+    monthly_target: target,
     suspended: false,
   }, { onConflict: 'id' })
 

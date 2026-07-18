@@ -93,6 +93,8 @@ export interface Profile {
   team_id?: string
   suspended?: boolean
   avatar_url?: string
+  // Monthly sales target (number of leads to convert to "sold" per calendar month).
+  monthly_target?: number | null
   created_at: string
 }
 
@@ -102,6 +104,8 @@ export interface Team {
   name: string
   description?: string
   manager_id?: string
+  // Monthly sales target for the whole team.
+  monthly_target?: number | null
   created_at: string
 }
 
@@ -119,6 +123,8 @@ export interface TeamMember {
   // Agent identifier in Bevatel (email/name as shown there) — used to assign
   // Bevatel chat/call leads to this employee.
   bevatel_agent_id?: string | null
+  // Monthly sales target (number of leads to convert to "sold" per calendar month).
+  monthly_target?: number | null
   created_at: string
 }
 
