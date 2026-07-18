@@ -105,10 +105,16 @@ export async function syncBevatelCallCenter(tenantId: string, from: Date, to: Da
       page++
     }
   } catch (err) {
-    return {
-      fetched: 0, processed: 0, matched: 0, leadsTouched: 0,
-      error: err instanceof Error ? err.message : 'تعذّر الاتصال بـ API مركز الاتصال',
+    // A bare "fetch failed" hides the real reason (DNS failure, connection
+    // refused, TLS error, ...) inside `cause` — surface it so a failed sync
+    // is diagnosable from the message alone.
+    let message = 'تعذّر الاتصال بـ API مركز الاتصال'
+    if (err instanceof Error) {
+      const cause = (err as Error & { cause?: unknown }).cause
+      const causeMsg = cause instanceof Error ? cause.message : cause ? String(cause) : ''
+      message = causeMsg ? `${err.message} — ${causeMsg}` : err.message
     }
+    return { fetched: 0, processed: 0, matched: 0, leadsTouched: 0, error: message }
   }
 
   let processed = 0
