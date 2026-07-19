@@ -37,7 +37,8 @@ export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
   const [rotating, setRotating] = useState(false)
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const webhookUrl = `${origin}/api/integrations/rafeeqsocial/${tenantId}/${currentSecret}`
+  const incomingUrl = `${origin}/api/integrations/rafeeqsocial/${tenantId}/${currentSecret}`
+  const outgoingUrl = `${incomingUrl}?direction=out`
 
   async function rotate() {
     if (!confirm('توليد رابط جديد سيوقف الرابط الحالي فورًا، وستحتاج للصق الرابط الجديد في رفيق سوشيال. هل تريد المتابعة؟')) return
@@ -57,7 +58,7 @@ export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
         <div className="me-auto">
           <h1 className="text-2xl font-extrabold text-foreground">الربط مع رفيق سوشيال</h1>
           <p className="text-muted text-sm mt-1">
-            اربط بوت واتساب في رفيق سوشيال بالـ CRM — كل تفاعل من العميل (ضغط زر، إكمال نموذج، مشاركة موقع) يُطابَق مع العميل بالرقم، وتُنشأ ليد جديدة إن لم تكن موجودة.
+            اربط بوت واتساب في رفيق سوشيال بالـ CRM — كل رسالة (واردة من العميل أو صادرة من الفريق) تُطابَق مع العميل بالرقم وتُسجَّل في محادثته، وتُنشأ ليد جديدة إن لم تكن موجودة.
           </p>
         </div>
         <button onClick={rotate} disabled={rotating} className="btn btn-outline gap-2">
@@ -66,39 +67,45 @@ export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
         <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
 
-      <div className="card p-5 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
-            <MessageCircle size={20} style={{ color: 'var(--primary)' }} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
+              <MessageCircle size={20} style={{ color: 'var(--primary)' }} />
+            </div>
+            <div>
+              <h2 className="font-bold text-foreground">الرسائل الواردة</h2>
+              <p className="text-xs text-muted2">رسائل العملاء (Incoming)</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-foreground">Outbound Webhook</h2>
-            <p className="text-xs text-muted2">أحداث البوت (Postback / Input Flow / Location)</p>
-          </div>
+          <CopyField label="الصقه في خانة «Webhook URL for Incoming Messages»:" url={incomingUrl} />
         </div>
-        <CopyField label="رابط استقبال الأحداث — الصقه في خانة «OUT-BOUND WEBHOOK URL» بشاشة Outbound Actions في رفيق سوشيال:" url={webhookUrl} />
+
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
+              <MessageCircle size={20} style={{ color: 'var(--primary)' }} />
+            </div>
+            <div>
+              <h2 className="font-bold text-foreground">الرسائل الصادرة</h2>
+              <p className="text-xs text-muted2">ردود الفريق (Outgoing)</p>
+            </div>
+          </div>
+          <CopyField label="الصقه في خانة «Outgoing Webhook URL»:" url={outgoingUrl} />
+        </div>
       </div>
 
       <div className="card p-5 mt-4 space-y-3">
         <h3 className="font-bold text-foreground text-sm">خطوات الربط في رفيق سوشيال</h3>
         <ol className="text-sm text-muted space-y-2 leading-relaxed list-decimal ps-5">
-          <li>من لوحة رفيق سوشيال، افتح <span className="text-foreground font-semibold">Automation ← Outbound Actions</span> ثم أضِف Webhook جديد.</li>
-          <li>في <span className="text-foreground font-semibold">OUT-BOUND WEBHOOK URL</span> الصق الرابط أعلاه.</li>
-          <li>
-            في <span className="text-foreground font-semibold">Select actions that will trigger the webhook</span> فعّل الأحداث التي تريد التقاطها
-            (<span dir="ltr">POSTBACK</span> / <span dir="ltr">USER INPUT FLOW</span> / <span dir="ltr">LOCATION</span>).
-          </li>
-          <li>
-            في <span className="text-foreground font-semibold">Select data fields that will be sent</span> فعّل على الأقل
-            <span dir="ltr" className="text-foreground font-semibold"> PHONE NUMBER </span>
-            و
-            <span dir="ltr" className="text-foreground font-semibold"> SUBSCRIBER NAME </span>
-            — رقم الهاتف ضروري لمطابقة العميل.
-          </li>
-          <li>احفظ (Save)، ثم جرّب الضغط على زر داخل محادثة واتساب — يُفترض أن تظهر ليد جديدة هنا في مركز العملاء خلال ثوانٍ.</li>
+          <li>من لوحة رفيق سوشيال، افتح <span className="text-foreground font-semibold">Bot Settings ← Webhook</span>.</li>
+          <li>فعّل <span className="text-foreground font-semibold">Trigger Webhook for Incoming Message</span>، والصق رابط <span className="text-foreground font-semibold">الرسائل الواردة</span> في خانة <span dir="ltr">Webhook URL</span>.</li>
+          <li>فعّل <span className="text-foreground font-semibold">Trigger Webhook for Outgoing Message</span>، والصق رابط <span className="text-foreground font-semibold">الرسائل الصادرة</span> في خانة <span dir="ltr">Outgoing Webhook URL</span>.</li>
+          <li>اضغط <span className="text-foreground font-semibold">Publish Changes</span> (أعلى يمين لوحة رفيق سوشيال) لتفعيل الربط.</li>
+          <li>جرّب إرسال رسالة من رقم آخر إلى رقم البوت — يُفترض أن تظهر ليد جديدة هنا في مركز العملاء خلال ثوانٍ.</li>
         </ol>
         <p className="text-xs text-muted2 pt-1 border-t border-border">
-          ملاحظة: شاشة Outbound Actions لا تدعم إضافة Header مخصص، لذلك الحماية عبر الرابط نفسه (يحوي مُعرّفًا سريًا). لا تُشارك الرابط، وولّد رابطًا جديدًا فورًا إن تسرّب.
+          مهم: الرابطان متطابقان عدا <span dir="ltr">?direction=out</span> في نهاية رابط الصادر — هذا ما يميّز الرسالة الصادرة عن الواردة، فلا تعكسهما. الحماية عبر الرابط نفسه (يحوي مُعرّفًا سريًا)؛ لا تُشاركه، وولّد رابطًا جديدًا فورًا إن تسرّب.
         </p>
       </div>
     </div>
