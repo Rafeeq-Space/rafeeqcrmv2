@@ -391,11 +391,13 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                 <tr className="border-b border-border text-muted2 text-xs">
                   <th className="text-start font-semibold px-4 py-3">العميل</th>
                   <th className="text-start font-semibold px-4 py-3">الحالة</th>
-                  <th className="text-start font-semibold px-4 py-3">تواصل</th>
+                  {/* Contact shown right here on small screens (no scrolling needed), and again at the end for large screens — see the matching pair of <td>s below. */}
+                  <th className="md:hidden text-start font-semibold px-4 py-3">تواصل</th>
                   <th className="hidden md:table-cell text-start font-semibold px-4 py-3">الحملة</th>
                   {(isAdmin || isManager) && <th className="hidden md:table-cell text-start font-semibold px-4 py-3">المسؤول</th>}
                   <th className="hidden md:table-cell text-start font-semibold px-4 py-3">تاريخ الإنشاء</th>
                   <th className="hidden md:table-cell text-start font-semibold px-4 py-3">آخر تحديث</th>
+                  <th className="hidden md:table-cell text-start font-semibold px-4 py-3">تواصل</th>
                 </tr>
               </thead>
               <tbody>
@@ -408,7 +410,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                         {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}
                       </td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
+                      <td className="md:hidden px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
                       <td className="hidden md:table-cell px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       {(isAdmin || isManager) && (
                         <td className="hidden md:table-cell px-4 py-3 text-muted whitespace-nowrap">
@@ -419,6 +421,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                       )}
                       <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
                       <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
+                      <td className="hidden md:table-cell px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
                     </tr>
                   )
                 })}
