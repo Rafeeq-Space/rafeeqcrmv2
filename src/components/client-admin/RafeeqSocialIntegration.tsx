@@ -7,6 +7,7 @@ import DateTimePrayer from '@/components/DateTimePrayer'
 interface Props {
   tenantId: string
   secret: string
+  api?: { hasToken: boolean; phoneNumberId: string }
 }
 
 // Copyable read-only URL field — same visual as the Bevatel one.
@@ -32,9 +33,16 @@ function CopyField({ label, url }: { label: string; url: string }) {
   )
 }
 
-export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
+export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
+
+  const [token, setToken] = useState('')
+  const [phoneNumberId, setPhoneNumberId] = useState(api?.phoneNumberId || '')
+  const [savingApi, setSavingApi] = useState(false)
+  const [apiSaved, setApiSaved] = useState(false)
+  const [apiError, setApiError] = useState('')
+  const hasToken = api?.hasToken || false
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const incomingUrl = `${origin}/api/integrations/rafeeqsocial/${tenantId}/${currentSecret}`
@@ -49,6 +57,27 @@ export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
       if (res.ok && data.secret) setCurrentSecret(data.secret)
     } finally {
       setRotating(false)
+    }
+  }
+
+  async function saveApi() {
+    setSavingApi(true)
+    setApiSaved(false)
+    setApiError('')
+    try {
+      const res = await fetch('/api/client-admin/rafeeqsocial', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiToken: token, phoneNumberId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setApiError(data.error || 'تعذّر الحفظ'); return }
+      setApiSaved(true)
+      setToken('')
+    } catch {
+      setApiError('تعذّر الاتصال')
+    } finally {
+      setSavingApi(false)
     }
   }
 
@@ -107,6 +136,35 @@ export default function RafeeqSocialIntegration({ tenantId, secret }: Props) {
         <p className="text-xs text-muted2 pt-1 border-t border-border">
           مهم: الرابطان متطابقان عدا <span dir="ltr">?direction=out</span> في نهاية رابط الصادر — هذا ما يميّز الرسالة الصادرة عن الواردة، فلا تعكسهما. الحماية عبر الرابط نفسه (يحوي مُعرّفًا سريًا)؛ لا تُشاركه، وولّد رابطًا جديدًا فورًا إن تسرّب.
         </p>
+      </div>
+
+      <div className="card p-5 mt-4 space-y-4">
+        <div>
+          <h3 className="font-bold text-foreground text-sm">الرد على العملاء من الـ CRM (اختياري)</h3>
+          <p className="text-xs text-muted2 mt-0.5">
+            بمفتاح API، يقدر المندوب يرد على العميل عبر واتساب من داخل الـ CRM مباشرةً. المفتاح ومعرّف الرقم موجودان في لوحة رفيق سوشيال ← WhatsApp API.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-muted2 mb-1">مفتاح API {hasToken && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
+            <input dir="ltr" type="password" value={token} onChange={e => setToken(e.target.value)}
+              placeholder={hasToken ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق التوكن (apiToken)'} className="input text-xs py-1.5 w-full" />
+          </div>
+          <div>
+            <p className="text-xs text-muted2 mb-1">معرّف رقم الواتساب (phone_number_id)</p>
+            <input dir="ltr" value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)}
+              placeholder="مثال: 11906XXXXX40020" className="input text-xs py-1.5 w-full" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveApi} disabled={savingApi} className="btn btn-primary text-xs !py-1.5">
+            {savingApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
+          </button>
+          {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+          {apiError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{apiError}</span>}
+        </div>
       </div>
     </div>
   )

@@ -31,3 +31,6 @@ npm-debug.log*
 .claude/
 SETUP.md
 *.tsbuildinfo
+
+# local scratch: screenshots shared during rafeeqsocial integration
+rafeeqsocial data/

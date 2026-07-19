@@ -18,6 +18,7 @@ interface BevatelData {
 
 interface RafeeqSocialData {
   secret: string
+  api?: { hasToken: boolean; phoneNumberId: string }
 }
 
 interface Props {
@@ -366,7 +367,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
       {onBevatel && bevatel ? (
         <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} callCenterApi={bevatel.callCenterApi} />
       ) : onRafeeqSocial && rafeeqSocial ? (
-        <RafeeqSocialIntegration tenantId={tenantId} secret={rafeeqSocial.secret} />
+        <RafeeqSocialIntegration tenantId={tenantId} secret={rafeeqSocial.secret} api={rafeeqSocial.api} />
       ) : /* Connections list */
       tabConnections.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

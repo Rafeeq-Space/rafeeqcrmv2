@@ -87,6 +87,9 @@ export interface Tenant {
   bevatel_callcenter_host?: string | null
   // random token that gates this tenant's Rafeeq Social outbound-webhook URL.
   rafeeqsocial_webhook_secret?: string | null
+  // Rafeeq Social (BotSailor) WhatsApp send API — lets a rep reply from the CRM.
+  rafeeqsocial_api_token?: string | null
+  rafeeqsocial_phone_number_id?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
