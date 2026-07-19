@@ -12,19 +12,19 @@ import type { Lead } from '@/lib/types'
 // separately via the Assign-to-Team-Member API.
 //
 // Read (Rafeeq Social → CRM): Subscriber Get's `assigned_agent_id` is the
-// authoritative signal — confirmed live that it reflects whoever was FIRST
-// assigned (a later reply from someone else covering/following up does not
-// change it), which is exactly the "first responder keeps it" rule wanted
-// here. Matched directly against profiles.rafeeqsocial_team_member_id.
+// authoritative signal, and it can change over time — a conversation
+// reassigned in Rafeeq Social's Shared Inbox (confirmed live: a lead first
+// assigned to one employee got explicitly reassigned to another later) must
+// show that same, current assignee in the CRM too. So this always mirrors
+// whatever Rafeeq Social currently reports, on every message event — it does
+// not lock onto the first resolution and ignore later changes.
 //
 // If that field is ever empty (e.g. an agent replied without the platform
 // recording a formal assignment), fall back to scanning Get Conversation's
-// message history oldest-first for the first ownership signal: an explicit
-// "Conversation was assigned to <Name>" system message (matched by
+// message history newest-first for the most recent ownership signal: an
+// explicit "Conversation was assigned to <Name>" system message (matched by
 // profiles.full_name), or a bot-sent reply whose agent_name is a plain
 // team-member id (matched the same way as the primary signal).
-//
-// Either way, never overrides a lead that already has an owner in the CRM.
 //
 // Write (CRM → Rafeeq Social): calling assign-to-team-member needs a numeric
 // team_member_id per employee (profiles.rafeeqsocial_team_member_id) — Rafeeq
@@ -84,14 +84,13 @@ async function fetchConversationMessages(creds: RafeeqSocialCreds, phone: string
   return []
 }
 
-// Oldest-first scan for the FIRST ownership signal in the conversation: an
-// explicit "assigned to <Name>" system message, or a bot-sent reply whose
+// Newest-first scan for the MOST RECENT ownership signal in the conversation:
+// an explicit "assigned to <Name>" system message, or a bot-sent reply whose
 // agent_name is a plain team-member id (a real reply, as opposed to an
-// automated flow message, which carries no agent_name at all). The lead goes
-// to whichever employee engaged with this conversation first — a later reply
-// from someone else (covering, following up, ...) must never steal it.
-function firstOwnerSignal(messages: ConversationMessage[]): { kind: 'id' | 'name'; value: string } | null {
-  const sorted = [...messages].sort((a, b) => (a.conversation_time || '').localeCompare(b.conversation_time || ''))
+// automated flow message, which carries no agent_name at all). Only used as a
+// fallback when Subscriber Get's assigned_agent_id is empty.
+function latestOwnerSignal(messages: ConversationMessage[]): { kind: 'id' | 'name'; value: string } | null {
+  const sorted = [...messages].sort((a, b) => (b.conversation_time || '').localeCompare(a.conversation_time || ''))
   for (const m of sorted) {
     if (m.sender === 'bot' && m.agent_name && /^\d+$/.test(m.agent_name)) {
       return { kind: 'id', value: m.agent_name }
@@ -141,7 +140,7 @@ export async function resolveRafeeqSocialAssignee(
   }
 
   const messages = await fetchConversationMessages(creds, phone)
-  const signal = firstOwnerSignal(messages)
+  const signal = latestOwnerSignal(messages)
   if (!signal) return null
 
   return signal.kind === 'id'
@@ -165,15 +164,19 @@ async function applyAssignment(tenantId: string, leadId: string, match: { id: st
 }
 
 // Read direction — call after a lead is created/touched by the message
-// webhook. No-op if the tenant has no API credentials saved, or the lead
-// already has an owner (never overrides a manual or prior assignment).
+// webhook. No-op if the tenant has no API credentials saved, or Rafeeq Social
+// reports no resolvable assignee. Always mirrors the current assignee —
+// re-applies even when the lead already has a different owner, since Rafeeq
+// Social's own assignment can change after the fact (a manual reassignment in
+// the Shared Inbox) and the CRM must track that, not lock onto the first
+// resolution. A no-op when the resolved assignee already matches.
 export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<void> {
-  const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
-  if (!lead || lead.assigned_sales_id) return
-
   const match = await resolveRafeeqSocialAssignee(tenantId, phone)
   if (!match) return
+
+  const supa = adminSupabase()
+  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
+  if (!lead || lead.assigned_sales_id === match.id) return
 
   await applyAssignment(tenantId, leadId, match)
 }

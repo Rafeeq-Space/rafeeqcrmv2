@@ -96,7 +96,7 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
         setBackfillMsg(d.error || 'تعذّر التشغيل')
       } else {
         setBackfillMsg(
-          `تمّت مراجعة ${d.reviewed} ليد — أُسند ${d.assigned}، بدون تطابق ${d.noMatch}، بدون رقم هاتف ${d.noPhone}. متبقّي ${d.remaining}.`
+          `تمّت مراجعة ${d.reviewed} ليد — أُسند/حُدّث ${d.assigned}، مطابق مسبقًا ${d.unchanged}، بدون تطابق ${d.noMatch}، بدون رقم هاتف ${d.noPhone}. متبقّي ${d.remaining}.`
         )
       }
     } catch {
@@ -192,13 +192,13 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
         </div>
 
         <div className="border-t border-border pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة</p>
+          <p className="text-xs font-semibold text-foreground mb-1">مزامنة إسناد الليدز</p>
           <p className="text-xs text-muted2 mb-2">
-            المزامنة اللحظية تعمل فقط عند وصول رسالة جديدة — الليدز الموجودة من قبل، أو التي لم تصلها رسالة بعد إسنادها في رفيق سوشيال، تحتاج تشغيل هذا الزر يدويًا. آمن لتكراره أكثر من مرة.
+            المزامنة اللحظية تعمل فقط عند وصول رسالة جديدة — فلو الإسناد اتغيّر في رفيق سوشيال ولم تصل رسالة بعدها بعد، أو الليد لم يُسند من الأساس، شغّل هذا الزر يدويًا ليطابق كل ليد آخر إسناد رسمي في رفيق سوشيال. آمن لتكراره أكثر من مرة.
           </p>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={runBackfill} disabled={backfilling} className="btn btn-outline text-xs !py-1.5 gap-2">
-              <RefreshCw size={14} className={backfilling ? 'animate-spin' : ''} /> إعادة محاولة إسناد الليدز
+              <RefreshCw size={14} className={backfilling ? 'animate-spin' : ''} /> مزامنة إسناد كل الليدز
             </button>
             {backfillMsg && <span className="text-xs text-muted">{backfillMsg}</span>}
           </div>

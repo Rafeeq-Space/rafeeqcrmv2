@@ -4,12 +4,12 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { resolveRafeeqSocialAssignee } from '@/lib/leads/rafeeqSocialAssign'
 
-// Assigns existing unassigned Rafeeq Social leads by resolving each
-// conversation's current assignee via Get Conversation — the real-time sync
-// only fires on a new incoming/outgoing message, so a lead with no messages
-// since this feature shipped (or whose assignment happened before that)
-// never got a chance to match. Safe to re-run: only touches leads still
-// unassigned, and only updates the ones a match was actually found for.
+// Re-syncs every Rafeeq Social lead's assignment to match its current
+// Rafeeq Social assignee — the real-time sync only fires on a new
+// incoming/outgoing message, so a lead with no messages since this feature
+// shipped (or since its assignee last changed in Rafeeq Social) never got a
+// chance to catch up. Safe to re-run: only touches leads whose resolved
+// assignee actually differs from what the CRM currently has.
 const BATCH = 60
 
 export async function POST() {
@@ -35,16 +35,16 @@ export async function POST() {
 
   const { data: leads } = await supa
     .from('leads')
-    .select('id, data')
+    .select('id, data, assigned_sales_id')
     .eq('tenant_id', tenantId)
     .eq('source', 'rafeeqsocial')
-    .is('assigned_sales_id', null)
     .order('created_at', { ascending: true })
 
   const all = leads || []
   const batch = all.slice(0, BATCH)
 
   let assigned = 0
+  let unchanged = 0
   let noPhone = 0
   let noMatch = 0
 
@@ -54,6 +54,7 @@ export async function POST() {
 
     const match = await resolveRafeeqSocialAssignee(tenantId, phone)
     if (!match) { noMatch++; continue }
+    if (lead.assigned_sales_id === match.id) { unchanged++; continue }
 
     await supa
       .from('leads')
@@ -67,7 +68,8 @@ export async function POST() {
 
   return NextResponse.json({
     reviewed: batch.length,
-    assigned,
+    assigned, // newly assigned or reassigned to match Rafeeq Social
+    unchanged, // already matched Rafeeq Social's current assignee
     noPhone,
     noMatch, // either no assignment system message yet, or its name matches no CRM employee
     remaining: Math.max(0, all.length - batch.length),
