@@ -85,6 +85,8 @@ export interface Tenant {
   bevatel_callcenter_api_key?: string | null
   bevatel_callcenter_workspace_id?: string | null
   bevatel_callcenter_host?: string | null
+  // random token that gates this tenant's Rafeeq Social outbound-webhook URL.
+  rafeeqsocial_webhook_secret?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'

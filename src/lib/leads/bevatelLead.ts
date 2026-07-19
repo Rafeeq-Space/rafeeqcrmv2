@@ -116,7 +116,7 @@ export interface AppendArgs {
   phone: string
   name?: string
   email?: string
-  source: 'bevatel_chat' | 'bevatel_call'
+  source: 'bevatel_chat' | 'bevatel_call' | 'rafeeqsocial'
   activityBody: string
   activityExternalId?: string
   conversationId?: string
