@@ -17,12 +17,14 @@ import { adminSupabase } from '@/lib/supabase/admin'
 
 const SEND_URL = 'https://rafeeq.social/api/v1/whatsapp/send'
 
-interface SendCreds {
+export interface RafeeqSocialCreds {
   apiToken: string
   phoneNumberId: string
 }
 
-async function tenantSendCreds(tenantId: string): Promise<SendCreds | null> {
+// Shared by the send, get-conversation, and assign-to-team-member calls —
+// see rafeeqSocialAssign.ts.
+export async function tenantRafeeqSocialCreds(tenantId: string): Promise<RafeeqSocialCreds | null> {
   const { data } = await adminSupabase()
     .from('tenants')
     .select('rafeeqsocial_api_token, rafeeqsocial_phone_number_id')
@@ -42,7 +44,7 @@ export interface SendResult {
 }
 
 export async function sendRafeeqSocialMessage(tenantId: string, phone: string, message: string): Promise<SendResult> {
-  const creds = await tenantSendCreds(tenantId)
+  const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return { ok: false, error: 'مفتاح API لرفيق سوشيال غير محفوظ' }
 
   // BotSailor requires a country-code-prefixed, digits-only recipient.

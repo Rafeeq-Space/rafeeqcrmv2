@@ -3,6 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
+import { pushAssigneeToRafeeqSocial } from '@/lib/leads/rafeeqSocialAssign'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
@@ -75,9 +76,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })
   }
 
-  // Mirror the assignment onto the Bevatel conversation's assignee.
+  // Mirror the assignment onto the Bevatel conversation's assignee, or the
+  // Rafeeq Social subscriber's team-member assignment — each no-ops for a
+  // lead that isn't its own source.
   if ('assigned_sales_id' in body) {
     pushAssigneeToBevatel(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error)
+    pushAssigneeToRafeeqSocial(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error)
   }
 
   const { data: updated } = await supa

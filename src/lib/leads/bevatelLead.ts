@@ -27,7 +27,7 @@ function hasHint(h: AgentHint): boolean {
   return !!(h.email || h.phone || h.name)
 }
 
-function normName(s: string): string {
+export function normName(s: string): string {
   return s.toLowerCase().trim().replace(/[أإآ]/g, 'ا').replace(/ـ/g, '').replace(/\s+/g, ' ')
 }
 
