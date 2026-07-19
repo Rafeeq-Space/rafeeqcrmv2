@@ -4,6 +4,7 @@ import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { pushSubStatusToBevatel, pushNoteToBevatel } from '@/lib/leads/bevatelSync'
+import { pushSubStatusToRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 import { statusForSubStatus } from '@/lib/leads/subStatus'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
@@ -91,7 +92,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await supa.from('leads').update(update).eq('id', leadId)
     syncLeadEvent({ leadId, status: to }).catch(console.error)
     pushStatusToSheet(supa, lead as Lead, to).catch(console.error)
-    if (subStatus) pushSubStatusToBevatel(lead as Lead, subStatus).catch(console.error)
+    if (subStatus) {
+      pushSubStatusToBevatel(lead as Lead, subStatus).catch(console.error)
+      pushSubStatusToRafeeqSocial(lead as Lead, subStatus).catch(console.error)
+    }
   } else if (type === 'call') {
     const result = body.call_result
     if (!result || !['answered', 'no_answer'].includes(result)) {

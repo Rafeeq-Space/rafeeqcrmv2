@@ -1,5 +1,6 @@
 import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
 import { syncRafeeqSocialAssignment } from '@/lib/leads/rafeeqSocialAssign'
+import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 
 // ── Rafeeq Social (rafeeq.social) message webhook ─────────────────────────────
 //
@@ -88,6 +89,9 @@ export async function handleRafeeqSocialEvent(
   if (res.leadId) {
     syncRafeeqSocialAssignment(tenantId, res.leadId, phone).catch(err =>
       console.error('syncRafeeqSocialAssignment failed', err)
+    )
+    syncSubStatusFromRafeeqSocial(tenantId, res.leadId, phone).catch(err =>
+      console.error('syncSubStatusFromRafeeqSocial failed', err)
     )
   }
 
