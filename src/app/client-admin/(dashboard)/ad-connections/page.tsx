@@ -20,7 +20,7 @@ export default async function AdConnectionsPage() {
   const [{ data: connections }, { data: campaigns }, { data: tenant }, { data: logRows }] = await Promise.all([
     supa.from('ad_connections').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supa.from('campaigns').select('id, name').eq('tenant_id', tenantId).order('name'),
-    supa.from('tenants').select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id, bevatel_callcenter_host').eq('id', tenantId).single(),
+    supa.from('tenants').select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id, bevatel_callcenter_host, rafeeqsocial_webhook_secret').eq('id', tenantId).single(),
     supa.from('bevatel_webhook_logs')
       .select('id, kind, event, direction, phone, agent_hint, matched, created, assigned, lead_id, created_at')
       .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(50),
@@ -48,12 +48,20 @@ export default async function AdConnectionsPage() {
     },
   }
 
+  // Generate the Rafeeq Social outbound-webhook secret on first visit too.
+  let rafeeqSocialSecret = (tenant?.rafeeqsocial_webhook_secret as string | null) || null
+  if (!rafeeqSocialSecret) {
+    rafeeqSocialSecret = crypto.randomBytes(16).toString('hex')
+    await supa.from('tenants').update({ rafeeqsocial_webhook_secret: rafeeqSocialSecret }).eq('id', tenantId)
+  }
+
   return (
     <AdConnectionsManager
       tenantId={tenantId}
       connections={connections || []}
       campaigns={campaigns || []}
       bevatel={bevatel}
+      rafeeqSocial={{ secret: rafeeqSocialSecret }}
     />
   )
 }

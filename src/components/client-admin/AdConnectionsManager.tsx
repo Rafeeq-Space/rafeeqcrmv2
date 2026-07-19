@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-re
 import type { AdConnection, AdPlatform } from '@/lib/types'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import BevatelIntegration, { type BevatelLog } from '@/components/client-admin/BevatelIntegration'
+import RafeeqSocialIntegration from '@/components/client-admin/RafeeqSocialIntegration'
 
 interface CampaignOption { id: string; name: string }
 
@@ -15,14 +16,19 @@ interface BevatelData {
   callCenterApi: { hasKey: boolean; workspaceId: string; host: string }
 }
 
+interface RafeeqSocialData {
+  secret: string
+}
+
 interface Props {
   tenantId: string
   connections: AdConnection[]
   campaigns: CampaignOption[]
   bevatel?: BevatelData | null
+  rafeeqSocial?: RafeeqSocialData | null
 }
 
-type TabKey = AdPlatform | 'bevatel'
+type TabKey = AdPlatform | 'bevatel' | 'rafeeqsocial'
 
 const PLATFORM_LABELS: Record<AdPlatform, string> = {
   tiktok: 'تيك توك',
@@ -295,11 +301,13 @@ function SnapchatWebhookField({ connection, campaigns, onSaved }: { connection: 
 }
 
 // ─── Main Component ───────────────────────────────────────────────
-export default function AdConnectionsManager({ tenantId, connections, campaigns, bevatel }: Props) {
+export default function AdConnectionsManager({ tenantId, connections, campaigns, bevatel, rafeeqSocial }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('tiktok')
   const [showModal, setShowModal] = useState(false)
   const [editConn, setEditConn] = useState<AdConnection | null>(null)
   const onBevatel = activeTab === 'bevatel'
+  const onRafeeqSocial = activeTab === 'rafeeqsocial'
+  const onIntegration = onBevatel || onRafeeqSocial
 
   function refresh() { window.location.reload() }
 
@@ -321,7 +329,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
             المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
           </p>
         </div>
-        {!onBevatel && (
+        {!onIntegration && (
           <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
             <Plus size={17} /> إضافة حساب
           </button>
@@ -346,11 +354,19 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
             بيفاتيل
           </button>
         )}
+        {rafeeqSocial && (
+          <button onClick={() => setActiveTab('rafeeqsocial')}
+            className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition ${onRafeeqSocial ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'}`}>
+            رفيق سوشيال
+          </button>
+        )}
       </div>
 
       {/* Bevatel integration */}
       {onBevatel && bevatel ? (
         <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} callCenterApi={bevatel.callCenterApi} />
+      ) : onRafeeqSocial && rafeeqSocial ? (
+        <RafeeqSocialIntegration tenantId={tenantId} secret={rafeeqSocial.secret} />
       ) : /* Connections list */
       tabConnections.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
