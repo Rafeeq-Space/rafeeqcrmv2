@@ -10,12 +10,19 @@ import type { Lead } from '@/lib/types'
 // responsible for this lead" has to be read separately via the Get Conversation
 // API, and written back separately via the Assign-to-Team-Member API.
 //
-// Read (Rafeeq Social → CRM): every assignment change in Rafeeq Social's Shared
-// Inbox appends a `sender: "system"` message reading
-// "Conversation was assigned to <Name>" — the most recent one is the current
-// owner. <Name> is matched against profiles.full_name (same normalization as
-// Bevatel's name-matching fallback), and the CRM lead is assigned to whoever
-// matches. Never overrides a lead that already has an owner in the CRM.
+// Read (Rafeeq Social → CRM): two signals show up in Get Conversation, and
+// only the most recent one (by conversation_time) matters:
+//  - a `sender: "system"` message "Conversation was assigned to <Name>",
+//    logged only when someone explicitly (re)assigns the conversation from
+//    the Shared Inbox — matched against profiles.full_name.
+//  - a `sender: "bot"` message whose `agent_name` is a plain number — that's
+//    the numeric id of whichever team member actually sent that reply,
+//    matched directly against profiles.rafeeqsocial_team_member_id. This is
+//    what actually reflects reality: a different agent can reply without
+//    ever triggering a new "assigned to" system message, so relying on that
+//    alone would keep pointing at a stale, previous owner.
+// Whichever of the two is chronologically newest wins. Never overrides a
+// lead that already has an owner in the CRM.
 //
 // Write (CRM → Rafeeq Social): calling assign-to-team-member needs a numeric
 // team_member_id per employee (profiles.rafeeqsocial_team_member_id) — Rafeeq
@@ -75,16 +82,33 @@ async function fetchConversationMessages(creds: RafeeqSocialCreds, phone: string
   return []
 }
 
-// Newest-first scan for the last "Conversation was assigned to <Name>" system
-// message — that's the conversation's current owner in Rafeeq Social.
-function latestAssigneeName(messages: ConversationMessage[]): string | null {
-  const sorted = [...messages].sort((a, b) => (b.conversation_time || '').localeCompare(a.conversation_time || ''))
+// Oldest-first scan for the FIRST ownership signal in the conversation: an
+// explicit "assigned to <Name>" system message, or a bot-sent reply whose
+// agent_name is a plain team-member id (a real reply, as opposed to an
+// automated flow message, which carries no agent_name at all). The lead goes
+// to whichever employee engaged with this conversation first — a later reply
+// from someone else (covering, following up, ...) must never steal it.
+function firstOwnerSignal(messages: ConversationMessage[]): { kind: 'id' | 'name'; value: string } | null {
+  const sorted = [...messages].sort((a, b) => (a.conversation_time || '').localeCompare(b.conversation_time || ''))
   for (const m of sorted) {
-    if (m.sender !== 'system') continue
-    const match = /assigned to\s+(.+)/i.exec(m.message_content || '')
-    if (match) return match[1].trim()
+    if (m.sender === 'bot' && m.agent_name && /^\d+$/.test(m.agent_name)) {
+      return { kind: 'id', value: m.agent_name }
+    }
+    if (m.sender === 'system') {
+      const match = /assigned to\s+(.+)/i.exec(m.message_content || '')
+      if (match) return { kind: 'name', value: match[1].trim() }
+    }
   }
   return null
+}
+
+async function matchEmployeeByTeamMemberId(tenantId: string, teamMemberId: string): Promise<{ id: string; team_id: string | null } | null> {
+  const { data: profiles } = await adminSupabase()
+    .from('profiles')
+    .select('id, rafeeqsocial_team_member_id, team_id')
+    .eq('tenant_id', tenantId)
+  const match = (profiles || []).find(p => (p.rafeeqsocial_team_member_id || '').trim() === teamMemberId)
+  return match ? { id: match.id, team_id: match.team_id ?? null } : null
 }
 
 async function matchEmployeeByName(tenantId: string, name: string): Promise<{ id: string; team_id: string | null } | null> {
@@ -98,24 +122,27 @@ async function matchEmployeeByName(tenantId: string, name: string): Promise<{ id
   return match ? { id: match.id, team_id: match.team_id ?? null } : null
 }
 
-// Read direction — call after a lead is created/touched by the message
-// webhook. No-op if the tenant has no API credentials saved, or the lead
-// already has an owner (never overrides a manual or prior assignment).
-export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<void> {
+// Core matching step, shared by the real-time sync below and the backfill
+// route: fetch the conversation and resolve the currently-assigned employee,
+// if any. Returns null on any missing creds/no-signal-found/no-match step.
+export async function resolveRafeeqSocialAssignee(
+  tenantId: string,
+  phone: string
+): Promise<{ id: string; team_id: string | null } | null> {
   const creds = await tenantRafeeqSocialCreds(tenantId)
-  if (!creds) return
-
-  const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
-  if (!lead || lead.assigned_sales_id) return
+  if (!creds) return null
 
   const messages = await fetchConversationMessages(creds, phone)
-  const name = latestAssigneeName(messages)
-  if (!name) return
+  const signal = firstOwnerSignal(messages)
+  if (!signal) return null
 
-  const match = await matchEmployeeByName(tenantId, name)
-  if (!match) return
+  return signal.kind === 'id'
+    ? matchEmployeeByTeamMemberId(tenantId, signal.value)
+    : matchEmployeeByName(tenantId, signal.value)
+}
 
+async function applyAssignment(tenantId: string, leadId: string, match: { id: string; team_id: string | null }): Promise<void> {
+  const supa = adminSupabase()
   await supa
     .from('leads')
     .update({ assigned_sales_id: match.id, assigned_team_id: match.team_id, updated_at: new Date().toISOString() })
@@ -127,6 +154,20 @@ export async function syncRafeeqSocialAssignment(tenantId: string, leadId: strin
     type: 'assignment',
     mentioned_id: match.id,
   })
+}
+
+// Read direction — call after a lead is created/touched by the message
+// webhook. No-op if the tenant has no API credentials saved, or the lead
+// already has an owner (never overrides a manual or prior assignment).
+export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<void> {
+  const supa = adminSupabase()
+  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
+  if (!lead || lead.assigned_sales_id) return
+
+  const match = await resolveRafeeqSocialAssignee(tenantId, phone)
+  if (!match) return
+
+  await applyAssignment(tenantId, leadId, match)
 }
 
 // Write direction — mirrors bevatelSync's pushAssigneeToBevatel. Called

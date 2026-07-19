@@ -81,6 +81,31 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
     }
   }
 
+  // Retries assignment-matching for leads that already exist but never got a
+  // chance to match — the real-time sync only fires on a new message.
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillMsg, setBackfillMsg] = useState('')
+
+  async function runBackfill() {
+    setBackfilling(true)
+    setBackfillMsg('')
+    try {
+      const res = await fetch('/api/client-admin/rafeeqsocial/backfill', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) {
+        setBackfillMsg(d.error || 'تعذّر التشغيل')
+      } else {
+        setBackfillMsg(
+          `تمّت مراجعة ${d.reviewed} ليد — أُسند ${d.assigned}، بدون تطابق ${d.noMatch}، بدون رقم هاتف ${d.noPhone}. متبقّي ${d.remaining}.`
+        )
+      }
+    } catch {
+      setBackfillMsg('تعذّر الاتصال')
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -164,6 +189,19 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
           </button>
           {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
           {apiError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{apiError}</span>}
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة</p>
+          <p className="text-xs text-muted2 mb-2">
+            المزامنة اللحظية تعمل فقط عند وصول رسالة جديدة — الليدز الموجودة من قبل، أو التي لم تصلها رسالة بعد إسنادها في رفيق سوشيال، تحتاج تشغيل هذا الزر يدويًا. آمن لتكراره أكثر من مرة.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={runBackfill} disabled={backfilling} className="btn btn-outline text-xs !py-1.5 gap-2">
+              <RefreshCw size={14} className={backfilling ? 'animate-spin' : ''} /> إعادة محاولة إسناد الليدز
+            </button>
+            {backfillMsg && <span className="text-xs text-muted">{backfillMsg}</span>}
+          </div>
         </div>
       </div>
     </div>
