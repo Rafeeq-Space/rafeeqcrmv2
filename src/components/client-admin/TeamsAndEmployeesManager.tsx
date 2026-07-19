@@ -99,6 +99,7 @@ function MemberModal({
     team_id: lockedTeamId ?? member?.team_id ?? '',
     bevatel_agent_id: member?.bevatel_agent_id || '',
     bevatel_extension: member?.bevatel_extension || '',
+    rafeeqsocial_team_member_id: member?.rafeeqsocial_team_member_id || '',
     monthly_target: member?.monthly_target != null ? String(member.monthly_target) : '',
   })
   const [loading, setLoading] = useState(false)
@@ -146,6 +147,7 @@ function MemberModal({
           team_id: form.team_id || null,
           bevatel_agent_id: form.bevatel_agent_id,
           bevatel_extension: form.bevatel_extension,
+          rafeeqsocial_team_member_id: form.rafeeqsocial_team_member_id,
           monthly_target: form.monthly_target === '' ? null : form.monthly_target,
         }
         if (form.password) payload.password = form.password
@@ -168,6 +170,7 @@ function MemberModal({
             team_id: form.team_id || null,
             bevatel_agent_id: form.bevatel_agent_id,
             bevatel_extension: form.bevatel_extension,
+            rafeeqsocial_team_member_id: form.rafeeqsocial_team_member_id,
             monthly_target: form.monthly_target === '' ? null : form.monthly_target,
           }),
         })
@@ -280,6 +283,20 @@ function MemberModal({
             />
             <p className="text-xs text-muted2 mt-1">
               لربط المكالمات القادمة من مركز الاتصال بهذا الموظف — رقم مختلف عن الإيميل، تلاقيه في إعدادات حسابه هناك.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">معرّف رفيق سوشيال (Team Member ID)</label>
+            <input
+              dir="ltr"
+              className="input text-start"
+              value={form.rafeeqsocial_team_member_id}
+              onChange={e => setForm({ ...form, rafeeqsocial_team_member_id: e.target.value })}
+              placeholder="مثال: 12"
+            />
+            <p className="text-xs text-muted2 mt-1">
+              رقم الموظف الداخلي في رفيق سوشيال (Team Members) — لإسناد محادثات هذا الموظف تلقائياً بين الطرفين.
             </p>
           </div>
 

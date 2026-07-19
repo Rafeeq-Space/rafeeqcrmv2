@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, email, monthly_target } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, email, monthly_target } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -56,6 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (team_id !== undefined) updates.team_id = team_id || null
   if (bevatel_agent_id !== undefined) updates.bevatel_agent_id = bevatel_agent_id || null
   if (bevatel_extension !== undefined) updates.bevatel_extension = bevatel_extension || null
+  if (rafeeqsocial_team_member_id !== undefined) updates.rafeeqsocial_team_member_id = rafeeqsocial_team_member_id || null
   // Monthly sales target — non-negative whole number, or null to clear it.
   if (monthly_target !== undefined) {
     updates.monthly_target = Number.isFinite(Number(monthly_target)) && Number(monthly_target) >= 0

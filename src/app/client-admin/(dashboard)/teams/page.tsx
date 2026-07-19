@@ -40,7 +40,7 @@ export default async function ClientAdminTeamsPage() {
     : ['client_sales_manager', 'client_user']
   const { data: membersRaw } = await adminSupabase
     .from('profiles')
-    .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, bevatel_agent_id, bevatel_extension, monthly_target, created_at')
+    .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, monthly_target, created_at')
     .eq('tenant_id', tenantId)
     .in('role', memberRoles)
     .order('full_name')

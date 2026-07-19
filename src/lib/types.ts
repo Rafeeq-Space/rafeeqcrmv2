@@ -137,6 +137,9 @@ export interface TeamMember {
   // Call Center extension (e.g. "7499") — a separate identity from the chat
   // one above, used to match answered/missed call reports to this employee.
   bevatel_extension?: string | null
+  // Rafeeq Social (BotSailor) numeric team-member id — used to assign a
+  // subscriber's chat to this employee via the assign-to-team-member API.
+  rafeeqsocial_team_member_id?: string | null
   // Monthly sales target (number of leads to convert to "sold" per calendar month).
   monthly_target?: number | null
   created_at: string
