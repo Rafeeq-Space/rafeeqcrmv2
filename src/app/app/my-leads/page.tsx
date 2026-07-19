@@ -18,6 +18,15 @@ export default async function MyLeadsPage() {
     .eq('tenant_id', viewer.tenantId)
     .order('created_at', { ascending: false })
 
+  const { data: tenant } = await supa
+    .from('tenants')
+    .select('bevatel_api_host, bevatel_account_id')
+    .eq('id', viewer.tenantId)
+    .single()
+  const bevatel = tenant?.bevatel_account_id
+    ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
+    : null
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -33,6 +42,7 @@ export default async function MyLeadsPage() {
         basePath="/app/my-leads"
         tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
+        bevatel={bevatel}
       />
     </div>
   )

@@ -54,7 +54,7 @@ async function hasLeadNotification(tenantId: string, profileId: string, leadId: 
 // Returns the set of leads a viewer is allowed to see, respecting role.
 export async function fetchVisibleLeads(viewer: Viewer): Promise<Lead[]> {
   const supa = adminSupabase()
-  let query = supa.from('leads').select(LEAD_SELECT).eq('tenant_id', viewer.tenantId).order('created_at', { ascending: false })
+  let query = supa.from('leads').select(LEAD_SELECT).eq('tenant_id', viewer.tenantId).order('updated_at', { ascending: false })
 
   if (viewer.role === 'client_admin') {
     // sees everything

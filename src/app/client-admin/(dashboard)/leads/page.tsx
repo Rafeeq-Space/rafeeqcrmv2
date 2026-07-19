@@ -30,6 +30,15 @@ export default async function ClientAdminLeadsPage() {
   }
   const { data: members } = await membersQuery
 
+  const { data: tenant } = await supa
+    .from('tenants')
+    .select('bevatel_api_host, bevatel_account_id')
+    .eq('id', viewer.tenantId)
+    .single()
+  const bevatel = tenant?.bevatel_account_id
+    ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
+    : null
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4 mb-6">
@@ -47,6 +56,7 @@ export default async function ClientAdminLeadsPage() {
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
         teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
         members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
+        bevatel={bevatel}
       />
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
@@ -22,6 +22,7 @@ interface Props {
   campaigns?: FilterOption[]
   teams?: FilterOption[]
   members?: FilterOption[]
+  bevatel?: { host: string; accountId: string } | null
 }
 
 // Overview stat cards (also act as quick status filters) shown at the top of
@@ -84,21 +85,69 @@ function sourceLabel(lead: Lead) {
   return SOURCE_LABELS[lead.source] || lead.source
 }
 
-// Call / WhatsApp buttons — clicking them must not trigger the row/card navigation.
-function ContactButtons({ phone }: { phone: string }) {
+// Call / WhatsApp buttons — clicking them must not trigger the row/card
+// navigation. When Bevatel is connected and this lead has a conversation
+// there, each button opens a small menu offering the plain phone/WhatsApp
+// action alongside the matching Bevatel dial panel / chat link — same choice
+// as the lead profile page.
+function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; bevatel?: { host: string; accountId: string } | null }) {
+  const [menu, setMenu] = useState<'call' | 'wa' | null>(null)
   if (!phone) return null
   const d = digits(phone)
   const cls = 'btn text-xs !py-1.5 !px-2.5 flex items-center gap-1.5'
+  const convUrl = bevatel && lead.bevatel_conversation_id
+    ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/conversations/${lead.bevatel_conversation_id}`
+    : (bevatel ? bevatel.host.replace(/\/+$/, '') : null)
+
+  if (!convUrl) {
+    return (
+      <>
+        <a href={`tel:${d}`} onClick={e => e.stopPropagation()} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></a>
+        <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+          className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></a>
+      </>
+    )
+  }
+
+  const close = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(null) }
+  const toggle = (m: 'call' | 'wa') => (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === m ? null : m) }
+
   return (
-    <>
-      <a href={`tel:${d}`} onClick={e => e.stopPropagation()} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></a>
-      <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-        className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></a>
-    </>
+    <div className="relative flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+      <button onClick={toggle('call')} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></button>
+      <button onClick={toggle('wa')} className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></button>
+
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={close} />
+          <div className="absolute z-30 top-full mt-1 start-0 w-44 rounded-xl border border-border bg-surface shadow-lg p-1">
+            {menu === 'call' ? (
+              <>
+                <a href={`tel:${d}`} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <Phone size={15} /> اتصال هاتفي
+                </a>
+                <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <ExternalLink size={15} /> لوحة اتصال بيفاتيل
+                </a>
+              </>
+            ) : (
+              <>
+                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <MessageCircle size={15} /> واتساب
+                </a>
+                <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <ExternalLink size={15} /> شات بيفاتيل
+                </a>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
-export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [] }: Props) {
+export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null }: Props) {
   const router = useRouter()
   const [view, setView] = useState<'cards' | 'table'>('table')
   const [status, setStatus] = useState('all')
@@ -329,7 +378,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                   <p className="flex items-center gap-2"><Clock size={13} /> <span className="text-muted2">آخر تحديث:</span> {fmtDateTime(lead.updated_at)}</p>
                   {(isAdmin || isManager) && <p className="flex items-center gap-2"><User size={13} /> <span className="text-muted2">المسؤول:</span> {lead.assigned_sales?.full_name || 'غير مُسنَد'}</p>}
                 </div>
-                {phone && <div className="flex items-center gap-2"><ContactButtons phone={phone} /></div>}
+                {phone && <div className="flex items-center gap-2"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div>}
               </div>
             )
           })}
@@ -342,11 +391,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                 <tr className="border-b border-border text-muted2 text-xs">
                   <th className="text-start font-semibold px-4 py-3">العميل</th>
                   <th className="text-start font-semibold px-4 py-3">الحالة</th>
-                  <th className="text-start font-semibold px-4 py-3">الحملة</th>
-                  {(isAdmin || isManager) && <th className="text-start font-semibold px-4 py-3">المسؤول</th>}
-                  <th className="text-start font-semibold px-4 py-3">تاريخ الإنشاء</th>
-                  <th className="text-start font-semibold px-4 py-3">آخر تحديث</th>
                   <th className="text-start font-semibold px-4 py-3">تواصل</th>
+                  <th className="hidden md:table-cell text-start font-semibold px-4 py-3">الحملة</th>
+                  {(isAdmin || isManager) && <th className="hidden md:table-cell text-start font-semibold px-4 py-3">المسؤول</th>}
+                  <th className="hidden md:table-cell text-start font-semibold px-4 py-3">تاريخ الإنشاء</th>
+                  <th className="hidden md:table-cell text-start font-semibold px-4 py-3">آخر تحديث</th>
                 </tr>
               </thead>
               <tbody>
@@ -359,17 +408,17 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                         {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}
                       </td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
-                      <td className="px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
+                      <td className="hidden md:table-cell px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       {(isAdmin || isManager) && (
-                        <td className="px-4 py-3 text-muted whitespace-nowrap">
+                        <td className="hidden md:table-cell px-4 py-3 text-muted whitespace-nowrap">
                           {lead.assigned_sales?.full_name
                             ? <span className="flex items-center gap-1.5"><User size={13} /> {lead.assigned_sales.full_name}</span>
                             : <span className="text-muted2">غير مُسنَد</span>}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
-                      <td className="px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons phone={phone} /></div></td>
+                      <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
+                      <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
                     </tr>
                   )
                 })}
