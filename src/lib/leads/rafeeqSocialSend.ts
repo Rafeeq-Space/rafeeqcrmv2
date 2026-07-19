@@ -4,13 +4,18 @@ import { adminSupabase } from '@/lib/supabase/admin'
 //
 // Sends a WhatsApp message to a customer through rafeeq.social's BotSailor API,
 // so a rep can reply from inside the CRM:
-//   POST https://botsailor.com/api/v1/whatsapp/send
+//   POST https://rafeeq.social/api/v1/whatsapp/send
 //        apiToken, phone_number_id, message, phone_number
 // A success reply is {"status":"1","wa_message_id":"wamid..."}; a failure is
 // {"status":"0","message":"<reason>"}. This is the write-back counterpart to the
 // inbound message webhook (see rafeeqSocialLead.ts).
+//
+// The host is rafeeq.social, not botsailor.com — this account's own Developer
+// page documents every endpoint (myInfo included) under rafeeq.social, meaning
+// this white-label instance serves the API on its own domain rather than
+// BotSailor's.
 
-const SEND_URL = 'https://botsailor.com/api/v1/whatsapp/send'
+const SEND_URL = 'https://rafeeq.social/api/v1/whatsapp/send'
 
 interface SendCreds {
   apiToken: string
