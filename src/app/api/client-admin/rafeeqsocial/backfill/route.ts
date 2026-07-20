@@ -34,11 +34,16 @@ export async function POST() {
     return NextResponse.json({ error: 'مفاتيح API غير مضبوطة' }, { status: 400 })
   }
 
+  // Unassigned leads first (regardless of age) — they're the ones actually
+  // waiting on a decision, and there are normally far fewer of them than the
+  // full lead history, so they'd otherwise get buried behind old, already-
+  // correct leads and never reached within one batch.
   const { data: leads } = await supa
     .from('leads')
     .select('id, data')
     .eq('tenant_id', tenantId)
     .eq('source', 'rafeeqsocial')
+    .order('assigned_sales_id', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
 
   const all = leads || []
