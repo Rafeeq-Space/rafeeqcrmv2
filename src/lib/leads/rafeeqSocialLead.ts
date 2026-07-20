@@ -1,3 +1,4 @@
+import { adminSupabase } from '@/lib/supabase/admin'
 import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
 import { syncRafeeqSocialAssignment } from '@/lib/leads/rafeeqSocialAssign'
 import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
@@ -34,6 +35,24 @@ function str(v: unknown): string {
   return ''
 }
 
+// The webhook payload carries no agent identity for an outgoing message, so
+// the timeline label uses the lead's currently-assigned rep as a stand-in —
+// accurate in the common case now that assignment is sticky (see
+// rafeeqSocialAssign.ts) rather than something that flips on every reply.
+async function resolveAssignedName(tenantId: string, phone: string): Promise<string | undefined> {
+  const key = phoneKey(phone)
+  if (!key) return undefined
+  const { data } = await adminSupabase()
+    .from('leads')
+    .select('assigned_sales:profiles!assigned_sales_id(full_name)')
+    .eq('tenant_id', tenantId)
+    .eq('phone_key', key)
+    .maybeSingle()
+  const rel = data?.assigned_sales as { full_name?: string } | { full_name?: string }[] | null
+  const name = Array.isArray(rel) ? rel[0]?.full_name : rel?.full_name
+  return name || undefined
+}
+
 export async function handleRafeeqSocialEvent(
   tenantId: string,
   payload: Record<string, unknown>,
@@ -62,6 +81,12 @@ export async function handleRafeeqSocialEvent(
   const waId = str(payload.wa_message_id)
   const externalId = waId ? `rafeeqsocial_msg_${waId}` : undefined
 
+  // Timeline display name: the customer's own name for an incoming message,
+  // the currently-assigned rep for an outgoing one (see resolveAssignedName).
+  const activityActorLabel = direction === 'out'
+    ? await resolveAssignedName(tenantId, phone)
+    : (name || undefined)
+
   const res = await appendToLead({
     tenantId,
     phone,
@@ -69,6 +94,7 @@ export async function handleRafeeqSocialEvent(
     source: 'rafeeqsocial',
     activityBody: body,
     activityExternalId: externalId,
+    activityActorLabel,
     // No agent/rep identity in the payload — the lead stays for a rep to pick up.
     agent: {},
   })

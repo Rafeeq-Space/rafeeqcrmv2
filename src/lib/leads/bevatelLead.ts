@@ -119,6 +119,10 @@ export interface AppendArgs {
   source: 'bevatel_chat' | 'bevatel_call' | 'rafeeqsocial'
   activityBody: string
   activityExternalId?: string
+  // Display name for the timeline entry when there's no real CRM actor — the
+  // customer's name for an incoming message, or the replying agent's name for
+  // an outgoing one. Falls back to "النظام" (see TimelineItem) if omitted.
+  activityActorLabel?: string
   conversationId?: string
   contactId?: string
   agent: AgentHint
@@ -287,7 +291,14 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // external_id (Bevatel's message id) is deduped by a unique index, so a
   // re-sent webhook silently no-ops instead of duplicating the message.
   if (activityBody) {
-    const base = { tenant_id: tenantId, lead_id: leadId, actor_id: null, type: 'comment' as const, body: activityBody }
+    const base = {
+      tenant_id: tenantId,
+      lead_id: leadId,
+      actor_id: null,
+      type: 'comment' as const,
+      body: activityBody,
+      actor_label: args.activityActorLabel ?? null,
+    }
     const { error: commentErr } = await supa
       .from('lead_activities')
       .insert({ ...base, external_id: activityExternalId ?? null })
@@ -429,6 +440,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     source: 'bevatel_chat',
     activityBody: body,
     activityExternalId: messageId,
+    activityActorLabel: incoming ? (name || undefined) : (agent.name || agent.email || undefined),
     conversationId: convId,
     contactId,
     agent,

@@ -439,7 +439,7 @@ function StatusPicker({ currentKey, busy, onPick }: { currentKey: string | null;
 }
 
 function TimelineItem({ activity: a }: { activity: LeadActivity }) {
-  const actor = a.actor?.full_name || 'النظام'
+  const actor = a.actor?.full_name || a.actor_label || 'النظام'
   const when = new Date(a.created_at).toLocaleString('ar-EG')
   let text = ''
   if (a.type === 'created') text = 'تم إنشاء العميل المحتمل'

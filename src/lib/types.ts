@@ -316,6 +316,10 @@ export interface LeadActivity {
   call_result?: 'answered' | 'no_answer' | null
   body?: string | null
   mentioned_id?: string | null
+  // Display name shown when there's no real actor_id (a chat message synced
+  // from Bevatel/Rafeeq Social — authored by a customer or an external agent
+  // name, not a CRM user). Falls back to "النظام" only when this is empty too.
+  actor_label?: string | null
   created_at: string
   // joined helpers
   actor?: { id: string; full_name: string } | null
