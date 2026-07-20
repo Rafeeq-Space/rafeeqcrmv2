@@ -90,6 +90,8 @@ export interface Tenant {
   // Rafeeq Social (BotSailor) WhatsApp send API — lets a rep reply from the CRM.
   rafeeqsocial_api_token?: string | null
   rafeeqsocial_phone_number_id?: string | null
+  // Round-robin counter for Rafeeq Social leads nobody has claimed yet.
+  rafeeqsocial_rr_index?: number
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'

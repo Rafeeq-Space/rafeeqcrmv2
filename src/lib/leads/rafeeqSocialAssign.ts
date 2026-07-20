@@ -29,6 +29,14 @@ import type { Lead } from '@/lib/types'
 // Write (CRM → Rafeeq Social): calling assign-to-team-member needs a numeric
 // team_member_id per employee (profiles.rafeeqsocial_team_member_id) — Rafeeq
 // Social has no email/name-based assignment API, unlike Bevatel.
+//
+// Round-robin fallback: Rafeeq Social itself never assigns a new conversation
+// to anyone — it sits unclaimed until a rep replies or explicitly claims it.
+// When resolveRafeeqSocialAssignee finds no signal at all AND the CRM lead is
+// also still unassigned, the lead is distributed round-robin across every
+// active rep (client_user + client_sales_manager) and that decision is pushed
+// to Rafeeq Social too, instead of leaving it to wait indefinitely for
+// someone to notice and reply first.
 
 const CONVERSATION_URL = 'https://rafeeq.social/api/v1/whatsapp/get/conversation'
 const ASSIGN_URL = 'https://rafeeq.social/api/v1/whatsapp/subscriber/chat/assign-to-team-member'
@@ -163,35 +171,74 @@ async function applyAssignment(tenantId: string, leadId: string, match: { id: st
   })
 }
 
-// Read direction — call after a lead is created/touched by the message
-// webhook. No-op if the tenant has no API credentials saved, or Rafeeq Social
-// reports no resolvable assignee. Always mirrors the current assignee —
-// re-applies even when the lead already has a different owner, since Rafeeq
-// Social's own assignment can change after the fact (a manual reassignment in
-// the Shared Inbox) and the CRM must track that, not lock onto the first
-// resolution. A no-op when the resolved assignee already matches.
-export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<void> {
-  const match = await resolveRafeeqSocialAssignee(tenantId, phone)
-  if (!match) return
-
+// Distributes a lead round-robin across every active rep in the tenant.
+// Persists the rotation in tenants.rafeeqsocial_rr_index so consecutive
+// real-time leads (arriving one at a time) still rotate instead of always
+// landing on the first rep.
+async function assignRafeeqSocialRoundRobin(tenantId: string): Promise<{ id: string; team_id: string | null } | null> {
   const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
-  if (!lead || lead.assigned_sales_id === match.id) return
+  const { data: repsRaw } = await supa
+    .from('profiles')
+    .select('id, team_id, suspended')
+    .eq('tenant_id', tenantId)
+    .in('role', ['client_sales_manager', 'client_user'])
+    .order('full_name')
+  const reps = (repsRaw || []).filter(r => !r.suspended)
+  if (!reps.length) return null
 
-  await applyAssignment(tenantId, leadId, match)
+  const { data: tenant } = await supa.from('tenants').select('rafeeqsocial_rr_index').eq('id', tenantId).single()
+  const idx = (((tenant?.rafeeqsocial_rr_index ?? 0) % reps.length) + reps.length) % reps.length
+  await supa.from('tenants').update({ rafeeqsocial_rr_index: idx + 1 }).eq('id', tenantId)
+
+  const rep = reps[idx]
+  return { id: rep.id, team_id: rep.team_id ?? null }
 }
 
-// Write direction — mirrors bevatelSync's pushAssigneeToBevatel. Called
-// whenever a lead's assignment changes in the CRM; no-ops for any lead not
-// sourced from Rafeeq Social, or when the employee has no team_member_id saved.
-export async function pushAssigneeToRafeeqSocial(lead: Lead, salesId: string | null): Promise<void> {
-  if (lead.source !== 'rafeeqsocial' || !salesId) return
+export type RafeeqSocialAssignOutcome =
+  | 'matched'      // applied Rafeeq Social's resolved assignee (new or changed)
+  | 'round_robin'  // no signal anywhere — distributed round-robin and pushed it
+  | 'unchanged'    // already correct, nothing to do
+  | 'no_reps'      // no signal, lead unassigned, but no active rep to give it to
 
-  const creds = await tenantRafeeqSocialCreds(lead.tenant_id)
+// Read direction — call after a lead is created/touched by the message
+// webhook, or from the backfill route. No-op (well, 'unchanged') if the
+// tenant has no API credentials saved. Always mirrors Rafeeq Social's
+// current assignee — re-applies even when the lead already has a different
+// owner, since Rafeeq Social's own assignment can change after the fact (a
+// manual reassignment in the Shared Inbox) and the CRM must track that, not
+// lock onto the first resolution.
+//
+// When Rafeeq Social reports no assignee at all AND the CRM lead is also
+// still unassigned (a brand new, unclaimed conversation), distributes it
+// round-robin instead of leaving it to wait for someone to notice and reply.
+export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<RafeeqSocialAssignOutcome> {
+  const supa = adminSupabase()
+  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
+  if (!lead) return 'unchanged'
+
+  const match = await resolveRafeeqSocialAssignee(tenantId, phone)
+  if (match) {
+    if (lead.assigned_sales_id === match.id) return 'unchanged'
+    await applyAssignment(tenantId, leadId, match)
+    return 'matched'
+  }
+
+  if (lead.assigned_sales_id) return 'unchanged' // no Rafeeq Social signal, but already assigned in the CRM — leave it
+
+  const rr = await assignRafeeqSocialRoundRobin(tenantId)
+  if (!rr) return 'no_reps'
+  await applyAssignment(tenantId, leadId, rr)
+  await pushAssignmentCore(tenantId, phone, rr.id)
+  return 'round_robin'
+}
+
+// Core write step: tell Rafeeq Social who's responsible for this phone number.
+async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<void> {
+  const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return
 
-  const phone = leadPhone(lead.data).replace(/\D/g, '')
-  if (!phone) return
+  const digitsPhone = phone.replace(/\D/g, '')
+  if (!digitsPhone) return
 
   const { data: profile } = await adminSupabase()
     .from('profiles')
@@ -204,7 +251,7 @@ export async function pushAssigneeToRafeeqSocial(lead: Lead, salesId: string | n
   const body = new URLSearchParams({
     apiToken: creds.apiToken,
     phone_number_id: creds.phoneNumberId,
-    phone_number: phone,
+    phone_number: digitsPhone,
     team_member_id: teamMemberId,
   })
   try {
@@ -216,4 +263,14 @@ export async function pushAssigneeToRafeeqSocial(lead: Lead, salesId: string | n
   } catch (err) {
     console.error('pushAssigneeToRafeeqSocial failed', err)
   }
+}
+
+// Write direction — mirrors bevatelSync's pushAssigneeToBevatel. Called
+// whenever a lead's assignment changes in the CRM; no-ops for any lead not
+// sourced from Rafeeq Social, or when the employee has no team_member_id saved.
+export async function pushAssigneeToRafeeqSocial(lead: Lead, salesId: string | null): Promise<void> {
+  if (lead.source !== 'rafeeqsocial' || !salesId) return
+  const phone = leadPhone(lead.data)
+  if (!phone) return
+  await pushAssignmentCore(lead.tenant_id, phone, salesId)
 }
