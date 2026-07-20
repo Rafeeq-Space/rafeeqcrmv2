@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Tajawal } from 'next/font/google'
 import './globals.css'
 
@@ -12,6 +12,24 @@ const tajawal = Tajawal({
 export const metadata: Metadata = {
   title: 'رفيق CRM — إدارة العملاء المحتملين',
   description: 'منصة CRM لإدارة العملاء المحتملين والحملات الإعلانية',
+  // iOS Safari doesn't fully honor the web app manifest — it needs these
+  // specifically for "Add to Home Screen" to open standalone (no browser
+  // chrome) with the right title, instead of just bookmarking the page.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'رفيق CRM',
+  },
+  // Declared explicitly (not via the apple-icon.tsx file convention) — that
+  // convention's fixed output path ("/apple-icon") collides with proxy.ts's
+  // `pathname.startsWith('/app')` check and gets redirected to /login.
+  icons: {
+    apple: '/apple-touch-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#080809',
 }
 
 // Applies the saved theme before paint to avoid a flash. Dark is the default.
