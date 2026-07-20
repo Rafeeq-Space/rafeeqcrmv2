@@ -2,7 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey, subStatusByLabel } from '@/lib/leads/subStatus'
 import { tenantRafeeqSocialCreds, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
-import { fetchRafeeqSocialSubscriber } from '@/lib/leads/rafeeqSocialSubscriber'
+import { fetchRafeeqSocialSubscriberAnyVariant, phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 import type { Lead } from '@/lib/types'
 
 // ── Rafeeq Social bidirectional sub-status sync ───────────────────────────────
@@ -49,18 +49,24 @@ async function fetchLabelList(creds: RafeeqSocialCreds): Promise<RafeeqLabel[]> 
   }
 }
 
+// Applies to every plausible phone variant (see phoneVariants) — if Rafeeq
+// Social is actually holding two subscriber records for the same real
+// person, both end up showing the same label instead of just whichever one
+// happens to be stored on the lead.
 async function callLabelsEndpoint(url: string, creds: RafeeqSocialCreds, phone: string, ids: number[]): Promise<void> {
   if (!ids.length) return
-  const body = new URLSearchParams({
-    apiToken: creds.apiToken,
-    phone_number_id: creds.phoneNumberId,
-    phone_number: phone,
-    label_ids: ids.join(','),
-  })
-  try {
-    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
-  } catch (err) {
-    console.error(`rafeeqsocial ${url} failed`, err)
+  for (const variant of phoneVariants(phone)) {
+    const body = new URLSearchParams({
+      apiToken: creds.apiToken,
+      phone_number_id: creds.phoneNumberId,
+      phone_number: variant,
+      label_ids: ids.join(','),
+    })
+    try {
+      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+    } catch (err) {
+      console.error(`rafeeqsocial ${url} failed`, err)
+    }
   }
 }
 
@@ -95,7 +101,7 @@ export async function pushSubStatusToRafeeqSocial(lead: Lead, subStatusKey: stri
   const phone = leadPhone(lead.data).replace(/\D/g, '')
   if (!phone) return
 
-  const subscriber = await fetchRafeeqSocialSubscriber(creds, phone)
+  const subscriber = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
   if (subscriber?.labelNames.includes(sub.label)) return // already set — nothing to do
 
   const list = await fetchLabelList(creds)
@@ -116,7 +122,7 @@ export async function syncSubStatusFromRafeeqSocial(tenantId: string, leadId: st
   const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return
 
-  const subscriber = await fetchRafeeqSocialSubscriber(creds, phone)
+  const subscriber = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
   if (!subscriber) return
 
   const label = subscriber.labelNames.find(n => SUB_STATUS_LABELS.has(n))

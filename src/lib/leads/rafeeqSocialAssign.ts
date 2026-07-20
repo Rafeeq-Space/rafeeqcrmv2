@@ -2,7 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { normName } from '@/lib/leads/bevatelLead'
 import { tenantRafeeqSocialCreds, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
-import { fetchRafeeqSocialSubscriber } from '@/lib/leads/rafeeqSocialSubscriber'
+import { fetchRafeeqSocialSubscriberAnyVariant, phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 import type { Lead } from '@/lib/types'
 
 // ── Rafeeq Social bidirectional assignment sync ───────────────────────────────
@@ -52,7 +52,7 @@ interface ConversationMessage {
 // *string* (sometimes an array, sometimes an object keyed "0","1","2"... when
 // there's more than one message) rather than a native JSON array — decode
 // whichever shape comes back.
-async function fetchConversationMessages(creds: RafeeqSocialCreds, phone: string): Promise<ConversationMessage[]> {
+async function fetchConversationMessagesOne(creds: RafeeqSocialCreds, phone: string): Promise<ConversationMessage[]> {
   const body = new URLSearchParams({
     apiToken: creds.apiToken,
     phone_number_id: creds.phoneNumberId,
@@ -90,6 +90,13 @@ async function fetchConversationMessages(creds: RafeeqSocialCreds, phone: string
   if (Array.isArray(parsed)) return parsed as ConversationMessage[]
   if (parsed && typeof parsed === 'object') return Object.values(parsed) as ConversationMessage[]
   return []
+}
+
+// Pools messages across every plausible phone variant (see phoneVariants) —
+// Rafeeq Social can hold this conversation under either form.
+async function fetchConversationMessages(creds: RafeeqSocialCreds, phone: string): Promise<ConversationMessage[]> {
+  const perVariant = await Promise.all(phoneVariants(phone).map(v => fetchConversationMessagesOne(creds, v)))
+  return perVariant.flat()
 }
 
 // Newest-first scan for the MOST RECENT ownership signal in the conversation:
@@ -134,6 +141,15 @@ async function matchEmployeeByName(tenantId: string, name: string): Promise<{ id
 // Core matching step, shared by the real-time sync below and the backfill
 // route: resolve the currently-assigned employee, if any. Returns null on any
 // missing creds/no-signal-found/no-match step.
+//
+// The pooled, timestamp-sorted conversation scan is the PRIMARY signal, not
+// Subscriber Get's assigned_agent_id — confirmed live that assigned_agent_id
+// only updates on an explicit (re)assignment and can go stale behind actual
+// activity (a lead assigned to one rep kept showing them even after a
+// different rep's reply became the most recent event). This matters even
+// more once phone variants are pooled: two variants can each carry their own
+// assigned_agent_id with no way to tell which is more current, whereas
+// conversation timestamps compare directly across both.
 export async function resolveRafeeqSocialAssignee(
   tenantId: string,
   phone: string
@@ -141,19 +157,23 @@ export async function resolveRafeeqSocialAssignee(
   const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return null
 
-  const subscriber = await fetchRafeeqSocialSubscriber(creds, phone)
-  if (subscriber?.assignedAgentId) {
-    const match = await matchEmployeeByTeamMemberId(tenantId, subscriber.assignedAgentId)
+  const messages = await fetchConversationMessages(creds, phone)
+  const signal = latestOwnerSignal(messages)
+  if (signal) {
+    const match = signal.kind === 'id'
+      ? await matchEmployeeByTeamMemberId(tenantId, signal.value)
+      : await matchEmployeeByName(tenantId, signal.value)
     if (match) return match
   }
 
-  const messages = await fetchConversationMessages(creds, phone)
-  const signal = latestOwnerSignal(messages)
-  if (!signal) return null
-
-  return signal.kind === 'id'
-    ? matchEmployeeByTeamMemberId(tenantId, signal.value)
-    : matchEmployeeByName(tenantId, signal.value)
+  // Fallback: a conversation that was assigned but never had a message
+  // logged (so there's no timestamp to compare) still resolves via whichever
+  // variant Subscriber Get reports an assignee for.
+  const subscriber = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
+  if (subscriber?.assignedAgentId) {
+    return matchEmployeeByTeamMemberId(tenantId, subscriber.assignedAgentId)
+  }
+  return null
 }
 
 async function applyAssignment(tenantId: string, leadId: string, match: { id: string; team_id: string | null }): Promise<void> {
@@ -232,13 +252,14 @@ export async function syncRafeeqSocialAssignment(tenantId: string, leadId: strin
   return 'round_robin'
 }
 
-// Core write step: tell Rafeeq Social who's responsible for this phone number.
+// Core write step: tell Rafeeq Social who's responsible for this phone
+// number — pushed to every plausible variant (see phoneVariants) so that if
+// Rafeeq Social is actually holding two subscriber records for the same real
+// person, both end up showing the same assignee instead of just whichever
+// one happens to be stored on the lead.
 async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<void> {
   const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return
-
-  const digitsPhone = phone.replace(/\D/g, '')
-  if (!digitsPhone) return
 
   const { data: profile } = await adminSupabase()
     .from('profiles')
@@ -248,20 +269,22 @@ async function pushAssignmentCore(tenantId: string, phone: string, salesId: stri
   const teamMemberId = (profile?.rafeeqsocial_team_member_id || '').trim()
   if (!teamMemberId) return
 
-  const body = new URLSearchParams({
-    apiToken: creds.apiToken,
-    phone_number_id: creds.phoneNumberId,
-    phone_number: digitsPhone,
-    team_member_id: teamMemberId,
-  })
-  try {
-    await fetch(ASSIGN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
+  for (const variant of phoneVariants(phone)) {
+    const body = new URLSearchParams({
+      apiToken: creds.apiToken,
+      phone_number_id: creds.phoneNumberId,
+      phone_number: variant,
+      team_member_id: teamMemberId,
     })
-  } catch (err) {
-    console.error('pushAssigneeToRafeeqSocial failed', err)
+    try {
+      await fetch(ASSIGN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      })
+    } catch (err) {
+      console.error('pushAssigneeToRafeeqSocial failed', err)
+    }
   }
 }
 
