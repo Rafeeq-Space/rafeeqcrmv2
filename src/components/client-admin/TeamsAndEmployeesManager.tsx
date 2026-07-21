@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Users, UserPlus, Plus, Trash2, X, Phone, MessageCircle,
   Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal, ShieldCheck,
@@ -89,7 +90,26 @@ function MemberModal({
   const initialPhone = splitPhone(member?.phone)
   // Phone is limited to Saudi/Egypt — fall back to Saudi for any other stored code.
   const initialCode = initialPhone.code === '+20' ? '+20' : '+966'
-  const [form, setForm] = useState({
+  // The "new employee, nothing entered yet" shape — reused both for the
+  // initial state and to reset the form after adding, so the modal can stay
+  // open ready for the next one instead of closing every time.
+  function blankForm() {
+    return {
+      full_name: '',
+      email: '',
+      password: '',
+      job_title: '',
+      role: 'client_user' as 'client_user' | 'client_sales_manager',
+      countryCode: '+966',
+      number: '',
+      team_id: lockedTeamId ?? '',
+      bevatel_agent_id: '',
+      bevatel_extension: '',
+      rafeeqsocial_team_member_id: '',
+      monthly_target: '',
+    }
+  }
+  const [form, setForm] = useState(() => editing ? {
     full_name: member?.full_name || '',
     email: member?.email || '',
     password: '',
@@ -102,11 +122,24 @@ function MemberModal({
     bevatel_extension: member?.bevatel_extension || '',
     rafeeqsocial_team_member_id: member?.rafeeqsocial_team_member_id || '',
     monthly_target: member?.monthly_target != null ? String(member.monthly_target) : '',
-  })
+  } : blankForm())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [justAdded, setJustAdded] = useState(false)
+  // These 3 identifiers are only relevant once a tenant actually uses that
+  // integration — hidden behind a checkbox by default to save space, shown
+  // (and pre-checked) whenever a value already exists.
+  const [showBevatelId, setShowBevatelId] = useState(!!member?.bevatel_agent_id)
+  const [showExtension, setShowExtension] = useState(!!member?.bevatel_extension)
+  const [showRafeeqSocialId, setShowRafeeqSocialId] = useState(!!member?.rafeeqsocial_team_member_id)
   const [resetting2fa, setResetting2fa] = useState(false)
   const [reset2faDone, setReset2faDone] = useState(false)
+
+  useEffect(() => {
+    if (!justAdded) return
+    const t = setTimeout(() => setJustAdded(false), 4000)
+    return () => clearTimeout(t)
+  }, [justAdded])
 
   async function resetTwoFactor() {
     if (!member) return
@@ -179,7 +212,17 @@ function MemberModal({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'خطأ')
       onSaved()
-      onClose()
+      if (editing) {
+        onClose()
+      } else {
+        // Stay open, reset the form — ready to add the next employee without
+        // reopening "إضافة موظف" each time.
+        setForm(blankForm())
+        setShowBevatelId(false)
+        setShowExtension(false)
+        setShowRafeeqSocialId(false)
+        setJustAdded(true)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'خطأ')
     } finally {
@@ -194,6 +237,11 @@ function MemberModal({
           <h3 className="text-lg font-bold text-foreground">{editing ? 'تعديل الموظف' : 'إضافة موظف'}</h3>
           <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
         </div>
+        {justAdded && (
+          <p className="text-sm rounded-xl px-4 py-2.5 mb-4" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}>
+            تم إنشاء الحساب ✓ — أضف موظفًا آخر أو اضغط إغلاق.
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="label">الاسم الكامل *</label>
@@ -260,45 +308,90 @@ function MemberModal({
           </div>
 
           <div>
-            <label className="label">معرّف الموظف في بيفاتيل (الشات)</label>
-            <input
-              dir="ltr"
-              className="input text-start"
-              value={form.bevatel_agent_id}
-              onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
-              placeholder="ahmed@email.com"
-            />
-            <p className="text-xs text-muted2 mt-1">
-              لربط ليدز الشات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات كما يظهر بالضبط.
-            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showBevatelId}
+                onChange={e => {
+                  setShowBevatelId(e.target.checked)
+                  if (!e.target.checked) setForm(f => ({ ...f, bevatel_agent_id: '' }))
+                }}
+              />
+              <span className="label !mb-0">معرّف الموظف في بيفاتيل (الشات)</span>
+            </label>
+            {showBevatelId && (
+              <>
+                <input
+                  dir="ltr"
+                  className="input text-start mt-1.5"
+                  value={form.bevatel_agent_id}
+                  onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
+                  placeholder="ahmed@email.com"
+                  autoFocus
+                />
+                <p className="text-xs text-muted2 mt-1">
+                  لربط ليدز الشات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات كما يظهر بالضبط.
+                </p>
+              </>
+            )}
           </div>
 
           <div>
-            <label className="label">رقم الإكستنشن في مركز الاتصال (Call Center)</label>
-            <input
-              dir="ltr"
-              className="input text-start"
-              value={form.bevatel_extension}
-              onChange={e => setForm({ ...form, bevatel_extension: e.target.value })}
-              placeholder="مثال: 7499"
-            />
-            <p className="text-xs text-muted2 mt-1">
-              لربط المكالمات القادمة من مركز الاتصال بهذا الموظف — رقم مختلف عن الإيميل، تلاقيه في إعدادات حسابه هناك.
-            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showExtension}
+                onChange={e => {
+                  setShowExtension(e.target.checked)
+                  if (!e.target.checked) setForm(f => ({ ...f, bevatel_extension: '' }))
+                }}
+              />
+              <span className="label !mb-0">رقم الإكستنشن في مركز الاتصال (Call Center)</span>
+            </label>
+            {showExtension && (
+              <>
+                <input
+                  dir="ltr"
+                  className="input text-start mt-1.5"
+                  value={form.bevatel_extension}
+                  onChange={e => setForm({ ...form, bevatel_extension: e.target.value })}
+                  placeholder="مثال: 7499"
+                  autoFocus
+                />
+                <p className="text-xs text-muted2 mt-1">
+                  لربط المكالمات القادمة من مركز الاتصال بهذا الموظف — رقم مختلف عن الإيميل، تلاقيه في إعدادات حسابه هناك.
+                </p>
+              </>
+            )}
           </div>
 
           <div>
-            <label className="label">معرّف رفيق سوشيال (Team Member ID)</label>
-            <input
-              dir="ltr"
-              className="input text-start"
-              value={form.rafeeqsocial_team_member_id}
-              onChange={e => setForm({ ...form, rafeeqsocial_team_member_id: e.target.value })}
-              placeholder="مثال: 12"
-            />
-            <p className="text-xs text-muted2 mt-1">
-              رقم الموظف الداخلي في رفيق سوشيال (Team Members) — لإسناد محادثات هذا الموظف تلقائياً بين الطرفين.
-            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showRafeeqSocialId}
+                onChange={e => {
+                  setShowRafeeqSocialId(e.target.checked)
+                  if (!e.target.checked) setForm(f => ({ ...f, rafeeqsocial_team_member_id: '' }))
+                }}
+              />
+              <span className="label !mb-0">معرّف رفيق سوشيال (Team Member ID)</span>
+            </label>
+            {showRafeeqSocialId && (
+              <>
+                <input
+                  dir="ltr"
+                  className="input text-start mt-1.5"
+                  value={form.rafeeqsocial_team_member_id}
+                  onChange={e => setForm({ ...form, rafeeqsocial_team_member_id: e.target.value })}
+                  placeholder="مثال: 12"
+                  autoFocus
+                />
+                <p className="text-xs text-muted2 mt-1">
+                  رقم الموظف الداخلي في رفيق سوشيال (Team Members) — لإسناد محادثات هذا الموظف تلقائياً بين الطرفين.
+                </p>
+              </>
+            )}
           </div>
 
           {!lockedTeamId && (
@@ -857,6 +950,7 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 
 // ─── Self Profile Modal (admin edits own name/password only) ──────
 function SelfProfileModal({ member, onClose }: { member: MemberRow; onClose: () => void }) {
+  const router = useRouter()
   const [fullName, setFullName] = useState(member.full_name)
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -877,7 +971,7 @@ function SelfProfileModal({ member, onClose }: { member: MemberRow; onClose: () 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'خطأ')
       onClose()
-      window.location.reload()
+      router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'خطأ')
     } finally {
@@ -937,8 +1031,12 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null)
   const [editSelf, setEditSelf] = useState<MemberRow | null>(null)
   const [openTeam, setOpenTeam] = useState<Team | null>(null)
+  const router = useRouter()
 
-  function refresh() { window.location.reload() }
+  // A soft data refresh (re-fetches server data, re-renders with new props)
+  // instead of a full page reload — open modals (e.g. TeamDetailModal) stay
+  // open across it since their own state lives in this component, untouched.
+  function refresh() { router.refresh() }
 
   async function toggleSuspend(m: TeamMember) {
     await fetch(`/api/client-admin/team-members/${m.id}`, {

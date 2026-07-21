@@ -156,7 +156,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
-  const [period, setPeriod] = useState<PeriodKey>('all')
+  const [period, setPeriod] = useState<PeriodKey>('day')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [search, setSearch] = useState('')

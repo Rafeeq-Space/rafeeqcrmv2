@@ -138,7 +138,7 @@ export default function DashboardView({
   const [addCampaignOpen, setAddCampaignOpen] = useState(false)
 
   // ── Period filter (overview statistics) ──
-  const [rangeKey, setRangeKey] = useState<RangeKey>('month')
+  const [rangeKey, setRangeKey] = useState<RangeKey>('day')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 

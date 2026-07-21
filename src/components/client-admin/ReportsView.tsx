@@ -66,7 +66,7 @@ function tally(row: Row, status: string) {
 }
 
 export default function ReportsView({ leads, employees, teams, campaigns, forms }: Props) {
-  const [rangeKey, setRangeKey] = useState<RangeKey>('thisMonth')
+  const [rangeKey, setRangeKey] = useState<RangeKey>('day')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [dim, setDim] = useState<DimKey>('employees')
