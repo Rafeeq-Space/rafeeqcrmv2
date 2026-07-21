@@ -6,6 +6,7 @@ import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Tab
 import type { Lead } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
+import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
 import AddLeadModal from './AddLeadModal'
 
 interface FilterOption {
@@ -164,6 +165,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const isAdmin = role === 'client_admin'
   const isManager = role === 'client_sales_manager'
 
+  // Bulk-select checkboxes only ever render for client_admin (the delete
+  // button they feed is admin-only) — see LeadSelectionContext.
+  const selection = useLeadSelection()
+  const bulkSelect = isAdmin ? selection : null
+
   const open = (id: string) => router.push(`${basePath}/${id}`)
 
   // When a team is selected, the employees dropdown shows only that team's
@@ -229,6 +235,16 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
     ),
     [scoped, status, subStatus],
   )
+
+  // "Select all" toggles every lead matching the CURRENT filters (not just
+  // the visible page) — so a filtered-down admin selection can't silently
+  // balloon into "delete everything".
+  const allFilteredSelected = !!bulkSelect && filtered.length > 0 && filtered.every(l => bulkSelect.selected.has(l.id))
+  const toggleSelectAllFiltered = () => {
+    if (!bulkSelect) return
+    if (allFilteredSelected) bulkSelect.clear()
+    else bulkSelect.selectMany(filtered.map(l => l.id))
+  }
 
   // Pagination — show a bounded page of leads instead of the whole list.
   const PAGE_SIZE = 10
@@ -365,6 +381,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
               <div key={lead.id} onClick={() => open(lead.id)} className="card p-4 text-start transition hover:border-primary cursor-pointer">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
+                    {bulkSelect && (
+                      <span onClick={e => e.stopPropagation()} className="shrink-0">
+                        <input type="checkbox" checked={bulkSelect.selected.has(lead.id)} onChange={() => bulkSelect.toggle(lead.id)} aria-label={`تحديد ${leadName(lead.data)}`} />
+                      </span>
+                    )}
                     <div className="w-9 h-9 rounded-full bg-primary-soft flex items-center justify-center shrink-0">
                       <User size={16} style={{ color: 'var(--primary)' }} />
                     </div>
@@ -389,6 +410,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-muted2 text-xs">
+                  {bulkSelect && (
+                    <th className="w-10 px-4 py-3">
+                      <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} aria-label="تحديد الكل" />
+                    </th>
+                  )}
                   <th className="text-start font-semibold px-4 py-3">العميل</th>
                   <th className="text-start font-semibold px-4 py-3">الحالة</th>
                   {/* Contact shown right here on small screens (no scrolling needed), and again at the end for large screens — see the matching pair of <td>s below. */}
@@ -405,6 +431,11 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
                   const phone = leadPhone(lead.data)
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
+                      {bulkSelect && (
+                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={bulkSelect.selected.has(lead.id)} onChange={() => bulkSelect.toggle(lead.id)} aria-label={`تحديد ${leadName(lead.data)}`} />
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span className="font-semibold text-foreground block">{leadName(lead.data)}</span>
                         {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}

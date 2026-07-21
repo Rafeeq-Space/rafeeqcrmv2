@@ -4,6 +4,7 @@ import { fetchVisibleLeads, adminSupabase, managedTeamIds } from '@/lib/leads/ac
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import LeadsAdminActions from '@/components/client-admin/LeadsAdminActions'
+import { LeadSelectionProvider } from '@/components/client-admin/LeadSelectionContext'
 
 export default async function ClientAdminLeadsPage() {
   const viewer = await requireTenantUser()
@@ -41,25 +42,27 @@ export default async function ClientAdminLeadsPage() {
     : null
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="me-auto">
-          <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
-          <p className="text-muted text-sm mt-1">إدارة العملاء المحتملين — الحملات، الإسناد، والمتابعة</p>
+    <LeadSelectionProvider totalCount={leads.length}>
+      <div>
+        <div className="flex flex-wrap items-center gap-4 mb-6">
+          <div className="me-auto">
+            <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
+            <p className="text-muted text-sm mt-1">إدارة العملاء المحتملين — الحملات، الإسناد، والمتابعة</p>
+          </div>
+          {viewer.role === 'client_admin' && <LeadsAdminActions leadCount={leads.length} />}
+          <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
         </div>
-        {viewer.role === 'client_admin' && <LeadsAdminActions leadCount={leads.length} />}
-        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
+        <LeadsCenter
+          leads={leads}
+          role={viewer.role}
+          basePath="/client-admin/leads"
+          tenantId={viewer.tenantId}
+          campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
+          teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
+          members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
+          bevatel={bevatel}
+        />
       </div>
-      <LeadsCenter
-        leads={leads}
-        role={viewer.role}
-        basePath="/client-admin/leads"
-        tenantId={viewer.tenantId}
-        campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
-        teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
-        members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
-        bevatel={bevatel}
-      />
-    </div>
+    </LeadSelectionProvider>
   )
 }
