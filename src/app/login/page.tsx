@@ -34,6 +34,8 @@ export default async function LoginPage({ searchParams }: Props) {
     return <LoginForm tenantName={tenant.name} subdomain={subdomain} errorParam={error} />
   }
 
-  // No subdomain → this is the super admin login on the root domain.
-  return <LoginForm tenantName="" subdomain="" errorParam={error} />
+  // No subdomain → this used to fall back to the super admin login here,
+  // but that's now at an unlisted path (/logininin) instead, so this obvious
+  // path doesn't advertise that a super-admin login exists at all.
+  return notFound()
 }

@@ -11,7 +11,7 @@ export default async function AdminDashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) redirect('/login')
+  if (!user) redirect('/logininin')
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -19,7 +19,7 @@ export default async function AdminDashboardPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'super_admin') redirect('/login')
+  if (profile?.role !== 'super_admin') redirect('/logininin')
 
   // Use service client to bypass RLS (super_admin has no tenant_id)
   const [{ data: tenants }, { data: campaignRows }, { data: leadRows }, { data: profileRows }] = await Promise.all([

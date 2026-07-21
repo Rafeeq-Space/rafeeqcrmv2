@@ -56,10 +56,10 @@ export async function proxy(request: NextRequest) {
     const { supabaseResponse, user, profile } = await updateSession(request)
 
     if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return NextResponse.redirect(new URL('/logininin', request.url))
     }
     if (user && profile?.role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return NextResponse.redirect(new URL('/logininin', request.url))
     }
     return supabaseResponse
   }
