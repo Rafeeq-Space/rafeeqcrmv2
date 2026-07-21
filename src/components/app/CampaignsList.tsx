@@ -1,21 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import {
   Plus, Calendar, Layers, Link as LinkIcon, Paperclip,
   Image as ImageIcon, Target, Search, Megaphone, SearchX,
   LayoutGrid, Table as TableIcon,
 } from 'lucide-react'
 import type { AdConnection, Campaign, Form, CampaignStatus, TeamWithMembers } from '@/lib/types'
-import FormBuilder from './FormBuilder'
-import HtmlFormBuilder from './HtmlFormBuilder'
-import GoogleSheetForm, { SheetConnectionInfo } from './GoogleSheetForm'
 import { STATUS_LABELS, STATUS_BADGE, STATUS_DOT, STATUS_FILTERS, formatDate, campaignSources } from './campaigns/constants'
 import AddCampaignModal from './campaigns/AddCampaignModal'
-import EditCampaignModal from './campaigns/EditCampaignModal'
-import CampaignDetailModal from './campaigns/CampaignDetailModal'
-import ChooseFormMethodModal from './campaigns/ChooseFormMethodModal'
 
 interface Props {
   campaigns: Campaign[]
@@ -32,60 +26,21 @@ interface Props {
   onAddOpenChange?: (open: boolean) => void
 }
 
-type FormFlow = { campaignId: string; mode: 'choose' | 'advanced' | 'html' | 'sheet' }
-
 export default function CampaignsList({
-  campaigns: initialCampaigns, forms: initialForms, tenantId, isAdmin = false, teams = [],
-  adConnections = [], campaignConnectionMap = {}, addOpen, onAddOpenChange,
+  campaigns: initialCampaigns, forms, tenantId, isAdmin = false, teams = [],
+  adConnections = [], addOpen, onAddOpenChange,
 }: Props) {
+  const router = useRouter()
   const [campaigns, setCampaigns] = useState(initialCampaigns)
-  const [forms, setForms] = useState(initialForms)
   // The add-campaign modal is controlled by the parent when both props are
   // supplied; otherwise CampaignsList keeps its own local state.
   const controlledAdd = addOpen !== undefined && onAddOpenChange !== undefined
   const [internalAddOpen, setInternalAddOpen] = useState(false)
   const showAddCampaign = controlledAdd ? addOpen : internalAddOpen
   const setShowAddCampaign = controlledAdd ? onAddOpenChange : setInternalAddOpen
-  const [formFlow, setFormFlow] = useState<FormFlow | null>(null)
-  const [detailId, setDetailId] = useState<string | null>(null)
-  const [copied, setCopied] = useState<string | null>(null)
-  const [sheetInfoForm, setSheetInfoForm] = useState<Form | null>(null)
-  const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | CampaignStatus>('all')
   const [view, setView] = useState<'table' | 'cards'>('table')
-
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
-  const getFormLink = (formId: string) => `https://${rootDomain}/f/${formId}`
-
-  async function copyLink(formId: string) {
-    await navigator.clipboard.writeText(getFormLink(formId))
-    setCopied(formId)
-    setTimeout(() => setCopied(null), 2000)
-  }
-
-  function onFormCreated(form: Form) {
-    setForms(prev => [form, ...prev])
-    setFormFlow(null)
-  }
-
-  async function deleteForm(formId: string) {
-    if (!confirm('حذف هذا النموذج نهائياً؟ لن يعمل رابطه بعد الحذف.')) return
-    const supabase = createClient()
-    const { error } = await supabase.from('forms').delete().eq('id', formId)
-    if (error) { alert(`تعذّر حذف النموذج: ${error.message}`); return }
-    setForms(prev => prev.filter(f => f.id !== formId))
-  }
-
-  const detailCampaign = campaigns.find(c => c.id === detailId) || null
-
-  // Teams (with members) chosen for a campaign — the pool the form can distribute to.
-  function campaignTeamsFor(campaignId: string): TeamWithMembers[] {
-    const c = campaigns.find(x => x.id === campaignId)
-    const ids = c?.team_ids || []
-    return teams.filter(t => ids.includes(t.id))
-  }
-
 
   const filteredCampaigns = campaigns.filter(c => {
     if (statusFilter !== 'all' && c.status !== statusFilter) return false
@@ -181,7 +136,7 @@ export default function CampaignsList({
             return (
               <button
                 key={campaign.id}
-                onClick={() => setDetailId(campaign.id)}
+                onClick={() => router.push(`/client-admin/campaigns/${campaign.id}`)}
                 className="group card card-hover p-0 overflow-hidden text-start flex flex-col"
               >
                 <div className="relative w-full aspect-video bg-surface2 overflow-hidden">
@@ -253,7 +208,7 @@ export default function CampaignsList({
                   const date = formatDate(campaign.campaign_date)
 
                   return (
-                    <tr key={campaign.id} onClick={() => setDetailId(campaign.id)}
+                    <tr key={campaign.id} onClick={() => router.push(`/client-admin/campaigns/${campaign.id}`)}
                       className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
                       <td className="px-4 py-3">
                         <span className="font-semibold text-foreground block">{campaign.name}</span>
@@ -301,78 +256,6 @@ export default function CampaignsList({
         />
       )}
 
-      {detailCampaign && (
-        <CampaignDetailModal
-          campaign={detailCampaign}
-          forms={forms.filter(f => f.campaign_id === detailCampaign.id)}
-          isAdmin={isAdmin}
-          getFormLink={getFormLink}
-          copied={copied}
-          onCopyLink={copyLink}
-          onCreateForm={() => setFormFlow({ campaignId: detailCampaign.id, mode: 'choose' })}
-          onDeleteForm={deleteForm}
-          onViewSheet={setSheetInfoForm}
-          onEdit={() => setEditCampaign(detailCampaign)}
-          onClose={() => setDetailId(null)}
-        />
-      )}
-
-      {editCampaign && isAdmin && (
-        <EditCampaignModal
-          campaign={editCampaign}
-          teams={teams}
-          adConnections={adConnections}
-          initialConnectionIds={campaignConnectionMap[editCampaign.id] || []}
-          onClose={() => setEditCampaign(null)}
-          onUpdated={c => setCampaigns(prev => prev.map(x => x.id === c.id ? c : x))}
-        />
-      )}
-
-      {formFlow && isAdmin && formFlow.mode === 'choose' && (
-        <ChooseFormMethodModal
-          onAdvanced={() => setFormFlow({ ...formFlow, mode: 'advanced' })}
-          onHtml={() => setFormFlow({ ...formFlow, mode: 'html' })}
-          onSheet={() => setFormFlow({ ...formFlow, mode: 'sheet' })}
-          onClose={() => setFormFlow(null)}
-        />
-      )}
-
-      {formFlow && isAdmin && formFlow.mode === 'advanced' && (
-        <FormBuilder
-          campaignId={formFlow.campaignId}
-          tenantId={tenantId}
-          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
-          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
-          onClose={() => setFormFlow(null)}
-          onCreated={onFormCreated}
-        />
-      )}
-
-      {formFlow && isAdmin && formFlow.mode === 'html' && (
-        <HtmlFormBuilder
-          campaignId={formFlow.campaignId}
-          tenantId={tenantId}
-          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
-          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
-          onClose={() => setFormFlow(null)}
-          onCreated={onFormCreated}
-        />
-      )}
-
-      {formFlow && isAdmin && formFlow.mode === 'sheet' && (
-        <GoogleSheetForm
-          campaignId={formFlow.campaignId}
-          tenantId={tenantId}
-          campaignTeams={campaignTeamsFor(formFlow.campaignId)}
-          onBack={() => setFormFlow({ ...formFlow, mode: 'choose' })}
-          onClose={() => setFormFlow(null)}
-          onCreated={form => { onFormCreated(form); setSheetInfoForm(form) }}
-        />
-      )}
-
-      {sheetInfoForm && (
-        <SheetConnectionInfo form={sheetInfoForm} onClose={() => setSheetInfoForm(null)} />
-      )}
     </div>
   )
 }
