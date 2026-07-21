@@ -281,11 +281,11 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-start px-6 py-3 text-muted2 font-semibold">الاسم</th>
-            <th className="text-start px-6 py-3 text-muted2 font-semibold">النطاق</th>
-            <th className="text-start px-6 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
-            <th className="text-start px-6 py-3 text-muted2 font-semibold">تاريخ الإنشاء</th>
-            <th className="text-start px-6 py-3 text-muted2 font-semibold">إجراءات</th>
+            <th className="text-center px-6 py-3 text-muted2 font-semibold">الاسم</th>
+            <th className="text-center px-6 py-3 text-muted2 font-semibold">النطاق</th>
+            <th className="text-center px-6 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
+            <th className="text-center px-6 py-3 text-muted2 font-semibold">تاريخ الإنشاء</th>
+            <th className="text-center px-6 py-3 text-muted2 font-semibold">إجراءات</th>
           </tr>
         </thead>
         <tbody>
@@ -294,21 +294,21 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
           )}
           {tenants.map(tenant => (
             <tr key={tenant.id} className={`border-b border-border last:border-0 hover:bg-surface2 transition ${tenant.suspended ? 'opacity-60' : ''}`}>
-              <td className="px-6 py-3 font-semibold text-foreground">
-                <span className="flex items-center gap-2">
-                  {tenant.name}
-                  {tenant.suspended && <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>موقوف</span>}
+              <td className="px-6 py-3 font-semibold text-foreground text-center">
+                <span className="flex items-center justify-center gap-2">
+                  <span className="truncate max-w-[12rem]">{tenant.name}</span>
+                  {tenant.suspended && <span className="badge shrink-0" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>موقوف</span>}
                 </span>
               </td>
-              <td className="px-6 py-3">
+              <td className="px-6 py-3 text-center">
                 <a href={`https://${tenant.subdomain}.rafeeqcrm.com`} target="_blank" className="hover:underline" style={{ color: 'var(--primary)' }} dir="ltr">
                   {tenant.subdomain}.rafeeqcrm.com
                 </a>
               </td>
-              <td className="px-6 py-3 text-muted" dir="ltr">{tenant.email}</td>
-              <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
+              <td className="px-6 py-3 text-muted text-center" dir="ltr">{tenant.email}</td>
+              <td className="px-6 py-3 text-muted2 text-center">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
               <td className="px-6 py-3 whitespace-nowrap">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-center gap-1">
                   <EditButton tenant={tenant} />
                   <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="icon" />
                   <SuspendButton tenant={tenant} />
@@ -333,24 +333,28 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-start px-6 py-3 text-muted2 font-semibold">الاسم</th>
-                <th className="text-start px-6 py-3 text-muted2 font-semibold">النطاق</th>
-                <th className="text-start px-6 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
-                <th className="text-start px-6 py-3 text-muted2 font-semibold">تاريخ الدعوة</th>
-                <th className="text-start px-6 py-3 text-muted2 font-semibold">إجراءات</th>
+                <th className="text-center px-6 py-3 text-muted2 font-semibold">الاسم</th>
+                <th className="text-center px-6 py-3 text-muted2 font-semibold">النطاق</th>
+                <th className="text-center px-6 py-3 text-muted2 font-semibold">البريد الإلكتروني</th>
+                <th className="text-center px-6 py-3 text-muted2 font-semibold">تاريخ الدعوة</th>
+                <th className="text-center px-6 py-3 text-muted2 font-semibold">إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {pending.map(tenant => (
                 <tr key={tenant.id} className="border-b border-border last:border-0 hover:bg-surface2 transition opacity-80">
-                  <td className="px-6 py-3 font-semibold text-foreground">{tenant.name}</td>
-                  <td className="px-6 py-3 text-muted2" dir="ltr">{tenant.subdomain}.rafeeqcrm.com</td>
-                  <td className="px-6 py-3 text-muted" dir="ltr">{tenant.email}</td>
-                  <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
+                  <td className="px-6 py-3 font-semibold text-foreground text-center">
+                    <span className="block truncate max-w-[12rem] mx-auto">{tenant.name}</span>
+                  </td>
+                  <td className="px-6 py-3 text-muted2 text-center" dir="ltr">{tenant.subdomain}.rafeeqcrm.com</td>
+                  <td className="px-6 py-3 text-muted text-center" dir="ltr">{tenant.email}</td>
+                  <td className="px-6 py-3 text-muted2 text-center">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="flex items-center justify-center">
+                      <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
