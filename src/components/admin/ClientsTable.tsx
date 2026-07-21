@@ -246,10 +246,10 @@ function SuspendButton({ tenant }: { tenant: Tenant }) {
                   key={r.key}
                   className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${reason === r.key ? 'border-primary bg-primary-soft' : 'border-border hover:bg-surface2'}`}
                 >
-                  <input type="radio" name="reason" className="mt-1" checked={reason === r.key} onChange={() => setReason(r.key)} />
-                  <span className="min-w-0">
+                  <input type="radio" name="reason" className="mt-1 shrink-0" checked={reason === r.key} onChange={() => setReason(r.key)} />
+                  <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-foreground">{r.label}</span>
-                    <span className="block text-xs text-muted2 mt-0.5">{r.title} — {r.message}</span>
+                    <span className="block text-xs text-muted2 mt-0.5 break-words">{r.title} — {r.message}</span>
                   </span>
                 </label>
               ))}
