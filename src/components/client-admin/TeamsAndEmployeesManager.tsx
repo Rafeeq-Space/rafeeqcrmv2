@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Users, UserPlus, Plus, Trash2, X, Phone, MessageCircle,
   Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal, ShieldCheck,
@@ -948,70 +949,6 @@ function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   )
 }
 
-// ─── Self Profile Modal (admin edits own name/password only) ──────
-function SelfProfileModal({ member, onClose }: { member: MemberRow; onClose: () => void }) {
-  const router = useRouter()
-  const [fullName, setFullName] = useState(member.full_name)
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    try {
-      const body: { full_name: string; password?: string } = { full_name: fullName }
-      if (password) body.password = password
-      const res = await fetch(`/api/client-admin/users/${member.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'خطأ')
-      onClose()
-      router.refresh()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'خطأ')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="overlay items-center justify-center p-4" onClick={onClose}>
-      <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-foreground">تعديل بياناتي</h3>
-          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
-        </div>
-        <form onSubmit={handleSave} className="space-y-3">
-          <div>
-            <label className="label">الاسم الكامل</label>
-            <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">البريد الإلكتروني</label>
-            <input type="email" dir="ltr" className="input text-start" value={member.email || ''} disabled />
-          </div>
-          <div>
-            <label className="label">كلمة مرور جديدة <span className="text-muted2">(اختياري)</span></label>
-            <input type="password" dir="ltr" className="input text-start" value={password} onChange={e => setPassword(e.target.value)} minLength={8} placeholder="اتركها فارغة لعدم التغيير" />
-          </div>
-          {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
-            <button type="submit" disabled={loading} className="btn btn-primary flex-1">
-              {loading ? 'جارٍ الحفظ...' : 'حفظ'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Component ───────────────────────────────────────────────
 export default function TeamsAndEmployeesManager({ teams, members, tenantId, currentRole, currentUserId, currentTeamId, leadStats = {}, memberLeadStats = {}, readOnly = false }: Props) {
   const isAdmin = currentRole === 'client_admin' && !readOnly
@@ -1029,7 +966,6 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
   const [showAddMember, setShowAddMember] = useState(false)
   const [editMember, setEditMember] = useState<TeamMember | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null)
-  const [editSelf, setEditSelf] = useState<MemberRow | null>(null)
   const [openTeam, setOpenTeam] = useState<Team | null>(null)
   const router = useRouter()
 
@@ -1168,9 +1104,9 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                     {canAddMember && (
                       <td className="px-5 py-3">
                         {self ? (
-                          <button onClick={() => setEditSelf(m)} className="text-muted2 hover:text-primary transition p-1.5 rounded-lg" title="تعديل بياناتي">
+                          <Link href="/client-admin/profile" className="text-muted2 hover:text-primary transition p-1.5 rounded-lg inline-flex" title="ملفي الشخصي">
                             <Pencil size={15} />
-                          </button>
+                          </Link>
                         ) : canEditMember(m) ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
@@ -1238,7 +1174,6 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           onDeleted={refresh}
         />
       )}
-      {editSelf && <SelfProfileModal member={editSelf} onClose={() => setEditSelf(null)} />}
     </div>
   )
 }

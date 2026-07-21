@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, Users, Bell, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Goal } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, Bell, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Goal, UserCircle } from 'lucide-react'
 import Logo from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -59,6 +59,12 @@ const navItems = [
     label: 'الإشعارات',
     desc: 'أهم الأحداث المتعلقة بك',
     icon: Bell,
+  },
+  {
+    href: '/app/profile',
+    label: 'ملفي الشخصي',
+    desc: 'بياناتك، فريقك، وأداؤك',
+    icon: UserCircle,
   },
 ]
 
