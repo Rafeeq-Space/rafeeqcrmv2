@@ -100,13 +100,6 @@ export async function POST() {
     await deleteByTenant('lead_events')
     await deleteByTenant('lead_shares')
     await deleteByTenant('notifications')
-    // ad_lead_webhook_events is a raw-delivery audit log independent of the
-    // lead it resolved to — keep the row, just drop the dangling link.
-    const { error: nullifyError } = await supa
-      .from('ad_lead_webhook_events')
-      .update({ lead_id: null })
-      .eq('tenant_id', tenantId)
-    if (nullifyError) throw new Error(`ad_lead_webhook_events: ${nullifyError.message}`)
     await deleteByTenant('leads')
   } catch (e) {
     return NextResponse.json({
