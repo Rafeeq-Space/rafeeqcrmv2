@@ -2,17 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { adminSupabase } from '@/lib/supabase/admin'
 
-async function tenantExists(subdomain: string): Promise<boolean> {
+type TenantStatus = 'active' | 'suspended' | 'missing'
+
+async function getTenantStatus(subdomain: string): Promise<TenantStatus> {
   try {
     const supabase = adminSupabase()
     const { data } = await supabase
       .from('tenants')
-      .select('id')
+      .select('suspended')
       .eq('subdomain', subdomain)
       .single()
-    return !!data
+    if (!data) return 'missing'
+    return data.suspended ? 'suspended' : 'active'
   } catch {
-    return false
+    return 'missing'
   }
 }
 
@@ -42,6 +45,9 @@ export async function proxy(request: NextRequest) {
 
   // ── Public invite/set-password route (served as-is on any subdomain) ──
   if (pathname.startsWith('/set-password')) return NextResponse.next()
+
+  // ── Public "account suspended" page — never rewritten/redirected further ──
+  if (pathname.startsWith('/account-suspended')) return NextResponse.next()
 
   // ════════════════════════════════════════════════════
   // 1. SUPER ADMIN PORTAL  →  rafeeqcrm.com/saas
@@ -92,8 +98,13 @@ export async function proxy(request: NextRequest) {
 
   // Production: sub.rafeeqcrm.com/admin → rewrite to /client-admin
   if (subdomain && pathname.startsWith('/admin')) {
-    const valid = await tenantExists(subdomain)
-    if (!valid) return new NextResponse(null, { status: 404 })
+    const status = await getTenantStatus(subdomain)
+    if (status === 'missing') return new NextResponse(null, { status: 404 })
+    if (status === 'suspended') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/account-suspended'
+      return NextResponse.rewrite(url)
+    }
     const { supabaseResponse, user, profile } = await updateSession(request)
     const isLoginPath = pathname === '/admin/login'
 
@@ -127,8 +138,13 @@ export async function proxy(request: NextRequest) {
   if (subdomain || (isLocalhost && (pathname.startsWith('/app') || pathname.startsWith('/login')))) {
     // Validate subdomain exists in DB (skip on localhost dev)
     if (subdomain && !isLocalhost) {
-      const valid = await tenantExists(subdomain)
-      if (!valid) return new NextResponse(null, { status: 404 })
+      const status = await getTenantStatus(subdomain)
+      if (status === 'missing') return new NextResponse(null, { status: 404 })
+      if (status === 'suspended') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/account-suspended'
+        return NextResponse.rewrite(url)
+      }
     }
 
     const { supabaseResponse, user, profile } = await updateSession(request)

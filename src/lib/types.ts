@@ -73,6 +73,9 @@ export interface Tenant {
   created_at: string
   // false while the client is invited but hasn't set their password yet.
   activated?: boolean
+  // true once the super admin suspends this tenant — blocks the subdomain
+  // and every user under it, without deleting any data.
+  suspended?: boolean
   // random token that gates this tenant's Bevatel webhook URLs.
   bevatel_webhook_secret?: string | null
   // Bevatel (Chatwoot) API credentials, for pushing status labels back.

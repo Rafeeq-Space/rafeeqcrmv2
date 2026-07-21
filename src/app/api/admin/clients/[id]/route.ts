@@ -49,20 +49,35 @@ export async function PATCH(
 
   try {
     const { id } = await params
-    const { name, email, password } = await request.json()
+    const { name, email, password, suspended } = await request.json()
 
     if (password && (typeof password !== 'string' || password.length < 8)) {
       return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' }, { status: 400 })
     }
 
     // Update tenant record (only provided fields)
-    const updates: Record<string, string> = {}
+    const updates: Record<string, string | boolean> = {}
     if (name) updates.name = name
     if (email) updates.email = email
+    if (typeof suspended === 'boolean') updates.suspended = suspended
 
     if (Object.keys(updates).length > 0) {
       const { error } = await supabaseAdmin.from('tenants').update(updates).eq('id', id)
       if (error) throw error
+    }
+
+    // Suspending/un-suspending bans (or unbans) every user under this tenant
+    // — no data is touched, but every existing session stops being valid the
+    // moment Supabase re-checks it, which every protected page already does
+    // via getUser(). This is the "force logout everywhere" behavior.
+    if (typeof suspended === 'boolean') {
+      const { data: allProfiles } = await supabaseAdmin.from('profiles').select('id').eq('tenant_id', id)
+      for (const p of allProfiles || []) {
+        const { error: banErr } = await supabaseAdmin.auth.admin.updateUserById(p.id, {
+          ban_duration: suspended ? '876000h' : 'none',
+        })
+        if (banErr) throw banErr
+      }
     }
 
     // Sync the linked auth user (email / password) and profile name

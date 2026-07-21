@@ -171,10 +171,34 @@ function EditButton({ tenant }: { tenant: Tenant }) {
 }
 
 export default function AdminClientsTable({ tenants, pending = [] }: Props) {
+  const [busyId, setBusyId] = useState<string | null>(null)
+
   async function handleDelete(id: string) {
     if (!confirm('حذف هذا العميل؟')) return
     await fetch(`/api/admin/clients/${id}`, { method: 'DELETE' })
     window.location.reload()
+  }
+
+  async function toggleSuspend(tenant: Tenant) {
+    const next = !tenant.suspended
+    const msg = next
+      ? `إيقاف حساب «${tenant.name}»؟ سيتم تسجيل خروج كل مستخدميه فورًا ولن يقدروا على الدخول حتى يُعاد التفعيل. لن يتم حذف أي بيانات.`
+      : `إعادة تفعيل حساب «${tenant.name}»؟`
+    if (!confirm(msg)) return
+    setBusyId(tenant.id)
+    try {
+      const res = await fetch(`/api/admin/clients/${tenant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'حدث خطأ غير متوقع')
+      window.location.reload()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'خطأ')
+      setBusyId(null)
+    }
   }
 
   return (
@@ -195,8 +219,13 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
             <tr><td colSpan={5} className="px-6 py-10 text-center text-muted2">لا يوجد عملاء بعد. أضف عميلك الأول.</td></tr>
           )}
           {tenants.map(tenant => (
-            <tr key={tenant.id} className="border-b border-border last:border-0 hover:bg-surface2 transition">
-              <td className="px-6 py-3 font-semibold text-foreground">{tenant.name}</td>
+            <tr key={tenant.id} className={`border-b border-border last:border-0 hover:bg-surface2 transition ${tenant.suspended ? 'opacity-60' : ''}`}>
+              <td className="px-6 py-3 font-semibold text-foreground">
+                <span className="flex items-center gap-2">
+                  {tenant.name}
+                  {tenant.suspended && <span className="badge" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}>موقوف</span>}
+                </span>
+              </td>
               <td className="px-6 py-3">
                 <a href={`https://${tenant.subdomain}.rafeeqcrm.com`} target="_blank" className="hover:underline" style={{ color: 'var(--primary)' }} dir="ltr">
                   {tenant.subdomain}.rafeeqcrm.com
@@ -207,6 +236,14 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
               <td className="px-6 py-3 whitespace-nowrap">
                 <EditButton tenant={tenant} />
                 <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="link" />
+                <button
+                  onClick={() => toggleSuspend(tenant)}
+                  disabled={busyId === tenant.id}
+                  className="text-xs font-semibold me-3"
+                  style={{ color: tenant.suspended ? 'var(--success)' : 'var(--warning)' }}
+                >
+                  {tenant.suspended ? 'تفعيل' : 'إيقاف'}
+                </button>
                 <button onClick={() => handleDelete(tenant.id)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>حذف</button>
               </td>
             </tr>
