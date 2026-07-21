@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireTeamManager } from '@/lib/auth/requireTeamManager'
+import { clearMfaFactors } from '@/lib/auth/mfa'
 
 // Verify the target member is in the caller's tenant (and team, for managers).
 async function canManage(auth: Awaited<ReturnType<typeof requireTeamManager>>, targetId: string, supabase: ReturnType<typeof createAdminSupabase>) {
@@ -76,13 +77,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // Auth account updates (email / password) live in auth.users, not profiles.
   const authUpdates: { email?: string; password?: string } = {}
   if (typeof email === 'string' && email.trim()) authUpdates.email = email.trim()
-  if (password) authUpdates.password = password
+  if (password) {
+    if (typeof password !== 'string' || password.length < 8) {
+      return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' }, { status: 400 })
+    }
+    authUpdates.password = password
+  }
   if (Object.keys(authUpdates).length > 0) {
     const { error } = await supabase.auth.admin.updateUserById(id, {
       ...authUpdates,
       ...(authUpdates.email ? { email_confirm: true } : {}),
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+    // A password reset must not leave a stale 2FA factor behind — the member
+    // re-enrols (fresh QR/key) the next time they log in.
+    if (authUpdates.password) {
+      const mfaError = await clearMfaFactors(supabase, id)
+      if (mfaError) return NextResponse.json({ error: mfaError }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ success: true })

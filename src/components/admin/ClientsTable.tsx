@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { Tenant } from '@/lib/types'
+import ResetPasswordButton from '@/components/ResetPasswordButton'
 
 interface Props {
   tenants: Tenant[]
@@ -205,6 +206,7 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
               <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
               <td className="px-6 py-3 whitespace-nowrap">
                 <EditButton tenant={tenant} />
+                <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="link" />
                 <button onClick={() => handleDelete(tenant.id)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>حذف</button>
               </td>
             </tr>

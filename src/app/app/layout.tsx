@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import AppNav from '@/components/app/AppNav'
-import { getCurrentAal, roleRequiresMfa } from '@/lib/auth/mfa'
+import { getCurrentAal } from '@/lib/auth/mfa'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single()
 
   // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or verify).
-  if (roleRequiresMfa(profile?.role) && (await getCurrentAal(supabase)) !== 'aal2') {
+  if ((await getCurrentAal(supabase)) !== 'aal2') {
     redirect('/two-factor?next=%2Fapp%2Fdashboard')
   }
 

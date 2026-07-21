@@ -71,13 +71,13 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
           setLoading(false)
           return
         }
-        router.push('/saas/dashboard')
+        router.push('/two-factor?next=%2Fsaas%2Fdashboard')
         return
       }
 
-      // Subdomain login — super_admin goes to their own portal.
+      // Subdomain login — super_admin goes to their own portal (also through 2FA).
       if (profile?.role === 'super_admin') {
-        router.push('/saas/dashboard')
+        router.push('/two-factor?next=%2Fsaas%2Fdashboard')
         return
       }
 
@@ -92,9 +92,9 @@ export default function LoginForm({ tenantName, subdomain, errorParam }: Props) 
         return
       }
 
-      // Route by role within the correct tenant — but tenant users must pass
-      // two-factor first. /two-factor decides enrol-vs-verify then forwards to
-      // `next`. super_admin (handled above) is exempt.
+      // Route by role within the correct tenant — everyone (super_admin
+      // handled above) must pass two-factor first. /two-factor decides
+      // enrol-vs-verify then forwards to `next`.
       const dest = profile?.role === 'client_admin' || profile?.role === 'client_sales_manager'
         ? '/client-admin/dashboard'
         : '/app/dashboard'

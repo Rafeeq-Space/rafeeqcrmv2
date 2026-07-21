@@ -3,9 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // ── Two-factor (TOTP) helpers ─────────────────────────────────────────────────
 //
 // We use Supabase's built-in MFA (TOTP / authenticator apps like Google
-// Authenticator). Enforcement is our own: every tenant user must reach
-// assurance level aal2 (i.e. have entered a valid TOTP code this session).
-// super_admin (the SaaS owner) is exempt.
+// Authenticator). Enforcement is our own: every user — including super_admin
+// — must reach assurance level aal2 (i.e. have entered a valid TOTP code this
+// session) before reaching their dashboard.
 //
 // The layout guards only need the CURRENT assurance level from the session
 // token — if it isn't aal2 we send the user to /two-factor, which itself
@@ -24,8 +24,18 @@ export async function getCurrentAal(supabase: SupabaseClient): Promise<string | 
   }
 }
 
-// Whether a role is required to pass two-factor. Only the SaaS super admin is
-// exempt; all tenant users (admin / manager / sales) must complete it.
-export function roleRequiresMfa(role: string | null | undefined): boolean {
-  return role !== 'super_admin'
+// Deletes every MFA (TOTP) factor for a user, forcing re-enrollment (a fresh
+// QR/key) on their next login. Used whenever an admin resets someone else's
+// password — a stale authenticator factor shouldn't survive a credential
+// reset. `adminClient` must be the service-role client (auth.admin.mfa.* is
+// not available to a regular user session).
+export async function clearMfaFactors(adminClient: SupabaseClient, userId: string): Promise<string | null> {
+  const { data: list, error: listErr } = await adminClient.auth.admin.mfa.listFactors({ userId })
+  if (listErr) return listErr.message
+  for (const factor of list?.factors || []) {
+    const { error: delErr } = await adminClient.auth.admin.mfa.deleteFactor({ id: factor.id, userId })
+    if (delErr) return delErr.message
+  }
+  return null
 }
+

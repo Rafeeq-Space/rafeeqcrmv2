@@ -8,6 +8,7 @@ import {
 import type { Team, TeamMember, UserRole } from '@/lib/types'
 import { MEMBER_COUNTRY_CODES, PHONE_RULES, splitPhone, validateLocalPhone, waNumber } from '@/lib/countryCodes'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import ResetPasswordButton from '@/components/ResetPasswordButton'
 
 export interface TeamLeadStats {
   open: number
@@ -656,6 +657,7 @@ function TeamDetailModal({
                           )}
                           {canFullyManage && (
                             <>
+                              <ResetPasswordButton endpoint={`/api/client-admin/team-members/${m.id}`} name={m.full_name} />
                               <button onClick={() => toggleSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                 {m.suspended ? <PlayCircle size={15} /> : <PauseCircle size={15} />}
                               </button>
@@ -1078,6 +1080,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                             </button>
                             {isAdmin && (
                               <>
+                                <ResetPasswordButton endpoint={`/api/client-admin/team-members/${m.id}`} name={m.full_name} />
                                 <button onClick={() => toggleSuspend(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                   {m.suspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
                                 </button>

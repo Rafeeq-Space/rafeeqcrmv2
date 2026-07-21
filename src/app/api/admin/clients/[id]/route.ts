@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth/requireAdmin'
 import { adminSupabase } from '@/lib/supabase/admin'
+import { clearMfaFactors } from '@/lib/auth/mfa'
 
 export async function DELETE(
   _request: Request,
@@ -50,6 +51,10 @@ export async function PATCH(
     const { id } = await params
     const { name, email, password } = await request.json()
 
+    if (password && (typeof password !== 'string' || password.length < 8)) {
+      return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' }, { status: 400 })
+    }
+
     // Update tenant record (only provided fields)
     const updates: Record<string, string> = {}
     if (name) updates.name = name
@@ -79,6 +84,13 @@ export async function PATCH(
             authUpdates
           )
           if (authErr) throw authErr
+
+          // A password reset must not leave a stale 2FA factor behind — the
+          // client admin re-enrols (fresh QR/key) the next time they log in.
+          if (password) {
+            const mfaError = await clearMfaFactors(supabaseAdmin, profile.id)
+            if (mfaError) throw new Error(mfaError)
+          }
         }
         if (name) {
           await supabaseAdmin.from('profiles').update({ full_name: name }).eq('id', profile.id)
