@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { FileDown, Archive, Trash2, X, Loader2, AlertTriangle } from 'lucide-react'
+import { FileDown, Trash2, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useLeadSelection } from './LeadSelectionContext'
+import CreateArchiveButton from './CreateArchiveButton'
 
 interface Props {
   leadCount: number
@@ -99,9 +99,7 @@ export default function LeadsAdminActions({ leadCount }: Props) {
         {exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}
       </button>
 
-      <Link href="/client-admin/leads/archive" className="btn btn-outline !py-2 !px-3 text-sm gap-1.5">
-        <Archive size={15} /> الأرشيف
-      </Link>
+      <CreateArchiveButton buttonClassName="btn btn-outline !py-2 !px-3 text-sm gap-1.5" />
 
       <button
         onClick={() => setOpen(true)}

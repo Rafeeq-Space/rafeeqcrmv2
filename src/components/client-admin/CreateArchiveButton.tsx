@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Archive, Loader2, X } from 'lucide-react'
 
-export default function CreateArchiveButton() {
+interface Props {
+  buttonClassName?: string
+}
+
+export default function CreateArchiveButton({ buttonClassName = 'btn btn-primary !py-2 !px-3 text-sm gap-1.5 shrink-0' }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -41,7 +45,7 @@ export default function CreateArchiveButton() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn btn-primary !py-2 !px-3 text-sm gap-1.5 shrink-0">
+      <button onClick={() => setOpen(true)} className={buttonClassName}>
         <Archive size={16} /> أرشفة الآن
       </button>
 
