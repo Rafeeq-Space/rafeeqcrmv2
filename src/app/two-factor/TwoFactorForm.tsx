@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ShieldCheck, LogOut } from 'lucide-react'
+import { ShieldCheck, LogOut, Copy, Check } from 'lucide-react'
 import Logo from '@/components/Logo'
 
 type Mode = 'loading' | 'enroll' | 'challenge'
@@ -21,6 +21,13 @@ export default function TwoFactorForm({ next }: { next: string }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copySecret() {
+    await navigator.clipboard.writeText(secret)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   // Decide enrol vs challenge on mount.
   useEffect(() => {
@@ -120,7 +127,18 @@ export default function TwoFactorForm({ next }: { next: string }) {
               {secret && (
                 <div className="text-center">
                   <p className="text-xs text-muted2 mb-1">أو أدخل هذا المفتاح يدويًا:</p>
-                  <code dir="ltr" className="text-sm font-mono bg-surface2 px-3 py-1.5 rounded-lg inline-block break-all">{secret}</code>
+                  <div className="inline-flex items-center gap-1.5 bg-surface2 rounded-lg ps-3 pe-1.5 py-1.5">
+                    <code dir="ltr" className="text-sm font-mono break-all">{secret}</code>
+                    <button
+                      type="button"
+                      onClick={copySecret}
+                      className="shrink-0 p-1 rounded-md text-muted2 hover:text-foreground hover:bg-surface3 transition"
+                      title="نسخ المفتاح"
+                      aria-label="نسخ المفتاح"
+                    >
+                      {copied ? <Check size={15} style={{ color: 'var(--success)' }} /> : <Copy size={15} />}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
