@@ -46,7 +46,6 @@ export default async function AdminDashboardPage() {
     return {
       id: t.id,
       name: t.name,
-      subdomain: t.subdomain,
       campaigns: (campaignRows || []).filter(c => c.tenant_id === t.id).length,
       leads: leads.length,
       converted,

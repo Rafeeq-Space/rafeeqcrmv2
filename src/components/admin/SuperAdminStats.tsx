@@ -5,7 +5,6 @@ import { Building2, Users, Megaphone, CheckCircle2, XCircle, TrendingUp } from '
 export interface TenantStat {
   id: string
   name: string
-  subdomain?: string
   campaigns: number
   leads: number
   converted: number
@@ -82,7 +81,6 @@ export default function SuperAdminStats({ rows }: { rows: TenantStat[] }) {
                 <tr key={r.id} className="border-b border-border last:border-0 hover:bg-surface2 transition">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-foreground">{r.name}</p>
-                    {r.subdomain && <p className="text-xs text-muted2" dir="ltr">{r.subdomain}</p>}
                   </td>
                   <td className="px-4 py-3 text-muted">{r.campaigns}</td>
                   <td className="px-4 py-3 font-semibold text-foreground">{r.leads}</td>
