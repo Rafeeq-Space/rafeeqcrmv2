@@ -137,45 +137,52 @@ export default function CampaignsList({
               <button
                 key={campaign.id}
                 onClick={() => router.push(`/client-admin/campaigns/${campaign.id}`)}
-                className="group card card-hover p-0 overflow-hidden text-start flex flex-col"
+                className="group card card-hover hover:-translate-y-0.5 p-0 overflow-hidden text-start flex flex-col"
               >
-                <div className="relative w-full aspect-video bg-surface2 overflow-hidden">
+                <div
+                  className="relative w-full aspect-video overflow-hidden"
+                  style={cover ? undefined : { background: 'linear-gradient(135deg, var(--primary-soft), var(--surface-3))' }}
+                >
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={cover} alt="" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Target size={28} className="text-muted2" />
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'var(--surface)' }}>
+                        <Target size={24} style={{ color: 'var(--primary)' }} />
+                      </div>
                     </div>
                   )}
                   <span
-                    className={`absolute top-2 end-2 badge ${STATUS_BADGE[campaign.status]} text-xs shadow-sm flex items-center gap-1.5`}
+                    className={`absolute top-2.5 end-2.5 badge ${STATUS_BADGE[campaign.status]} text-xs shadow-sm backdrop-blur-sm flex items-center gap-1.5`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: STATUS_DOT[campaign.status] }} />
                     {STATUS_LABELS[campaign.status] || campaign.status}
                   </span>
                 </div>
 
-                <div className="p-4 flex-1 flex flex-col">
+                <div className="p-4 flex-1 flex flex-col gap-2.5">
                   {srcList.length > 0 && (
-                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {srcList.map(s => <span key={s.value} className={`badge ${s.badge} text-xs`}>{s.label}</span>)}
                     </div>
                   )}
 
-                  <h3 className="font-bold text-foreground leading-tight mb-1 group-hover:text-primary transition">{campaign.name}</h3>
-                  {campaign.description && (
-                    <p className="text-sm text-muted line-clamp-2 mb-3">{campaign.description}</p>
-                  )}
+                  <div>
+                    <h3 className="font-bold text-foreground leading-snug line-clamp-1 group-hover:text-primary transition">{campaign.name}</h3>
+                    {campaign.description && (
+                      <p className="text-xs text-muted line-clamp-2 mt-1 leading-relaxed">{campaign.description}</p>
+                    )}
+                  </div>
 
                   {(campaign.tags?.length ?? 0) > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="flex flex-wrap gap-1">
                       {campaign.tags!.slice(0, 3).map((t, i) => <span key={i} className="badge badge-blue text-xs">{t}</span>)}
-                      {campaign.tags!.length > 3 && <span className="text-xs text-muted2">+{campaign.tags!.length - 3}</span>}
+                      {campaign.tags!.length > 3 && <span className="text-xs text-muted2 self-center">+{campaign.tags!.length - 3}</span>}
                     </div>
                   )}
 
-                  <div className="mt-auto flex flex-wrap items-center gap-3 pt-3 border-t border-border text-xs text-muted2">
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-3 border-t border-border text-[0.7rem] text-muted2">
                     {date && <span className="flex items-center gap-1"><Calendar size={12} /> {date}</span>}
                     <span className="flex items-center gap-1"><Layers size={12} /> {campaignForms.length} نموذج</span>
                     {(campaign.links?.length ?? 0) > 0 && <span className="flex items-center gap-1"><LinkIcon size={12} /> {campaign.links!.length}</span>}
