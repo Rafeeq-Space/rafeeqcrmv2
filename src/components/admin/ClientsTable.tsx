@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Pencil, Trash2, PauseCircle, PlayCircle } from 'lucide-react'
 import type { Tenant } from '@/lib/types'
 import ResetPasswordButton from '@/components/ResetPasswordButton'
+import { SUSPEND_REASONS, type SuspendReasonKey } from '@/lib/suspendReasons'
 
 interface Props {
   tenants: Tenant[]
@@ -135,7 +136,9 @@ function EditButton({ tenant }: { tenant: Tenant }) {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="text-xs font-semibold me-3" style={{ color: 'var(--primary)' }}>تعديل</button>
+      <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg text-muted2 hover:text-primary transition" title="تعديل" aria-label="تعديل">
+        <Pencil size={15} />
+      </button>
       {open && (
         <div className="overlay items-center justify-center p-4" onClick={() => setOpen(false)}>
           <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -170,35 +173,106 @@ function EditButton({ tenant }: { tenant: Tenant }) {
   )
 }
 
-export default function AdminClientsTable({ tenants, pending = [] }: Props) {
-  const [busyId, setBusyId] = useState<string | null>(null)
+function SuspendButton({ tenant }: { tenant: Tenant }) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState<SuspendReasonKey | ''>('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  async function handleDelete(id: string) {
-    if (!confirm('حذف هذا العميل؟')) return
-    await fetch(`/api/admin/clients/${id}`, { method: 'DELETE' })
-    window.location.reload()
-  }
-
-  async function toggleSuspend(tenant: Tenant) {
-    const next = !tenant.suspended
-    const msg = next
-      ? `إيقاف حساب «${tenant.name}»؟ سيتم تسجيل خروج كل مستخدميه فورًا ولن يقدروا على الدخول حتى يُعاد التفعيل. لن يتم حذف أي بيانات.`
-      : `إعادة تفعيل حساب «${tenant.name}»؟`
-    if (!confirm(msg)) return
-    setBusyId(tenant.id)
+  async function handleReactivate() {
+    if (!confirm(`إعادة تفعيل حساب «${tenant.name}»؟`)) return
+    setLoading(true)
     try {
       const res = await fetch(`/api/admin/clients/${tenant.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suspended: next }),
+        body: JSON.stringify({ suspended: false }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'حدث خطأ غير متوقع')
       window.location.reload()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'خطأ')
-      setBusyId(null)
+      setLoading(false)
     }
+  }
+
+  async function handleSuspend(e: React.FormEvent) {
+    e.preventDefault()
+    if (!reason) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/clients/${tenant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: true, suspend_reason: reason }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'حدث خطأ غير متوقع')
+      window.location.reload()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+      setLoading(false)
+    }
+  }
+
+  if (tenant.suspended) {
+    return (
+      <button onClick={handleReactivate} disabled={loading} className="p-1.5 rounded-lg text-muted2 transition" style={{ color: 'var(--success)' }} title="تفعيل" aria-label="تفعيل">
+        <PlayCircle size={16} />
+      </button>
+    )
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg text-muted2 transition" style={{ color: 'var(--warning)' }} title="إيقاف" aria-label="إيقاف">
+        <PauseCircle size={16} />
+      </button>
+      {open && (
+        <div className="overlay items-center justify-center p-4" onClick={() => !loading && setOpen(false)}>
+          <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-bold text-foreground">إيقاف حساب «{tenant.name}»</h3>
+              <button onClick={() => setOpen(false)} className="text-muted2 hover:text-foreground" disabled={loading}><X size={20} /></button>
+            </div>
+            <p className="text-sm text-muted2 mb-4 mt-2">
+              سيتم تسجيل خروج كل مستخدمي الحساب فورًا ولن يقدروا على الدخول حتى يُعاد التفعيل — لن يتم حذف أي بيانات. اختر الرسالة اللي هتظهر لهم:
+            </p>
+            <form onSubmit={handleSuspend} className="space-y-2">
+              {SUSPEND_REASONS.map(r => (
+                <label
+                  key={r.key}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${reason === r.key ? 'border-primary bg-primary-soft' : 'border-border hover:bg-surface2'}`}
+                >
+                  <input type="radio" name="reason" className="mt-1" checked={reason === r.key} onChange={() => setReason(r.key)} />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-foreground">{r.label}</span>
+                    <span className="block text-xs text-muted2 mt-0.5">{r.title} — {r.message}</span>
+                  </span>
+                </label>
+              ))}
+              {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setOpen(false)} disabled={loading} className="btn btn-outline flex-1">إلغاء</button>
+                <button type="submit" disabled={loading || !reason} className="btn flex-1" style={{ background: 'var(--danger)', color: 'white' }}>
+                  {loading ? 'جارٍ الإيقاف...' : 'إيقاف الحساب'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export default function AdminClientsTable({ tenants, pending = [] }: Props) {
+  async function handleDelete(id: string) {
+    if (!confirm('حذف هذا العميل؟')) return
+    await fetch(`/api/admin/clients/${id}`, { method: 'DELETE' })
+    window.location.reload()
   }
 
   return (
@@ -234,17 +308,14 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
               <td className="px-6 py-3 text-muted" dir="ltr">{tenant.email}</td>
               <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
               <td className="px-6 py-3 whitespace-nowrap">
-                <EditButton tenant={tenant} />
-                <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="link" />
-                <button
-                  onClick={() => toggleSuspend(tenant)}
-                  disabled={busyId === tenant.id}
-                  className="text-xs font-semibold me-3"
-                  style={{ color: tenant.suspended ? 'var(--success)' : 'var(--warning)' }}
-                >
-                  {tenant.suspended ? 'تفعيل' : 'إيقاف'}
-                </button>
-                <button onClick={() => handleDelete(tenant.id)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>حذف</button>
+                <div className="flex items-center gap-1">
+                  <EditButton tenant={tenant} />
+                  <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="icon" />
+                  <SuspendButton tenant={tenant} />
+                  <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -277,7 +348,9 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
                   <td className="px-6 py-3 text-muted" dir="ltr">{tenant.email}</td>
                   <td className="px-6 py-3 text-muted2">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <button onClick={() => handleDelete(tenant.id)} className="text-xs font-semibold" style={{ color: 'var(--danger)' }}>حذف</button>
+                    <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">
+                      <Trash2 size={15} />
+                    </button>
                   </td>
                 </tr>
               ))}

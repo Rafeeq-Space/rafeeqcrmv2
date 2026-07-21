@@ -76,6 +76,9 @@ export interface Tenant {
   // true once the super admin suspends this tenant — blocks the subdomain
   // and every user under it, without deleting any data.
   suspended?: boolean
+  // Which predefined reason (see src/lib/suspendReasons.ts) was shown to the
+  // tenant's users — set alongside `suspended`, null once reactivated.
+  suspend_reason?: string | null
   // random token that gates this tenant's Bevatel webhook URLs.
   bevatel_webhook_secret?: string | null
   // Bevatel (Chatwoot) API credentials, for pushing status labels back.

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth/requireAdmin'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { clearMfaFactors } from '@/lib/auth/mfa'
+import { SUSPEND_REASONS } from '@/lib/suspendReasons'
 
 export async function DELETE(
   _request: Request,
@@ -49,17 +50,23 @@ export async function PATCH(
 
   try {
     const { id } = await params
-    const { name, email, password, suspended } = await request.json()
+    const { name, email, password, suspended, suspend_reason } = await request.json()
 
     if (password && (typeof password !== 'string' || password.length < 8)) {
       return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' }, { status: 400 })
     }
+    if (suspended === true && !SUSPEND_REASONS.some(r => r.key === suspend_reason)) {
+      return NextResponse.json({ error: 'اختر سبب الإيقاف' }, { status: 400 })
+    }
 
     // Update tenant record (only provided fields)
-    const updates: Record<string, string | boolean> = {}
+    const updates: Record<string, string | boolean | null> = {}
     if (name) updates.name = name
     if (email) updates.email = email
-    if (typeof suspended === 'boolean') updates.suspended = suspended
+    if (typeof suspended === 'boolean') {
+      updates.suspended = suspended
+      updates.suspend_reason = suspended ? suspend_reason : null
+    }
 
     if (Object.keys(updates).length > 0) {
       const { error } = await supabaseAdmin.from('tenants').update(updates).eq('id', id)
