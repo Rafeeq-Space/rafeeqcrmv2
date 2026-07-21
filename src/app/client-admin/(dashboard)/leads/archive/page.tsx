@@ -7,6 +7,7 @@ import CreateArchiveButton from '@/components/client-admin/CreateArchiveButton'
 
 interface ArchiveRow {
   id: string
+  label: string | null
   lead_count: number
   file_url: string
   created_at: string
@@ -22,6 +23,13 @@ function fmtDateTime(d: string) {
   return new Date(d).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// The storage path itself is an opaque UUID (see the archive route) — this
+// is only for the "save as" name the browser offers on download.
+function downloadName(a: ArchiveRow) {
+  const safe = (a.label || fmtDateTime(a.created_at)).replace(/[\\/:*?"<>|]+/g, '').trim()
+  return `${safe || 'archive'}.xlsx`
+}
+
 export default async function LeadsArchivePage() {
   const viewer = await requireTenantUser()
   if (!viewer) redirect('/login')
@@ -30,7 +38,7 @@ export default async function LeadsArchivePage() {
   const supa = adminSupabase()
   const { data: archives } = await supa
     .from('lead_archives')
-    .select('id, lead_count, file_url, created_at, creator:profiles!created_by(full_name)')
+    .select('id, label, lead_count, file_url, created_at, creator:profiles!created_by(full_name)')
     .eq('tenant_id', viewer.tenantId)
     .order('created_at', { ascending: false })
 
@@ -57,10 +65,10 @@ export default async function LeadsArchivePage() {
               <FileSpreadsheet size={18} className="text-muted" />
             </div>
             <div className="me-auto min-w-0">
-              <p className="text-sm font-bold text-foreground truncate">{a.lead_count} عميل</p>
-              <p className="text-xs text-muted2 mt-0.5">{fmtDateTime(a.created_at)} · بواسطة {creatorName(a.creator)}</p>
+              <p className="text-sm font-bold text-foreground truncate">{a.label || fmtDateTime(a.created_at)}</p>
+              <p className="text-xs text-muted2 mt-0.5">{a.lead_count} عميل · {fmtDateTime(a.created_at)} · بواسطة {creatorName(a.creator)}</p>
             </div>
-            <a href={a.file_url} download className="btn btn-outline !py-1.5 !px-3 text-sm shrink-0 gap-1.5">
+            <a href={a.file_url} download={downloadName(a)} className="btn btn-outline !py-1.5 !px-3 text-sm shrink-0 gap-1.5">
               <Download size={14} /> تحميل
             </a>
           </div>
