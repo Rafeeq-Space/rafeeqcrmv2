@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
 import Logo from '@/components/Logo'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import PwaTopBarControls from '@/components/PwaTopBarControls'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
 import { useEffect, useState } from 'react'
 
@@ -246,6 +247,7 @@ export default function ClientAdminNav({ profile }: Props) {
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
+          <PwaTopBarControls />
           <Logo style={{ color: 'var(--primary)', height: 22 }} />
           <span className="font-extrabold text-foreground text-sm truncate hidden sm:inline">{profile?.tenants?.name || 'رفيق CRM'}</span>
         </div>
