@@ -252,6 +252,11 @@ body::before {
     border-radius: 1.25rem;
     box-shadow: var(--shadow-lg);
     animation: pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    /* Modals are fixed-position overlays but stay descendants of wherever
+       they're rendered in the DOM — often inside a `whitespace-nowrap`
+       table-actions cell. white-space inherits, so reset it here or long
+       modal text refuses to wrap and overflows its box. */
+    white-space: normal;
   }
 }
 
