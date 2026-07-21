@@ -3,7 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { fetchVisibleLeads, adminSupabase, managedTeamIds } from '@/lib/leads/access'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
-import DangerZoneLeads from '@/components/client-admin/DangerZoneLeads'
+import LeadsAdminActions from '@/components/client-admin/LeadsAdminActions'
 
 export default async function ClientAdminLeadsPage() {
   const viewer = await requireTenantUser()
@@ -47,6 +47,7 @@ export default async function ClientAdminLeadsPage() {
           <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
           <p className="text-muted text-sm mt-1">إدارة العملاء المحتملين — الحملات، الإسناد، والمتابعة</p>
         </div>
+        {viewer.role === 'client_admin' && <LeadsAdminActions leadCount={leads.length} />}
         <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
       <LeadsCenter
@@ -59,11 +60,6 @@ export default async function ClientAdminLeadsPage() {
         members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
         bevatel={bevatel}
       />
-      {viewer.role === 'client_admin' && (
-        <div className="mt-6">
-          <DangerZoneLeads leadCount={leads.length} />
-        </div>
-      )}
     </div>
   )
 }
