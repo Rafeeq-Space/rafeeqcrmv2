@@ -3,6 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { fetchVisibleLeads, adminSupabase, managedTeamIds } from '@/lib/leads/access'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
+import DangerZoneLeads from '@/components/client-admin/DangerZoneLeads'
 
 export default async function ClientAdminLeadsPage() {
   const viewer = await requireTenantUser()
@@ -58,6 +59,11 @@ export default async function ClientAdminLeadsPage() {
         members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
         bevatel={bevatel}
       />
+      {viewer.role === 'client_admin' && (
+        <div className="mt-6">
+          <DangerZoneLeads leadCount={leads.length} />
+        </div>
+      )}
     </div>
   )
 }
