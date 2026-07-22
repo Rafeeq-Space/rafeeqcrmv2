@@ -1,5 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
+import { assignRoundRobinTenantWide } from '@/lib/leads/roundRobin'
+import { createNotification } from '@/lib/notifications/create'
 import type { AdConnection, AdPlatform } from '@/lib/types'
 
 export interface ParsedLeadFields {
@@ -87,6 +89,15 @@ export async function recordAndImportLead(
     }
   }
 
+  // No form/assignee pool exists for a direct ad-webhook lead, so this
+  // round-robins tenant-wide across active sales reps instead (same pool the
+  // "assign old leads" backfill tool uses).
+  const { assigned_sales_id, assigned_team_id } = await assignRoundRobinTenantWide(
+    supabase,
+    connection.tenant_id,
+    connection.id
+  )
+
   const { data: lead, error } = await supabase
     .from('leads')
     .insert({
@@ -99,6 +110,8 @@ export async function recordAndImportLead(
       },
       source: platform,
       status: 'new',
+      assigned_sales_id,
+      assigned_team_id,
     })
     .select()
     .single()
@@ -121,6 +134,15 @@ export async function recordAndImportLead(
   // Report the new lead back to every connected account for this campaign
   // (same conversion-reporting pipeline every other lead goes through).
   syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
+
+  if (assigned_sales_id) {
+    await createNotification(supabase, {
+      tenantId: connection.tenant_id,
+      recipientId: assigned_sales_id,
+      type: 'lead_assigned',
+      leadId: lead.id,
+    })
+  }
 
   return { imported: true as const, leadId: lead.id as string }
 }

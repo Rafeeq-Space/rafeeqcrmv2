@@ -30,3 +30,37 @@ export async function assignRoundRobin(
 
   return { assigned_sales_id, assigned_team_id }
 }
+
+// Round-robin distribution for leads with no form/assignee pool of their own
+// (the direct ad-platform webhook — src/lib/leads/adLeadWebhook.ts). Pool is
+// every active sales rep tenant-wide (same pool the "assign old leads"
+// backfill tool round-robins across), rotated via the connection's own
+// counter so consecutive live leads keep advancing instead of always
+// landing on the first rep.
+export async function assignRoundRobinTenantWide(
+  supabase: SupabaseClient,
+  tenantId: string,
+  connectionId: string
+): Promise<{ assigned_sales_id: string | null; assigned_team_id: string | null }> {
+  const { data: repsRaw } = await supabase
+    .from('profiles')
+    .select('id, team_id, suspended')
+    .eq('tenant_id', tenantId)
+    .in('role', ['client_sales_manager', 'client_user'])
+    .order('full_name')
+  const reps = (repsRaw || []).filter(r => !r.suspended)
+  if (!reps.length) return { assigned_sales_id: null, assigned_team_id: null }
+
+  const { data: connection } = await supabase
+    .from('ad_connections')
+    .select('rr_index')
+    .eq('id', connectionId)
+    .single()
+
+  const idx = ((connection?.rr_index ?? 0) % reps.length + reps.length) % reps.length
+  const rep = reps[idx]
+
+  await supabase.from('ad_connections').update({ rr_index: idx + 1 }).eq('id', connectionId)
+
+  return { assigned_sales_id: rep.id, assigned_team_id: rep.team_id ?? null }
+}
