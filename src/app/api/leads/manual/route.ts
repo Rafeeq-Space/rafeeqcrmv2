@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       assigned_sales_id: assignedSalesId,
       assigned_team_id: assignedTeamId,
       notes: body.notes?.trim() || null,
-      attachments: attachments.length ? attachments : null,
+      attachments,
     })
     .select()
     .single()
