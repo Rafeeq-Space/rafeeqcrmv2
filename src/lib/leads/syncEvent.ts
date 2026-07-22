@@ -95,7 +95,13 @@ export async function syncLeadEvent(params: {
 
   for (const conn of connections) {
     if (conn.platform === 'tiktok') {
-      if (!lead.ttclid) { skipped.push(`tiktok (${conn.name}): missing ttclid`); continue }
+      // Instant Form leads never carry a ttclid (no external click occurs —
+      // the form is filled inside TikTok's own app), so email/phone identifiers
+      // are accepted as a fallback match key instead of skipping them entirely.
+      if (!lead.ttclid && !lead.data?.email && !lead.data?.phone) {
+        skipped.push(`tiktok (${conn.name}): no ttclid or email/phone identifier`)
+        continue
+      }
 
       const tiktokEvent = eventType || STATUS_TO_TIKTOK_EVENT[leadStatus] || 'Lead'
       const tiktokPayload = {
@@ -107,7 +113,7 @@ export async function syncLeadEvent(params: {
             event_time: eventTime,
             event_id: `${lead.id}_${eventTime}`,
             user: {
-              ttclid: lead.ttclid,
+              ...(lead.ttclid && { ttclid: lead.ttclid }),
               ...(lead.data?.email && { email: hashValue(lead.data.email) }),
               ...(lead.data?.phone && { phone: hashValue(lead.data.phone) }),
             },
