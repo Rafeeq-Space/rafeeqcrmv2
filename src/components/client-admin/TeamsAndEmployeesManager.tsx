@@ -697,6 +697,7 @@ function TeamDetailModal({
         )}
 
         <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -771,6 +772,7 @@ function TeamDetailModal({
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Danger zone — delete the whole team (admin only) */}
@@ -1066,6 +1068,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
       {/* ══ EMPLOYEES TAB — table ══ */}
       {activeTab === 'employees' && (
         <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -1137,6 +1140,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
