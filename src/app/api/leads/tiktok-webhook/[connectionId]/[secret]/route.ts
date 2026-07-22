@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { importTikTokWebhookLead } from '@/lib/leads/tiktokInstantFormLead'
 import type { AdConnection } from '@/lib/types'
@@ -37,7 +37,7 @@ export async function POST(
 
   const payload = await request.json().catch(() => null)
   if (payload) {
-    importTikTokWebhookLead(connection as AdConnection, payload).catch(console.error)
+    after(() => importTikTokWebhookLead(connection as AdConnection, payload).catch(console.error))
   }
 
   return NextResponse.json({ received: true }, { status: 200 })

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { importSnapchatLead, verifySnapchatSignature } from '@/lib/leads/snapchatLeadAds'
 import type { AdConnection } from '@/lib/types'
@@ -45,7 +45,7 @@ export async function POST(
   }
 
   const payload = raw ? JSON.parse(raw) : {}
-  importSnapchatLead(connection as AdConnection, payload).catch(console.error)
+  after(() => importSnapchatLead(connection as AdConnection, payload).catch(console.error))
 
   return NextResponse.json({ received: true }, { status: 200 })
 }

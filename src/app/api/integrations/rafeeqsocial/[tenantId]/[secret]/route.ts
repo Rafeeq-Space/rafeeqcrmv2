@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { handleRafeeqSocialEvent } from '@/lib/leads/rafeeqSocialLead'
 
@@ -30,7 +30,7 @@ export async function POST(
   const raw = await request.text()
   try {
     const payload = raw ? JSON.parse(raw) : {}
-    handleRafeeqSocialEvent(tenantId, payload, direction).catch(console.error)
+    after(() => handleRafeeqSocialEvent(tenantId, payload, direction).catch(console.error))
   } catch (err) {
     console.error('rafeeqsocial webhook parse error', err)
   }

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { statusFromLabel } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       // No actor_id — this change came from the Google Sheet, not a CRM user.
     })
 
-    syncLeadEvent({ leadId: lead.id, status: to }).catch(console.error)
+    after(() => syncLeadEvent({ leadId: lead.id, status: to }).catch(console.error))
 
     return NextResponse.json({ success: true, status: to })
   } catch (err: unknown) {

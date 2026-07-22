@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { handleBevatelCall } from '@/lib/leads/bevatelLead'
 
@@ -24,7 +24,7 @@ export async function POST(
   const raw = await request.text()
   try {
     const payload = raw ? JSON.parse(raw) : {}
-    handleBevatelCall(tenantId, payload).catch(console.error)
+    after(() => handleBevatelCall(tenantId, payload).catch(console.error))
   } catch (err) {
     console.error('bevatel call parse error', err)
   }

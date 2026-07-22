@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
@@ -80,8 +80,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Rafeeq Social subscriber's team-member assignment — each no-ops for a
   // lead that isn't its own source.
   if ('assigned_sales_id' in body) {
-    pushAssigneeToBevatel(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error)
-    pushAssigneeToRafeeqSocial(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error)
+    // after() keeps the function alive until these settle instead of
+    // letting Vercel freeze it right after the response is sent.
+    after(async () => {
+      await Promise.all([
+        pushAssigneeToBevatel(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error),
+        pushAssigneeToRafeeqSocial(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error),
+      ])
+    })
   }
 
   const { data: updated } = await supa

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
@@ -90,12 +90,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const update: Record<string, unknown> = { status: to, updated_at: new Date().toISOString() }
     if (subStatus) update.sub_status = subStatus
     await supa.from('leads').update(update).eq('id', leadId)
-    syncLeadEvent({ leadId, status: to }).catch(console.error)
-    pushStatusToSheet(supa, lead as Lead, to).catch(console.error)
-    if (subStatus) {
-      pushSubStatusToBevatel(lead as Lead, subStatus).catch(console.error)
-      pushSubStatusToRafeeqSocial(lead as Lead, subStatus).catch(console.error)
-    }
+    // Fire-and-forget background work — after() keeps the function alive
+    // until these settle instead of letting Vercel freeze it right after
+    // the response is sent, which would silently drop them mid-flight.
+    after(async () => {
+      await Promise.all([
+        syncLeadEvent({ leadId, status: to }).catch(console.error),
+        pushStatusToSheet(supa, lead as Lead, to).catch(console.error),
+        ...(subStatus
+          ? [
+              pushSubStatusToBevatel(lead as Lead, subStatus).catch(console.error),
+              pushSubStatusToRafeeqSocial(lead as Lead, subStatus).catch(console.error),
+            ]
+          : []),
+      ])
+    })
   } else if (type === 'call') {
     const result = body.call_result
     if (!result || !['answered', 'no_answer'].includes(result)) {
@@ -129,13 +138,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Mirror the comment to Bevatel as a private note. Store the returned Bevatel
   // message id on our activity so the echoed webhook is deduped (external_id).
   if (type === 'comment' && record.body) {
-    pushNoteToBevatel(lead as Lead, record.body as string)
-      .then(msgId => {
+    after(async () => {
+      try {
+        const msgId = await pushNoteToBevatel(lead as Lead, record.body as string)
         if (msgId && activity?.id) {
-          return supa.from('lead_activities').update({ external_id: `bevatel_msg_${msgId}` }).eq('id', activity.id)
+          await supa.from('lead_activities').update({ external_id: `bevatel_msg_${msgId}` }).eq('id', activity.id)
         }
-      })
-      .catch(console.error)
+      } catch (err) {
+        console.error(err)
+      }
+    })
   }
 
   return NextResponse.json({ success: true, activity }, { status: 201 })

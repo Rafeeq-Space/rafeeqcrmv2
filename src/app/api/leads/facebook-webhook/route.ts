@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { importFacebookLead } from '@/lib/leads/facebookLeadAds'
 import type { AdConnection } from '@/lib/types'
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   const payload = raw ? JSON.parse(raw) : {}
-  handleFacebookPayload(payload).catch(console.error)
+  after(() => handleFacebookPayload(payload).catch(console.error))
 
   return NextResponse.json({ received: true }, { status: 200 })
 }

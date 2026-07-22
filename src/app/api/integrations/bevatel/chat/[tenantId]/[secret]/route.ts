@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { handleBevatelChat } from '@/lib/leads/bevatelLead'
 
@@ -26,7 +26,7 @@ export async function POST(
   const raw = await request.text()
   try {
     const payload = raw ? JSON.parse(raw) : {}
-    handleBevatelChat(tenantId, payload).catch(console.error)
+    after(() => handleBevatelChat(tenantId, payload).catch(console.error))
   } catch (err) {
     console.error('bevatel chat parse error', err)
   }
