@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { adminSupabase } from '@/lib/supabase/admin'
+import { leadEmail, leadPhone } from '@/lib/utils'
 import type { AdConnection } from '@/lib/types'
 
 const META_API_VERSION = 'v21.0'
@@ -80,6 +81,12 @@ export async function syncLeadEvent(params: {
   const results: Record<string, unknown> = {}
   const skipped: string[] = []
 
+  // Submitted data is keyed by whatever label the source form/route used
+  // (Arabic labels for manual/public-form leads, English for ad-webhook
+  // leads) — leadEmail/leadPhone match across both instead of a fixed key.
+  const email = leadEmail(lead.data) || undefined
+  const phone = leadPhone(lead.data) || undefined
+
   // Ad accounts linked to this lead's campaign — none if the lead has no
   // campaign or the campaign has no connections attached.
   let connections: AdConnection[] = []
@@ -98,7 +105,7 @@ export async function syncLeadEvent(params: {
       // Instant Form leads never carry a ttclid (no external click occurs —
       // the form is filled inside TikTok's own app), so email/phone identifiers
       // are accepted as a fallback match key instead of skipping them entirely.
-      if (!lead.ttclid && !lead.data?.email && !lead.data?.phone) {
+      if (!lead.ttclid && !email && !phone) {
         skipped.push(`tiktok (${conn.name}): no ttclid or email/phone identifier`)
         continue
       }
@@ -114,8 +121,8 @@ export async function syncLeadEvent(params: {
             event_id: `${lead.id}_${eventTime}`,
             user: {
               ...(lead.ttclid && { ttclid: lead.ttclid }),
-              ...(lead.data?.email && { email: hashValue(lead.data.email) }),
-              ...(lead.data?.phone && { phone: hashValue(lead.data.phone) }),
+              ...(email && { email: hashValue(email) }),
+              ...(phone && { phone: hashValue(phone) }),
             },
             properties: {
               lead_id: lead.id,
@@ -168,8 +175,8 @@ export async function syncLeadEvent(params: {
             action_source: 'website',
             user_data: {
               fbc: buildFbc(lead.fbclid, createdAtMs),
-              ...(lead.data?.email && { em: [hashValue(lead.data.email)] }),
-              ...(lead.data?.phone && { ph: [hashValue(lead.data.phone)] }),
+              ...(email && { em: [hashValue(email)] }),
+              ...(phone && { ph: [hashValue(phone)] }),
             },
             custom_data: {
               lead_id: lead.id,
@@ -218,8 +225,8 @@ export async function syncLeadEvent(params: {
             event_type: snapEvent,
             event_conversion_type: 'WEB',
             event_time: Math.floor(createdAtMs / 1000),
-            hashed_email: lead.data?.email ? hashValue(lead.data.email) : undefined,
-            hashed_phone_number: lead.data?.phone ? hashValue(lead.data.phone) : undefined,
+            hashed_email: email ? hashValue(email) : undefined,
+            hashed_phone_number: phone ? hashValue(phone) : undefined,
             click_id: lead.data?.sccid || undefined,
             pixel_id: conn.pixel_id,
           },
