@@ -98,6 +98,8 @@ export interface Tenant {
   rafeeqsocial_phone_number_id?: string | null
   // Round-robin counter for Rafeeq Social leads nobody has claimed yet.
   rafeeqsocial_rr_index?: number
+  // Round-robin counter for missed/abandoned Bevatel calls nobody has claimed yet.
+  bevatel_call_rr_index?: number
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'

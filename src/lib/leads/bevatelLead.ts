@@ -1,6 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
+import { createNotification } from '@/lib/notifications/create'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
 //
@@ -470,6 +471,31 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
 // ── Calls (Bevatel Call Center) ───────────────────────────────────────────────
 
+// Distributes a missed/abandoned call's lead round-robin across every active
+// rep in the tenant — Bevatel reports no agent for a call nobody answered, so
+// without this the lead would sit unassigned indefinitely. Persists the
+// rotation in tenants.bevatel_call_rr_index (separate from every other
+// source's own counter) so consecutive missed calls keep advancing instead of
+// always landing on the first rep.
+async function assignMissedCallRoundRobin(tenantId: string): Promise<{ id: string; team_id: string | null } | null> {
+  const supa = adminSupabase()
+  const { data: repsRaw } = await supa
+    .from('profiles')
+    .select('id, team_id, suspended')
+    .eq('tenant_id', tenantId)
+    .in('role', ['client_sales_manager', 'client_user'])
+    .order('full_name')
+  const reps = (repsRaw || []).filter(r => !r.suspended)
+  if (!reps.length) return null
+
+  const { data: tenant } = await supa.from('tenants').select('bevatel_call_rr_index').eq('id', tenantId).single()
+  const idx = (((tenant?.bevatel_call_rr_index ?? 0) % reps.length) + reps.length) % reps.length
+  await supa.from('tenants').update({ bevatel_call_rr_index: idx + 1 }).eq('id', tenantId)
+
+  const rep = reps[idx]
+  return { id: rep.id, team_id: rep.team_id ?? null }
+}
+
 export async function handleBevatelCall(tenantId: string, payload: Record<string, unknown>) {
   const data = (payload.data as Record<string, unknown>) || {}
   const eventType = ((payload.event_type as string) || '').toLowerCase()
@@ -556,6 +582,41 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     activityActorLabel: agent.name || agent.email || undefined,
     agent,
   })
+
+  // A missed call carries no agent, so it never goes through the "hand it to
+  // whoever answered" logic above — a brand-new lead with no owner would sit
+  // unassigned indefinitely otherwise. Only steps in when nobody owns this
+  // lead yet; an existing owner (e.g. a customer already assigned to a rep)
+  // is never touched by a missed call — see the sticky-assignment note above.
+  if (abandoned && res.leadId) {
+    const { data: leadRow } = await adminSupabase()
+      .from('leads')
+      .select('assigned_sales_id')
+      .eq('id', res.leadId)
+      .single()
+    if (leadRow && !leadRow.assigned_sales_id) {
+      const rep = await assignMissedCallRoundRobin(tenantId)
+      if (rep) {
+        await adminSupabase()
+          .from('leads')
+          .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id })
+          .eq('id', res.leadId)
+        await adminSupabase().from('lead_activities').insert({
+          tenant_id: tenantId,
+          lead_id: res.leadId,
+          actor_id: null,
+          type: 'assignment',
+          mentioned_id: rep.id,
+        })
+        await createNotification(adminSupabase(), {
+          tenantId,
+          recipientId: rep.id,
+          type: 'lead_assigned',
+          leadId: res.leadId,
+        })
+      }
+    }
+  }
 
   await recordEvent(tenantId, {
     kind: 'call',
