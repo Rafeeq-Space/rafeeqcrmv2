@@ -57,6 +57,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     mentioned_id: body.profile_id,
   })
 
+  // Surfaces the lead at the top of the leads table, same as any other
+  // activity (ordered by updated_at — see fetchVisibleLeads).
+  await supa.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId)
+
   await createNotification(supa, {
     tenantId: viewer.tenantId,
     recipientId: body.profile_id,

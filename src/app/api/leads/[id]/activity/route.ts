@@ -125,6 +125,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Any activity counts as touching the lead, so it surfaces at the top of the
+  // leads table (which is ordered by updated_at — see fetchVisibleLeads).
+  // status_change already bumped it as part of writing the new status.
+  if (type !== 'status_change') {
+    await supa.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId)
+  }
+
   if (type === 'comment' && record.mentioned_id) {
     await createNotification(supa, {
       tenantId: viewer.tenantId,

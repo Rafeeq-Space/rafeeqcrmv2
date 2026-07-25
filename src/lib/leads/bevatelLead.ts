@@ -307,8 +307,18 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     // 23505 = duplicate external_id (message already logged) — expected, ignore.
     // Any other error usually means the external_id column isn't provisioned
     // yet; retry without it so the message still lands on the timeline.
+    let logged = !commentErr
     if (commentErr && commentErr.code !== '23505') {
-      await supa.from('lead_activities').insert(base)
+      const { error: retryErr } = await supa.from('lead_activities').insert(base)
+      logged = !retryErr
+    }
+
+    // A real new message/call touches the lead, so it surfaces at the top of
+    // the leads table (ordered by updated_at — see fetchVisibleLeads).
+    // Deliberately skipped for a 23505 duplicate: a re-sent webhook for a
+    // message we already logged must not resurface the lead.
+    if (logged) {
+      await supa.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId)
     }
   }
 
@@ -599,7 +609,7 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       if (rep) {
         await adminSupabase()
           .from('leads')
-          .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id })
+          .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id, updated_at: new Date().toISOString() })
           .eq('id', res.leadId)
         await adminSupabase().from('lead_activities').insert({
           tenant_id: tenantId,

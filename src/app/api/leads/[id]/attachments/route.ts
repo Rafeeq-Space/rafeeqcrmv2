@@ -26,7 +26,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : []
 
-  const { error } = await supa.from('leads').update({ attachments }).eq('id', leadId)
+  // updated_at so an attachment change surfaces the lead at the top of the
+  // leads table, same as any other edit (ordered by updated_at — see
+  // fetchVisibleLeads).
+  const { error } = await supa
+    .from('leads')
+    .update({ attachments, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ success: true, attachments })
