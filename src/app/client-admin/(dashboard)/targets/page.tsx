@@ -18,5 +18,15 @@ export default async function ClientAdminTargetsPage() {
 
   const { self, teams, monthLabel } = await buildTargetsModel(viewer)
 
-  return <TargetsView role={viewer.role} self={self} teams={teams} monthLabel={monthLabel} />
+  // Inline target editing is admin-only, matching the PATCH routes' own guards
+  // (a sales manager reaching this page sees the same read-only view as before).
+  return (
+    <TargetsView
+      role={viewer.role}
+      self={self}
+      teams={teams}
+      monthLabel={monthLabel}
+      canEdit={viewer.role === 'client_admin'}
+    />
+  )
 }
