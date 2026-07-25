@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared'
@@ -26,5 +27,28 @@ export async function createNotification(
     type,
     lead_id: leadId,
   })
-  if (error) console.error('createNotification failed:', error.message)
+  if (error) {
+    console.error('createNotification failed:', error.message)
+    return
+  }
+
+  // Also deliver as a Web Push so it lands even when the app isn't open. Kept
+  // out of the caller's critical path via after() — the row is already written,
+  // and a slow/failing push service must not delay the response. Imported
+  // lazily so anything that only records notifications doesn't pull in
+  // web-push. after() throws outside a request context, so fall back to a
+  // detached call for any non-request caller.
+  const deliver = async () => {
+    try {
+      const { sendPushToUser } = await import('@/lib/notifications/push')
+      await sendPushToUser({ recipientId, type, leadId })
+    } catch (err) {
+      console.error('web push delivery failed:', err)
+    }
+  }
+  try {
+    after(deliver)
+  } catch {
+    void deliver()
+  }
 }

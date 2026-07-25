@@ -40,6 +40,12 @@ export async function proxy(request: NextRequest) {
   // ── Public: API routes pass through unchanged ──
   if (pathname.startsWith('/api/')) return NextResponse.next()
 
+  // ── Service worker — must be served from the root scope to be allowed to
+  // receive push events. The matcher below doesn't exclude .js, so without
+  // this the request would fall through to the tenant/auth logic and get
+  // redirected to /login, and registration would fail with a MIME-type error.
+  if (pathname === '/sw.js') return NextResponse.next()
+
   // ── Public form routes ──
   if (pathname.startsWith('/f/')) return NextResponse.next()
 
