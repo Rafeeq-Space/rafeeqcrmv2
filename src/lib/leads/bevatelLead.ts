@@ -472,35 +472,65 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
 export async function handleBevatelCall(tenantId: string, payload: Record<string, unknown>) {
   const data = (payload.data as Record<string, unknown>) || {}
+  const eventType = ((payload.event_type as string) || '').toLowerCase()
+  const direction = (data.direction as string) || ''
+  const inbound = direction.toLowerCase().includes('in')
 
-  const phone = (data.caller_number as string) || (data.customer_number as string) || ''
+  // call.started only means the phone started ringing — not a final outcome.
+  // Logging it here would claim the call's dedupe slot (see callId below)
+  // before the real terminal event (ended/timeout/abandoned) arrives, so the
+  // actual result would never get logged. Record it for diagnostics and stop.
+  if (eventType === 'call.started') {
+    const ringingPhone = (data.from_number as string) || (data.connected_line_name as string) || ''
+    await recordEvent(tenantId, {
+      kind: 'call', event: eventType, direction: inbound ? 'in' : 'out', phone: phoneKey(ringingPhone) || 'بدون رقم',
+      agentHint: 'none', matched: false, created: false, assigned: false, leadId: null, raw: payload,
+    })
+    return { ok: false as const, reason: 'ringing' }
+  }
+
+  // The customer's number lives under a different field depending on the
+  // event: caller_number/customer_number for timeout/abandoned, connected_line_num
+  // for ended.
+  const phone =
+    (data.caller_number as string) ||
+    (data.customer_number as string) ||
+    (data.connected_line_num as string) ||
+    (data.from_number as string) ||
+    ''
   if (!phone) {
     await recordEvent(tenantId, {
-      kind: 'call', event: (payload.event_type as string) || 'unknown', direction: 'in', phone: 'بدون رقم',
+      kind: 'call', event: eventType || 'unknown', direction: inbound ? 'in' : 'out', phone: 'بدون رقم',
       agentHint: 'none', matched: false, created: false, assigned: false, leadId: null, raw: payload,
     })
     return { ok: false as const, reason: 'no_phone' }
   }
 
-  const direction = (data.direction as string) || ''
-  const inbound = direction.toLowerCase().includes('in')
-  const eventType = ((payload.event_type as string) || '').toLowerCase()
-  // A call counts as "not answered" for abandoned/missed/timeout/cancelled
-  // events — none of these reach an agent, so the lead stays unassigned.
-  const abandoned = /abandon|missed|no_answer|timeout|cancel|unanswer/.test(eventType)
+  // call.ended doesn't say "not answered" in its event name — the outcome is
+  // in dial_status (ANSWER vs BUSY/NOANSWER/...) instead. Every other
+  // terminal event (timeout/abandoned/...) already says so in its name.
+  const dialStatus = ((data.dial_status as string) || '').toUpperCase()
+  const abandoned =
+    /abandon|missed|no_answer|timeout|cancel|unanswer/.test(eventType) ||
+    (eventType === 'call.ended' && dialStatus !== '' && dialStatus !== 'ANSWER')
 
-  // Duration may arrive under several names depending on the exact event.
-  const durRaw = data.duration ?? data.talk_time ?? data.call_duration ?? data.billsec
-  const seconds = durRaw != null ? Number(durRaw) : NaN
+  // Duration may arrive under several names depending on the exact event;
+  // call.ended's talk_time is "HH:MM:SS" rather than a plain number of seconds.
+  const durRaw = data.duration ?? data.call_duration ?? data.billsec
+  let seconds = durRaw != null ? Number(durRaw) : NaN
+  if (!Number.isFinite(seconds) && typeof data.talk_time === 'string') {
+    const [h, m, s] = data.talk_time.split(':').map(Number)
+    if ([h, m, s].every(Number.isFinite)) seconds = h * 3600 + m * 60 + s
+  }
   const durText = Number.isFinite(seconds) && seconds > 0 ? ` (المدة ${Math.round(seconds)} ث)` : ''
 
   let body: string
   if (abandoned) {
-    body = inbound ? '📞 مكالمة واردة لم يتم الرد عليها' : '📞 مكالمة صادرة لم تكتمل'
+    body = inbound ? `📞 مكالمة واردة لم يتم الرد عليها — من ${phone}` : `📞 مكالمة صادرة لم تكتمل — إلى ${phone}`
   } else if (inbound) {
-    body = `📞 مكالمة واردة — تم الرد${durText}`
+    body = `📞 مكالمة واردة — تم الرد — من ${phone}${durText}`
   } else {
-    body = `📞 مكالمة صادرة${durText}`
+    body = `📞 مكالمة صادرة — إلى ${phone}${durText}`
   }
 
   // The agent who handled the call. Abandoned calls have no agent; answered
@@ -514,7 +544,8 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   // Bevatel fires one call.timeout per queue extension while a call rings,
   // then a final call.abandoned/call.ended — same call_id every time. Dedupe
   // on it so one physical call doesn't post several "missed call" comments.
-  const callId = data.call_id != null ? String(data.call_id) : undefined
+  // call.ended carries the identifier under `id` instead of `call_id`.
+  const callId = (data.call_id ?? data.id) != null ? String(data.call_id ?? data.id) : undefined
 
   const res = await appendToLead({
     tenantId,
@@ -522,6 +553,7 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     source: 'bevatel_call',
     activityBody: body,
     activityExternalId: callId ? `bevatel_call_${callId}` : undefined,
+    activityActorLabel: agent.name || agent.email || undefined,
     agent,
   })
 

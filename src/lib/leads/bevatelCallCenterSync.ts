@@ -167,8 +167,8 @@ export async function syncBevatelCallCenter(tenantId: string, from: Date, to: Da
     const disposition = row.event.replace(/^END CALL\s*/, '').trim()
     const answered = /COMPLETE/i.test(disposition)
     const body = answered
-      ? `📞 مكالمة واردة — تم الرد${row.duration ? ` (المدة ${row.duration})` : ''}`
-      : '📞 مكالمة واردة لم يتم الرد عليها'
+      ? `📞 مكالمة واردة — تم الرد — من ${phone}${row.duration ? ` (المدة ${row.duration})` : ''}`
+      : `📞 مكالمة واردة لم يتم الرد عليها — من ${phone}`
 
     const externalId = `bevatel_avail_${row.date}_${row.agent || 'unknown'}_${phone}`
 
@@ -178,6 +178,7 @@ export async function syncBevatelCallCenter(tenantId: string, from: Date, to: Da
       source: 'bevatel_call',
       activityBody: body,
       activityExternalId: externalId,
+      activityActorLabel: row.agent || undefined,
       agent: { name: row.agent || undefined },
     })
 
