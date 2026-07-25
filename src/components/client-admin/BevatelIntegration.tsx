@@ -177,6 +177,9 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
 
   const [ccSyncing, setCcSyncing] = useState(false)
   const [ccSyncMsg, setCcSyncMsg] = useState('')
+  // How far back to pull. The route caps this at 30 days; a wider window is
+  // what backfills call history that predates the integration working.
+  const [ccSyncDays, setCcSyncDays] = useState(3)
 
   async function runCcSync() {
     setCcSyncing(true)
@@ -185,7 +188,7 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
       const res = await fetch('/api/client-admin/bevatel/callcenter-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days: 3 }),
+        body: JSON.stringify({ days: ccSyncDays }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -434,11 +437,26 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
         </div>
 
         <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">مزامنة المكالمات المردود عليها (آخر 3 أيام)</p>
+          <p className="text-xs font-semibold text-foreground mb-1">مزامنة المكالمات المردود عليها</p>
           <p className="text-xs text-muted2 mb-2">
             تسحب تقرير مركز الاتصال وتربط كل مكالمة منتهية بالعميل (بالرقم) والموظف (بالاسم)، وتضيفها لتايم لاين العميل.
+            آمن للتكرار — المكالمة المسجّلة مسبقًا لا تتكرر.
           </p>
           <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-xs text-muted flex items-center gap-1.5">
+              الفترة
+              <select
+                value={ccSyncDays}
+                onChange={e => setCcSyncDays(Number(e.target.value))}
+                disabled={ccSyncing}
+                className="input !py-1 !px-2 text-xs"
+              >
+                <option value={3}>آخر 3 أيام</option>
+                <option value={7}>آخر 7 أيام</option>
+                <option value={14}>آخر 14 يوم</option>
+                <option value={30}>آخر 30 يوم</option>
+              </select>
+            </label>
             <button onClick={runCcSync} disabled={ccSyncing || !hasCcKey} className="btn btn-outline text-xs !py-1.5 gap-2">
               <RefreshCw size={14} className={ccSyncing ? 'animate-spin' : ''} /> مزامنة الآن
             </button>
