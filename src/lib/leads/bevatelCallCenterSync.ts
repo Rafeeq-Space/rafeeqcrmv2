@@ -66,6 +66,9 @@ function formatDate(d: Date): string {
 // endpoint (404s for every path tried). time_zone is required by this
 // endpoint specifically (unlike the sibling "answered calls" report, where
 // it's optional) — omitting it fails validation with a 400.
+//
+// `/v1/reports/agents/activity-events` is a documented sibling that returns
+// the identical row shape and works the same; either path is fine.
 async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: string, page: number): Promise<AvailabilityResponse> {
   // Only the "+" is escaped (as %2B) — a literal "+" in a query string
   // decodes to a space. The colon is left as-is: every manually-tested
@@ -81,6 +84,14 @@ async function fetchPage(creds: CallCenterCreds, fromDate: string, toDate: strin
       // default UA is what worked when this exact request was tested by
       // hand, so it's mimicked here rather than left blank.
       'User-Agent': 'curl/8.7.1',
+      // MUST be set explicitly. Node's fetch (undici) otherwise sends
+      // `accept-language: *`, which makes Bevatel's reports API return a
+      // bare 500 "Internal server error" for every request — bisected
+      // header-by-header against the live API on 2026-07-25. Their own docs
+      // tester and curl both work purely because neither sends that value.
+      // This one header was the entire cause of the "reports API is down"
+      // symptom; nothing else about the request needed to change.
+      'Accept-Language': 'en-US,en;q=0.9',
     },
     // @ts-expect-error — `dispatcher` is an undici/Node-fetch extension, not
     // part of the standard fetch() typings, but Next.js's runtime honors it.

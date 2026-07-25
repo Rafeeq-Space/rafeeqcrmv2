@@ -1,6 +1,6 @@
 # RafeeqCRM — Project Overview
 
-> **Purpose of this file**: a single technical reference covering everything built in this project, what actually works end-to-end vs. what's partial/incomplete, and the full permissions model. Originally written from a direct code audit on 2026-07-16, **substantially updated on 2026-07-22** after a long session that touched auth/2FA, tenant suspension, leads archive/export/delete, the campaign detail page, and a new self-service employee profile page (full list in §11). Re-read the linked files before trusting anything here after significant future changes — this is a snapshot, not a live document.
+> **Purpose of this file**: a single technical reference covering everything built in this project, what actually works end-to-end vs. what's partial/incomplete, and the full permissions model. Originally written from a direct code audit on 2026-07-16, **substantially updated on 2026-07-22** after a long session that touched auth/2FA, tenant suspension, leads archive/export/delete, the campaign detail page, and a new self-service employee profile page (full list in §11). **Updated again 2026-07-25** with the Bevatel Call Center audit — per-event webhook payload shapes, missed-call round-robin, and the root-cause of the long-running reports-API 500s (an `accept-language` header Node's `fetch` adds implicitly — not a Bevatel outage) (§9.2a/§9.2b). Re-read the linked files before trusting anything here after significant future changes — this is a snapshot, not a live document.
 >
 > **Repo**: `Rafeeq-Space/rafeeqcrmv2` — pushes to `main` auto-deploy via a connected Vercel project.
 
@@ -297,9 +297,50 @@ One shared manifest/icon set for the whole app (not per-tenant branding) — `sr
 
 Two-way sync via a Google Apps Script pasted into the client's sheet. New rows POST to `/api/leads/sheet-webhook/[formId]` (round-robin assigned like a normal form); manual status changes in the sheet's auto-added "الحالة" dropdown POST to the `/status` variant; CRM-side status changes optionally push back into the sheet via a deployed Apps Script Web App URL (`sheet_writeback_url`). Fully functional, dedup-protected (by row index, phone, or email).
 
-### 9.2 Bevatel (chat + calls) — fully documented earlier this project
+### 9.2 Bevatel (chat + calls)
 
 Webhook-based two-way sync (`/api/integrations/bevatel/{chat,calls}/[tenantId]/[secret]`) matching by phone number, plus optional API-token-based status sync back to Bevatel's `crm_status` contact attribute. Includes a bulk **"assign old leads" tool** (widened per this project's changes — see §11) that: (1) matches Bevatel-sourced unassigned leads to their Bevatel conversation owner, then (2) round-robins anything still unassigned, tenant-wide, across active sales reps, regardless of source.
+
+#### 9.2a Call Center webhook — event shapes (audited against production payloads 2026-07-25)
+
+**Every call event uses different field names for the same concepts.** This was the root cause of a long-standing bug where most call events were silently dropped (see §12); don't assume one shape:
+
+| Event | Customer phone field | Call id field | Outcome source | Duration |
+|---|---|---|---|---|
+| `call.started` | `from_number` | `call_id` | — (ringing only) | — |
+| `call.timeout` / `call.abandoned` | `caller_number` | `call_id` | event name | — |
+| `call.ended` | `connected_line_num` | **`id`** (not `call_id`) | **`dial_status`** (`ANSWER`/`BUSY`/`NOANSWER`) | `talk_time` as **`"HH:MM:SS"`**, not seconds |
+
+Consequences baked into `handleBevatelCall` (`src/lib/leads/bevatelLead.ts`):
+
+- **`call.started` is deliberately ignored** (logged to `bevatel_webhook_logs`, then early-return). It fires once per ringing queue extension — 6+ times for one physical call — and since dedupe is keyed on the call id, letting it through would claim the timeline slot with a premature "answered" comment and cause the real terminal event to be discarded as a duplicate.
+- `call.ended`'s outcome must come from `dial_status`, never the event name — a `BUSY`/`NOANSWER` outbound call is still `call.ended`.
+- **Missed/abandoned calls carry no agent at all**, so they never reach the "assign to whoever answered" path. They now round-robin tenant-wide via `tenants.bevatel_call_rr_index` (`supabase/add_bevatel_call_rr_index.sql`), but **only when the lead has no owner yet** — an already-owned lead is never reassigned by a missed call.
+
+#### 9.2b The reports-API "outage" was our own `accept-language` bug (solved 2026-07-25)
+
+The pull-based sync (`bevatelCallCenterSync.ts`, the "sync answered calls" button) returned a bare `500 {"success":false,"message":"Internal server error"}` on every call, for weeks, against every `/v1/reports/*` endpoint.
+
+**Cause: Node's global `fetch` (undici) silently adds `accept-language: *`, and Bevatel's reports API 500s on that value.** Setting `'Accept-Language': 'en-US,en;q=0.9'` explicitly in `fetchPage` fixes it completely. Nothing else was wrong — same key, host, path, and params all along.
+
+The bisect that found it, all within one minute with the same key: `curl` → **200**; raw `node:https` → **200**; `undici fetch` → **500**. Then undici's implicit headers were added to `node:https` one at a time until `accept-language: *` reproduced the 500 (`sec-fetch-mode`, `accept-encoding` variants, `connection`, `content-type` were all harmless).
+
+> ⚠️ **Two confident-but-wrong conclusions were reached and recorded before this. Don't re-derive either:**
+> 1. *"Bevatel's whole reports module is broken account-wide."* It worked fine from their own docs tester with our exact key.
+> 2. *"It's geo-restricted to Saudi Arabia"* (their request routed via Cloudflare Dammam, ours via Milan). Disproven by a VPN test that succeeded from a non-Saudi location.
+>
+> **Generalisable lesson**: when a third-party API works from `curl` but not from Next.js, diff the headers the HTTP client injects implicitly before suspecting the vendor. They don't appear anywhere in the calling code.
+
+Verified working after the fix, on the live API: `/v1/reports/agents/availability/details` **and** `/v1/reports/agents/activity-events` both return 200 with an identical row shape, e.g. `{event: "END CALL COMPLETECALLER", data: "00201000094180", duration: "00:00:07", agent: "TAREK FAZAA"}` — exactly what the existing reconciliation loop already parses.
+
+**Still open — `call.ended` webhook is never delivered for answered queue calls.** Independent of the above and unexplained: we get `call.started` per ringing extension and `call.abandoned` for missed calls, but nothing terminal for an answered call (last `call.ended` ever received: 2026-07-23), while Bevatel's dashboard shows those same calls as `COMPLETECALLER` with real talk time. **Now low priority** — the pull sync supplies the same data, so §9.2a's `call.ended` parsing may simply stay dormant.
+
+**Dead ends — don't re-investigate:**
+- `cloud16.bevatel.com` (seen in pagination links) is internal-only: Apache 404 on every public path, with or without the `/api/developer` prefix.
+- `bevatel-gcp-api.bevatel.com` (the admin panel's own API) rejects our key with `401 "No mandatory 'kid' in claims"` — it wants a panel session JWT, so mirroring the panel's data source isn't viable.
+- Endpoint paths can't be guessed from dashboard column names — every guess 404s. Their **real** docs, with a working request tester, are at **`developers.bevatel.com`** — neither linked from their marketing site nor web-searchable.
+
+**Useful diagnostic surfaces**: (1) Bevatel's docs tester — ground truth for "does this endpoint work at all", and the thing that disproved the outage theory; (2) their panel's **Webhooks → Logs** page, listing every delivery they attempted with event name, status, attempts, target URL, and full JSON body — authoritative for "did Bevatel actually send this event?", independent of our own logs.
 
 ### 9.3 Facebook (Instant Form / Lead Ads)
 
@@ -384,6 +425,9 @@ Pushes lead-status changes back to each linked ad platform as conversion events.
 Pulled together from every section above, so it's scannable in one place:
 
 - **`ad_lead_webhook_events` does not exist in production** (confirmed 2026-07-22 via direct service-role query — `PGRST205`, PostgREST suggested `tiktok_webhook_events` instead), yet the shared FB/TikTok/Snapchat ingestion pipeline (`adLeadWebhook.ts`, `facebookLeadAds.ts`, `tiktokInstantFormLead.ts`) still references it for raw-payload logging. That insert is almost certainly failing silently against production right now. **Not yet root-caused further** — unconfirmed whether lead creation itself still succeeds despite the failing insert, or whether it errors out before the lead row is written. Top priority to investigate next. *(§4, §7.2a)*
+- **`call.ended` webhook is never delivered for answered queue calls** — we only ever get `call.started` + `call.abandoned`, while Bevatel's dashboard shows those calls as completed with real talk time. Unexplained, but **low priority**: the pull-based reports sync now works and supplies the same data. *(§9.2b)*
+  - *(Resolved 2026-07-25 — the long-running `/v1/reports/*` 500s were **our** bug: Node's `fetch` auto-sends `accept-language: *`, which Bevatel's API 500s on. Two earlier diagnoses — "their outage" and "geo-blocked to Saudi" — were both wrong; see §9.2b before revisiting.)*
+- **~330 historical `call.ended` events were dropped** by the field-name bug fixed in `8c1953b` — their raw payloads are still in `bevatel_webhook_logs` and could be replayed through the corrected logic to create the missing lead activities. Backfill not built; decision pending. *(§9.2a)*
 - **Web push notifications (Chrome/Safari) are not built.** Requested by the user as item 7 of a 7-item batch but explicitly deferred to a future request; would need a service worker (none exists — intentional, see §8.1), VAPID keys, push-subscription storage, and a backend trigger tied to the existing `notifications` table.
 - **Ad-platform leads (FB/TikTok/Snapchat) never get an assigned sales rep at creation time** — only fixable after the fact via the widened Bevatel backfill tool (§11.4). *(Structural gap, §9.8)*
 - **Templates feature is backend-only and disconnected from the UI** — no GET route, no UI entry point anywhere. *(§7.6)*
