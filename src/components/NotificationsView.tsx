@@ -67,7 +67,14 @@ export default function NotificationsView({ viewerId, leadBasePath }: { viewerId
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  // Loads once on mount, then polls — same 12s cadence as the nav badge
+  // (useUnread.ts) — so a notification that arrived while this page was open
+  // (e.g. a colleague mentioning you) shows up without a manual refresh.
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 12000)
+    return () => clearInterval(id)
+  }, [load])
 
   async function markAllRead() {
     setItems(prev => prev.map(n => (n.recipient_id === viewerId ? { ...n, read: true } : n)))

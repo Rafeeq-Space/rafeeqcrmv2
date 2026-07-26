@@ -186,6 +186,18 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
     if (member !== 'all' && !visibleMembers.some(m => m.id === member)) setMember('all')
   }, [visibleMembers, member])
 
+  // `leads` is server-fetched (fetchVisibleLeads) and handed down as a prop —
+  // there's no client-side fetch to poll here, so a periodic router.refresh()
+  // re-runs that same server query and hands back fresh props in place,
+  // without a full navigation or losing filter/scroll state. Same 12s cadence
+  // as the notifications list, so a lead a colleague just touched (new
+  // message, status change, assignment) surfaces at the top without a manual
+  // reload.
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 12000)
+    return () => clearInterval(id)
+  }, [router])
+
   // Leads after every filter EXCEPT status (period, search, campaign, team,
   // member). The overview cards and the status filter both derive from this, so
   // the whole page — including the 6 cards up top — reacts to the period/search
