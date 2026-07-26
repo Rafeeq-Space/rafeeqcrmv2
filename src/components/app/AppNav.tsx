@@ -9,7 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import PwaTopBarControls from '@/components/PwaTopBarControls'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
-import { unsubscribePush } from '@/lib/notifications/unsubscribePush'
+import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -92,11 +92,14 @@ export default function AppNav({ profile }: Props) {
     document.documentElement.style.setProperty('--app-sidebar-w', collapsed ? '4.75rem' : '18rem')
   }, [collapsed, mounted])
 
+  // Runs on every protected page (this nav is always mounted) so a device a
+  // previous, different user was signed into gets reconciled within the
+  // first page load of this session — see reconcilePushSubscription.ts.
+  useEffect(() => {
+    reconcilePushSubscription()
+  }, [])
+
   async function handleLogout() {
-    // Push subscriptions are per-device, not per-login — clear this device's
-    // before signing out so the next person to log in on it doesn't inherit
-    // this user's notifications.
-    await unsubscribePush()
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

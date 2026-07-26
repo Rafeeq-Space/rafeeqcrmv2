@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { BellRing, BellOff, Loader2, Info } from 'lucide-react'
 import { unsubscribePush } from '@/lib/notifications/unsubscribePush'
+import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
 
 // The VAPID public key travels to the push service as raw bytes, but env vars
 // are base64url strings — this is the standard conversion.
@@ -40,24 +41,15 @@ export default function PushToggle() {
 
       if (Notification.permission === 'denied') return 'blocked'
 
-      // Already subscribed on this device? A subscription surviving from a
-      // previous user who signed in here without ever hitting "logout" (the
-      // one path the sign-out cleanup doesn't cover) would otherwise silently
-      // keep forwarding their notifications to whoever's using it now — so an
-      // existing subscription is trusted only once the server confirms it's
-      // actually registered to the signed-in user; anything else gets
-      // detached rather than shown as "on".
+      // The nav bar already reconciles this device's subscription against
+      // whoever's signed in (reconcilePushSubscription, run on every
+      // protected page) — repeated here too since PushToggle can render
+      // before that's had a chance to finish, or independently of it.
       try {
+        await reconcilePushSubscription()
         const reg = await navigator.serviceWorker.getRegistration()
         const sub = await reg?.pushManager.getSubscription()
-        if (!sub) return 'off'
-
-        const res = await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`)
-        const d = await res.json().catch(() => ({}))
-        if (d.ownedByMe) return 'on'
-
-        await sub.unsubscribe().catch(() => {})
-        return 'off'
+        return sub ? 'on' : 'off'
       } catch {
         return 'off'
       }
