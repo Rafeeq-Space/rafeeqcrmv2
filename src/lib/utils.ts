@@ -81,6 +81,13 @@ function pick(data: Record<string, string> | undefined, keys: string[]): string 
   for (const [k, v] of Object.entries(data)) {
     if (!v) continue
     const nk = norm(k)
+    // A blank/whitespace-only column header (common in sheets imported from
+    // another export with an unlabeled first column) normalizes to ''. Every
+    // string "includes" '', so without this guard a blank-header column
+    // matches every field — whichever one happens to come first in the
+    // object wins, hijacking name/phone/email with whatever unrelated value
+    // sits in that unlabeled column.
+    if (!nk) continue
     if (nkeys.some(key => nk === key || nk.includes(key) || key.includes(nk))) {
       return String(v)
     }
