@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react'
 import type { Lead } from '@/lib/types'
+import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
@@ -189,14 +190,13 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   // `leads` is server-fetched (fetchVisibleLeads) and handed down as a prop —
   // there's no client-side fetch to poll here, so a periodic router.refresh()
   // re-runs that same server query and hands back fresh props in place,
-  // without a full navigation or losing filter/scroll state. Same 12s cadence
-  // as the notifications list, so a lead a colleague just touched (new
-  // message, status change, assignment) surfaces at the top without a manual
-  // reload.
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), 12000)
-    return () => clearInterval(id)
-  }, [router])
+  // without a full navigation or losing filter/scroll state. Same cadence as
+  // the notifications list, so a lead a colleague just touched (new message,
+  // status change, assignment) surfaces at the top without a manual reload.
+  // Paused while the tab is backgrounded (usePollWhenVisible) — this page is
+  // commonly left open all day.
+  const refresh = useCallback(() => router.refresh(), [router])
+  usePollWhenVisible(refresh, 12000)
 
   // Leads after every filter EXCEPT status (period, search, campaign, team,
   // member). The overview cards and the status filter both derive from this, so

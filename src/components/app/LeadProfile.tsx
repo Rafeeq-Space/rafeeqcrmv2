@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -46,25 +47,23 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
 
-  // Polls the timeline (same 12s cadence as the notifications list and leads
+  // Polls the timeline (same cadence as the notifications list and leads
   // table) so a colleague's comment/call/status change on this same lead
   // shows up without a manual reload. The server's list is the source of
   // truth, so this simply replaces local state — by the time a poll lands,
   // any of *our own* just-posted activities are already reflected in it too.
-  useEffect(() => {
-    const leadId = lead.id
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/leads/${leadId}/activity`, { cache: 'no-store' })
-        if (!res.ok) return
-        const json = await res.json()
-        if (json.activities) setActivities(json.activities)
-      } catch {
-        /* offline — keep showing the last known timeline */
-      }
-    }, 12000)
-    return () => clearInterval(id)
+  // Paused while the tab is backgrounded (usePollWhenVisible).
+  const refreshActivities = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/activity`, { cache: 'no-store' })
+      if (!res.ok) return
+      const json = await res.json()
+      if (json.activities) setActivities(json.activities)
+    } catch {
+      /* offline — keep showing the last known timeline */
+    }
   }, [lead.id])
+  usePollWhenVisible(refreshActivities, 12000)
 
   const canManage = role === 'client_admin' || role === 'client_sales_manager'
   // You can't share a lead with yourself.

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AtSign, UserPlus, Share2, Bell, CheckCheck, type LucideIcon } from 'lucide-react'
 import { leadName } from '@/lib/utils'
+import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 
 type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared'
 
@@ -67,14 +68,12 @@ export default function NotificationsView({ viewerId, leadBasePath }: { viewerId
     }
   }, [])
 
-  // Loads once on mount, then polls — same 12s cadence as the nav badge
+  // Loads once on mount, then polls — same cadence as the nav badge
   // (useUnread.ts) — so a notification that arrived while this page was open
   // (e.g. a colleague mentioning you) shows up without a manual refresh.
-  useEffect(() => {
-    load()
-    const id = setInterval(load, 12000)
-    return () => clearInterval(id)
-  }, [load])
+  // Paused while the tab is backgrounded (usePollWhenVisible).
+  useEffect(() => { load() }, [load])
+  usePollWhenVisible(load, 12000)
 
   async function markAllRead() {
     setItems(prev => prev.map(n => (n.recipient_id === viewerId ? { ...n, read: true } : n)))
