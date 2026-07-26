@@ -40,11 +40,24 @@ export default function PushToggle() {
 
       if (Notification.permission === 'denied') return 'blocked'
 
-      // Already subscribed on this device?
+      // Already subscribed on this device? A subscription surviving from a
+      // previous user who signed in here without ever hitting "logout" (the
+      // one path the sign-out cleanup doesn't cover) would otherwise silently
+      // keep forwarding their notifications to whoever's using it now — so an
+      // existing subscription is trusted only once the server confirms it's
+      // actually registered to the signed-in user; anything else gets
+      // detached rather than shown as "on".
       try {
         const reg = await navigator.serviceWorker.getRegistration()
         const sub = await reg?.pushManager.getSubscription()
-        return sub ? 'on' : 'off'
+        if (!sub) return 'off'
+
+        const res = await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`)
+        const d = await res.json().catch(() => ({}))
+        if (d.ownedByMe) return 'on'
+
+        await sub.unsubscribe().catch(() => {})
+        return 'off'
       } catch {
         return 'off'
       }

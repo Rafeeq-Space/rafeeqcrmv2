@@ -2,6 +2,29 @@ import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase } from '@/lib/supabase/admin'
 
+// Whether this device's existing browser subscription belongs to the caller.
+// Push subscriptions are per-device, not per-login: if someone else signed
+// into this same browser earlier and enabled notifications without ever
+// logging out (the one path unsubscribing-on-logout doesn't cover), this
+// device would otherwise silently keep forwarding their notifications to
+// whoever's using it now. Checked on every load of the toggle so a stale
+// subscription gets detached rather than trusted.
+export async function GET(request: Request) {
+  const viewer = await requireTenantUser()
+  if (!viewer) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+
+  const endpoint = new URL(request.url).searchParams.get('endpoint')
+  if (!endpoint) return NextResponse.json({ error: 'endpoint مطلوب' }, { status: 400 })
+
+  const { data } = await adminSupabase()
+    .from('push_subscriptions')
+    .select('profile_id')
+    .eq('endpoint', endpoint)
+    .maybeSingle()
+
+  return NextResponse.json({ ownedByMe: data?.profile_id === viewer.id })
+}
+
 // Stores the browser's PushSubscription against the signed-in user, so the
 // server can push to this specific device later. Any role may subscribe —
 // notifications are personal, not privileged.
