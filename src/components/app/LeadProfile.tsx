@@ -70,6 +70,12 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)
   const phone = leadPhone(lead.data)
+  // Split the sheet/form columns: the first 4 (in the sheet's own column order,
+  // preserved in `data`) surface in the summary card up top; the rest stay in
+  // the "بيانات النموذج" section below.
+  const dataEntries = Object.entries(lead.data || {})
+  const topEntries = dataEntries.slice(0, 4)
+  const restEntries = dataEntries.slice(4)
 
   async function post(path: string, body: unknown) {
     setBusy(true)
@@ -237,6 +243,18 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="flex items-center gap-2 text-foreground"><Clock size={15} className="text-muted2" /> آخر تحديث: {new Date(lead.updated_at || lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
             </div>
 
+            {/* First 4 sheet/form columns (the sheet's own column order) */}
+            {topEntries.length > 0 && (
+              <div className="space-y-2 text-sm border-t border-border pt-4 mt-4">
+                {topEntries.map(([k, v]) => (
+                  <div key={k}>
+                    <span className="text-muted2 font-semibold block text-xs">{k}</span>
+                    <span className="text-foreground break-all">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Assignment */}
             <div className="space-y-2 text-sm border-t border-border pt-4 mt-4">
               <div className="flex items-center gap-2"><User size={15} className="text-muted2" /><span className="text-muted2">موظف المبيعات:</span><span className="text-foreground font-semibold">{lead.assigned_sales?.full_name || 'غير مُسنَد'}</span></div>
@@ -261,12 +279,12 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             )}
           </div>
 
-          {/* Form data */}
-          {Object.keys(lead.data || {}).length > 0 && (
+          {/* Form data — everything after the first 4 columns shown up top */}
+          {(restEntries.length > 0 || lead.forms?.name) && (
             <div className="card p-5">
               <p className="text-sm font-bold text-foreground mb-3 flex items-center gap-2"><FileText size={15} style={{ color: 'var(--primary)' }} /> بيانات النموذج</p>
               <div className="space-y-2">
-                {Object.entries(lead.data || {}).map(([k, v]) => (
+                {restEntries.map(([k, v]) => (
                   <div key={k} className="text-sm">
                     <span className="text-muted2 font-semibold block text-xs">{k}</span>
                     <span className="text-foreground break-all">{String(v)}</span>
