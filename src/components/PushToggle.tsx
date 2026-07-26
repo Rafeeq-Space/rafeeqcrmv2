@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BellRing, BellOff, Loader2, Info } from 'lucide-react'
+import { unsubscribePush } from '@/lib/notifications/unsubscribePush'
 
 // The VAPID public key travels to the push service as raw bytes, but env vars
 // are base64url strings — this is the standard conversion.
@@ -101,18 +102,7 @@ export default function PushToggle() {
     setBusy(true)
     setError('')
     try {
-      const reg = await navigator.serviceWorker.getRegistration()
-      const sub = await reg?.pushManager.getSubscription()
-      if (sub) {
-        // Tell the server first — once unsubscribe() runs we no longer have the
-        // endpoint to delete, which would leave a dead row pushing forever.
-        await fetch('/api/push/subscribe', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        }).catch(() => {})
-        await sub.unsubscribe()
-      }
+      await unsubscribePush()
       setState('off')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'تعذّر الإيقاف')

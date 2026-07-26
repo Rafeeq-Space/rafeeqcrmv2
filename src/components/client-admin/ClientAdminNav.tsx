@@ -13,6 +13,7 @@ import Logo from '@/components/Logo'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import PwaTopBarControls from '@/components/PwaTopBarControls'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
+import { unsubscribePush } from '@/lib/notifications/unsubscribePush'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -121,6 +122,10 @@ export default function ClientAdminNav({ profile }: Props) {
   }, [collapsed, mounted])
 
   async function handleLogout() {
+    // Push subscriptions are per-device, not per-login — clear this device's
+    // before signing out so the next person to log in on it doesn't inherit
+    // this user's notifications.
+    await unsubscribePush()
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
