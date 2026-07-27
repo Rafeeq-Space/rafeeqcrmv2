@@ -25,6 +25,8 @@ interface Props {
   teams?: FilterOption[]
   members?: FilterOption[]
   bevatel?: { host: string; accountId: string } | null
+  currentUserId?: string
+  sharedWithMeIds?: string[]
 }
 
 // Overview stat cards (also act as quick status filters) shown at the top of
@@ -149,7 +151,7 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
   )
 }
 
-export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null }: Props) {
+export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, currentUserId, sharedWithMeIds = [] }: Props) {
   const router = useRouter()
   const [view, setView] = useState<'cards' | 'table'>('table')
   const [status, setStatus] = useState('all')
@@ -157,11 +159,24 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
+  const [source, setSource] = useState('all')
+  const [mineOnly, setMineOnly] = useState(false)
   const [period, setPeriod] = useState<PeriodKey>('day')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [search, setSearch] = useState('')
   const [showAddLead, setShowAddLead] = useState(false)
+
+  const sharedWithMeSet = useMemo(() => new Set(sharedWithMeIds), [sharedWithMeIds])
+
+  // Distinct source values actually present in the visible leads, so the
+  // dropdown never offers a source with zero matching leads. Falls back to
+  // 'direct' for leads with no source (same fallback campaignLabel() uses).
+  const sourceOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const l of leads) set.add(l.source || 'direct')
+    return [...set].sort((a, b) => (SOURCE_LABELS[a] || a).localeCompare((SOURCE_LABELS[b] || b), 'ar'))
+  }, [leads])
 
   const isAdmin = role === 'client_admin'
   const isManager = role === 'client_sales_manager'
@@ -229,6 +244,8 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
       if (team !== 'all' && l.assigned_team_id !== team) return false
       if (member !== 'all' && l.assigned_sales_id !== member) return false
+      if (source !== 'all' && (l.source || 'direct') !== source) return false
+      if (mineOnly && currentUserId && !(l.assigned_sales_id === currentUserId || sharedWithMeSet.has(l.id))) return false
       const t = new Date(l.created_at).getTime()
       if (minTime !== null && t < minTime) return false
       if (maxTime !== null && t > maxTime) return false
@@ -238,7 +255,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       }
       return true
     })
-  }, [leads, campaign, team, member, period, customFrom, customTo, search])
+  }, [leads, campaign, team, member, source, mineOnly, currentUserId, sharedWithMeSet, period, customFrom, customTo, search])
 
   const filtered = useMemo(
     () => scoped.filter(l =>
@@ -263,7 +280,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   // Snap back to a valid page whenever filters shrink the list.
-  useEffect(() => { setPage(1) }, [status, subStatus, campaign, team, member, period, customFrom, customTo, search])
+  useEffect(() => { setPage(1) }, [status, subStatus, campaign, team, member, source, mineOnly, period, customFrom, customTo, search])
   const safePage = Math.min(page, totalPages)
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
@@ -367,6 +384,18 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
             <option value="all">كل الموظفين</option>
             {visibleMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
+        )}
+        {sourceOptions.length > 0 && (
+          <select className="input !w-auto" value={source} onChange={e => setSource(e.target.value)}>
+            <option value="all">كل المصادر</option>
+            {sourceOptions.map(s => <option key={s} value={s}>{SOURCE_LABELS[s] || s}</option>)}
+          </select>
+        )}
+        {currentUserId && (
+          <label className="flex items-center gap-1.5 text-sm text-muted2 cursor-pointer select-none">
+            <input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} />
+            مسند لي أو مشارك معي
+          </label>
         )}
         <span className="text-sm text-muted2">{filtered.length} عميل محتمل</span>
 

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
-import { fetchVisibleLeads, adminSupabase, managedTeamIds } from '@/lib/leads/access'
+import { fetchVisibleLeads, adminSupabase, managedTeamIds, sharedLeadIds } from '@/lib/leads/access'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import LeadsAdminActions from '@/components/client-admin/LeadsAdminActions'
@@ -11,6 +11,7 @@ export default async function ClientAdminLeadsPage() {
   if (!viewer) redirect('/login')
 
   const leads = await fetchVisibleLeads(viewer)
+  const sharedWithMe = await sharedLeadIds(viewer.tenantId, viewer.id)
   const supa = adminSupabase()
 
   const [{ data: campaigns }, { data: teams }] = await Promise.all([
@@ -61,6 +62,8 @@ export default async function ClientAdminLeadsPage() {
           teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
           members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
           bevatel={bevatel}
+          currentUserId={viewer.id}
+          sharedWithMeIds={sharedWithMe}
         />
       </div>
     </LeadSelectionProvider>

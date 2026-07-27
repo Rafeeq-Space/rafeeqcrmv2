@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
-import { fetchVisibleLeads, adminSupabase } from '@/lib/leads/access'
+import { fetchVisibleLeads, adminSupabase, sharedLeadIds } from '@/lib/leads/access'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
 
@@ -9,6 +9,7 @@ export default async function MyLeadsPage() {
   if (!viewer) redirect('/login')
 
   const leads = await fetchVisibleLeads(viewer)
+  const sharedWithMe = await sharedLeadIds(viewer.tenantId, viewer.id)
   const supa = adminSupabase()
 
   // Campaigns for filtering — limited to campaigns present in the visible leads.
@@ -43,6 +44,8 @@ export default async function MyLeadsPage() {
         tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
         bevatel={bevatel}
+        currentUserId={viewer.id}
+        sharedWithMeIds={sharedWithMe}
       />
     </div>
   )

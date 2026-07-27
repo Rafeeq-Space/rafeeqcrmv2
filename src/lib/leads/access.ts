@@ -31,7 +31,7 @@ export async function teamMemberIds(tenantId: string, teamIds: string[]): Promis
 }
 
 // Lead ids explicitly shared with a user.
-async function sharedLeadIds(tenantId: string, profileId: string): Promise<string[]> {
+export async function sharedLeadIds(tenantId: string, profileId: string): Promise<string[]> {
   const supa = adminSupabase()
   const { data } = await supa.from('lead_shares').select('lead_id').eq('tenant_id', tenantId).eq('profile_id', profileId)
   return (data || []).map(s => s.lead_id)

@@ -56,6 +56,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   bevatel_chat: 'بيفاتيل — شات',
   bevatel_call: 'بيفاتيل — مكالمة',
   rafeeqsocial: 'رفيق سوشيال — واتساب',
+  direct: 'مباشر',
 }
 
 // Pull a display name / phone out of a lead's free-form submitted data.
