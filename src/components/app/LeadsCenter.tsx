@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2 } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
@@ -160,7 +160,8 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
   const [source, setSource] = useState('all')
-  const [mineOnly, setMineOnly] = useState(false)
+  const [assignedToMe, setAssignedToMe] = useState(false)
+  const [sharedWithMeOnly, setSharedWithMeOnly] = useState(false)
   const [period, setPeriod] = useState<PeriodKey>('day')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -245,7 +246,8 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       if (team !== 'all' && l.assigned_team_id !== team) return false
       if (member !== 'all' && l.assigned_sales_id !== member) return false
       if (source !== 'all' && (l.source || 'direct') !== source) return false
-      if (mineOnly && currentUserId && !(l.assigned_sales_id === currentUserId || sharedWithMeSet.has(l.id))) return false
+      if (assignedToMe && currentUserId && l.assigned_sales_id !== currentUserId) return false
+      if (sharedWithMeOnly && !sharedWithMeSet.has(l.id)) return false
       const t = new Date(l.created_at).getTime()
       if (minTime !== null && t < minTime) return false
       if (maxTime !== null && t > maxTime) return false
@@ -255,7 +257,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       }
       return true
     })
-  }, [leads, campaign, team, member, source, mineOnly, currentUserId, sharedWithMeSet, period, customFrom, customTo, search])
+  }, [leads, campaign, team, member, source, assignedToMe, sharedWithMeOnly, currentUserId, sharedWithMeSet, period, customFrom, customTo, search])
 
   const filtered = useMemo(
     () => scoped.filter(l =>
@@ -280,7 +282,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   // Snap back to a valid page whenever filters shrink the list.
-  useEffect(() => { setPage(1) }, [status, subStatus, campaign, team, member, source, mineOnly, period, customFrom, customTo, search])
+  useEffect(() => { setPage(1) }, [status, subStatus, campaign, team, member, source, assignedToMe, sharedWithMeOnly, period, customFrom, customTo, search])
   const safePage = Math.min(page, totalPages)
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
@@ -358,7 +360,7 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
       </div>
 
       {/* Filters + view toggle */}
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="card p-3 flex flex-wrap gap-3 items-center">
         <select className="input !w-auto" value={subStatus} onChange={e => setSubStatus(e.target.value)}>
           <option value="all">اختر الحالة</option>
           {SUB_STATUS_GROUPS.map(g => (
@@ -392,10 +394,22 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
           </select>
         )}
         {currentUserId && (
-          <label className="flex items-center gap-1.5 text-sm text-muted2 cursor-pointer select-none">
-            <input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} />
-            مسند لي أو مشارك معي
-          </label>
+          <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setAssignedToMe(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${assignedToMe ? 'bg-surface text-primary shadow-sm' : 'text-muted hover:text-foreground'}`}
+            >
+              <User size={14} /> مسند لي
+            </button>
+            <button
+              type="button"
+              onClick={() => setSharedWithMeOnly(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 ${sharedWithMeOnly ? 'bg-surface text-primary shadow-sm' : 'text-muted hover:text-foreground'}`}
+            >
+              <Share2 size={14} /> مشارك معي
+            </button>
+          </div>
         )}
         <span className="text-sm text-muted2">{filtered.length} عميل محتمل</span>
 
