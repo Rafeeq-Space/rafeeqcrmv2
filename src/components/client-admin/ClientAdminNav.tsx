@@ -14,6 +14,7 @@ import DateTimePrayer from '@/components/DateTimePrayer'
 import PwaTopBarControls from '@/components/PwaTopBarControls'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
 import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
+import { useAutoBevatelCallSync } from '@/lib/leads/useAutoBevatelCallSync'
 import { useEffect, useState } from 'react'
 
 interface Props {
@@ -127,6 +128,11 @@ export default function ClientAdminNav({ profile }: Props) {
   useEffect(() => {
     reconcilePushSubscription()
   }, [])
+
+  // Keeps Bevatel's answered-call sync running in the background for any
+  // client_admin who has the dashboard open, instead of relying on someone
+  // remembering to click the manual button — see useAutoBevatelCallSync.ts.
+  useAutoBevatelCallSync(profile?.role)
 
   async function handleLogout() {
     const supabase = createClient()
