@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import UsersManager from '@/components/client-admin/UsersManager'
@@ -5,7 +6,11 @@ import UsersManager from '@/components/client-admin/UsersManager'
 export default async function ClientAdminUsersPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user!.id).single()
+
+  // User management is client_admin only.
+  if (profile?.role !== 'client_admin') redirect('/client-admin/dashboard')
+
   const tenantId = profile?.tenant_id || ''
 
   // Use service role to bypass RLS — client_admin needs to see all tenant profiles
