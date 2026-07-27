@@ -2,6 +2,8 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
+import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
+import type { Lead } from '@/lib/types'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
 //
@@ -353,6 +355,31 @@ async function syncStatusFromAttribute(tenantId: string, leadId: string, label: 
 
 // ── Chat (Bevatel Business Chat — Chatwoot-shaped payload) ────────────────────
 
+// Distributes a chat lead round-robin across every active rep in the tenant —
+// a fresh conversation nobody has claimed in Bevatel yet (or one an outgoing
+// message's sender couldn't be matched from) would otherwise sit unassigned
+// until someone happens to reply. Persists the rotation in
+// tenants.bevatel_chat_rr_index — separate from the call-center counter, so
+// each channel rotates independently.
+async function assignChatRoundRobin(tenantId: string): Promise<{ id: string; team_id: string | null } | null> {
+  const supa = adminSupabase()
+  const { data: repsRaw } = await supa
+    .from('profiles')
+    .select('id, team_id, suspended')
+    .eq('tenant_id', tenantId)
+    .in('role', ['client_sales_manager', 'client_user'])
+    .order('full_name')
+  const reps = (repsRaw || []).filter(r => !r.suspended)
+  if (!reps.length) return null
+
+  const { data: tenant } = await supa.from('tenants').select('bevatel_chat_rr_index').eq('id', tenantId).single()
+  const idx = (((tenant?.bevatel_chat_rr_index ?? 0) % reps.length) + reps.length) % reps.length
+  await supa.from('tenants').update({ bevatel_chat_rr_index: idx + 1 }).eq('id', tenantId)
+
+  const rep = reps[idx]
+  return { id: rep.id, team_id: rep.team_id ?? null }
+}
+
 export async function handleBevatelChat(tenantId: string, payload: Record<string, unknown>) {
   const conversation = (payload.conversation as Record<string, unknown>) || {}
   // Message events nest the conversation under `conversation`; conversation
@@ -461,6 +488,44 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // the CRM lead (agent changed the status in Bevatel → status in the CRM).
   if (res.leadId && statusLabel) {
     await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
+  }
+
+  // A fresh/unclaimed conversation carries no agent hint, so it never goes
+  // through the "hand it to whoever answered" logic above — this catches
+  // anything that still has no owner after normal processing and round-robins
+  // it, same as missed calls. Unlike calls, a chat conversation is a live
+  // object in Bevatel, so the decision is also pushed back there
+  // (pushAssigneeToBevatel) — their own view reflects the same owner, not
+  // just ours.
+  if (res.leadId) {
+    const { data: leadRow } = await adminSupabase()
+      .from('leads')
+      .select('assigned_sales_id, tenant_id, bevatel_conversation_id')
+      .eq('id', res.leadId)
+      .single()
+    if (leadRow && !leadRow.assigned_sales_id) {
+      const rep = await assignChatRoundRobin(tenantId)
+      if (rep) {
+        await adminSupabase()
+          .from('leads')
+          .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id, updated_at: new Date().toISOString() })
+          .eq('id', res.leadId)
+        await adminSupabase().from('lead_activities').insert({
+          tenant_id: tenantId,
+          lead_id: res.leadId,
+          actor_id: null,
+          type: 'assignment',
+          mentioned_id: rep.id,
+        })
+        await createNotification(adminSupabase(), {
+          tenantId,
+          recipientId: rep.id,
+          type: 'lead_assigned',
+          leadId: res.leadId,
+        })
+        await pushAssigneeToBevatel({ ...leadRow, id: res.leadId } as Lead, rep.id).catch(() => {})
+      }
+    }
   }
 
   await recordEvent(tenantId, {

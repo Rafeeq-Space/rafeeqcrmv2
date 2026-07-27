@@ -100,6 +100,8 @@ export interface Tenant {
   rafeeqsocial_rr_index?: number
   // Round-robin counter for missed/abandoned Bevatel calls nobody has claimed yet.
   bevatel_call_rr_index?: number
+  // Round-robin counter for Bevatel chat leads nobody has claimed yet.
+  bevatel_chat_rr_index?: number
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
