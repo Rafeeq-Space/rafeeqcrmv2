@@ -4,14 +4,13 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2, X, Radio, KeyRound, Copy, Check } from 'lucide-react'
 import type { AdConnection, AdPlatform } from '@/lib/types'
 import DateTimePrayer from '@/components/DateTimePrayer'
-import BevatelIntegration, { type BevatelLog } from '@/components/client-admin/BevatelIntegration'
+import BevatelIntegration from '@/components/client-admin/BevatelIntegration'
 import RafeeqSocialIntegration from '@/components/client-admin/RafeeqSocialIntegration'
 
 interface CampaignOption { id: string; name: string }
 
 interface BevatelData {
   secret: string
-  logs: BevatelLog[]
   api: { hasToken: boolean; host: string; accountId: string }
   callCenterApi: { hasKey: boolean; workspaceId: string; host: string }
 }
@@ -365,7 +364,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
 
       {/* Bevatel integration */}
       {onBevatel && bevatel ? (
-        <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} logs={bevatel.logs} api={bevatel.api} callCenterApi={bevatel.callCenterApi} />
+        <BevatelIntegration tenantId={tenantId} secret={bevatel.secret} api={bevatel.api} callCenterApi={bevatel.callCenterApi} />
       ) : onRafeeqSocial && rafeeqSocial ? (
         <RafeeqSocialIntegration tenantId={tenantId} secret={rafeeqSocial.secret} api={rafeeqSocial.api} />
       ) : /* Connections list */

@@ -1,22 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageSquare, Phone, Copy, Check, RefreshCw, MessageCircle, PhoneCall } from 'lucide-react'
+import { MessageSquare, Phone, Copy, Check, RefreshCw } from 'lucide-react'
 import DateTimePrayer from '@/components/DateTimePrayer'
-
-export interface BevatelLog {
-  id: string
-  kind: 'chat' | 'call'
-  event: string
-  direction: 'in' | 'out'
-  phone: string
-  agent_hint: string
-  matched: boolean
-  created: boolean
-  assigned: boolean
-  lead_id: string | null
-  created_at: string
-}
 
 interface BevatelApi {
   hasToken: boolean
@@ -36,7 +22,6 @@ interface BevatelCallCenterApi {
 interface Props {
   tenantId: string
   secret: string
-  logs: BevatelLog[]
   api: BevatelApi
   callCenterApi: BevatelCallCenterApi
 }
@@ -63,57 +48,7 @@ function CopyField({ label, url }: { label: string; url: string }) {
   )
 }
 
-function LogRow({ log }: { log: BevatelLog }) {
-  // Explain the outcome in one plain-Arabic phrase so the reason a lead did or
-  // didn't get assigned is obvious without reading the raw fields.
-  // Bevatel's own call-leg lifecycle events (rings starting/stopping on each
-  // extension) never carry a customer number by design — harmless noise, not
-  // a delivery problem. Anything else missing a phone is a real issue.
-  const isHarmlessCallLifecycle = log.kind === 'call' && (log.event === 'call.started' || log.event === 'call.ended')
-
-  let status: string
-  let tone: 'ok' | 'warn' | 'bad'
-  if (log.assigned) {
-    status = 'أُسنِد لموظف ✓'
-    tone = 'ok'
-  } else if (log.phone === 'بدون رقم' && isHarmlessCallLifecycle) {
-    status = 'حدث نظامي (بداية/نهاية رنة) — لا يحمل رقم عميل'
-    tone = 'warn'
-  } else if (log.phone === 'بدون رقم') {
-    status = 'حدث بدون رقم — تم تجاهله'
-    tone = 'bad'
-  } else if (log.agent_hint === 'none') {
-    status = 'لا يحمل بيانات موظف من بيفاتيل'
-    tone = 'warn'
-  } else if (!log.matched) {
-    status = `موظف «${log.agent_hint}» غير مطابق في CRM`
-    tone = 'bad'
-  } else {
-    status = 'مطابَق — الليد مُسنَد بالفعل'
-    tone = 'ok'
-  }
-  const toneColor = tone === 'ok' ? 'var(--success, #16a34a)' : tone === 'warn' ? '#d97706' : '#dc2626'
-  const when = new Date(log.created_at).toLocaleString('ar-EG', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
-  return (
-    <tr className="border-t border-[var(--border)]">
-      <td className="py-2 px-2 whitespace-nowrap text-muted2">{when}</td>
-      <td className="py-2 px-2">
-        <span className="inline-flex items-center gap-1">
-          {log.kind === 'call' ? <PhoneCall size={13} /> : <MessageCircle size={13} />}
-          {log.kind === 'call' ? 'مكالمة' : 'شات'}
-        </span>
-      </td>
-      <td className="py-2 px-2 whitespace-nowrap">{log.direction === 'in' ? 'واردة' : 'صادرة'}</td>
-      <td className="py-2 px-2 whitespace-nowrap text-muted2" dir="ltr">{log.event}</td>
-      <td className="py-2 px-2 whitespace-nowrap" dir="ltr">{log.phone === 'بدون رقم' ? '—' : `••••${log.phone.slice(-4)}`}</td>
-      <td className="py-2 px-2 font-medium" style={{ color: toneColor }}>{status}</td>
-    </tr>
-  )
-}
-
-export default function BevatelIntegration({ tenantId, secret, logs, api, callCenterApi }: Props) {
+export default function BevatelIntegration({ tenantId, secret, api, callCenterApi }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -206,58 +141,6 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
     }
   }
 
-  // Assign existing unassigned leads tenant-wide: first match Bevatel leads to
-  // their conversation owner (bounded batch; re-run until done), then
-  // round-robin anything still unassigned — any source — across active reps.
-  const [backfilling, setBackfilling] = useState(false)
-  const [backfillMsg, setBackfillMsg] = useState('')
-
-  async function runBackfill() {
-    setBackfilling(true)
-    setBackfillMsg('')
-    try {
-      const res = await fetch('/api/client-admin/bevatel/backfill', { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok) {
-        setBackfillMsg(d.error || 'تعذّر التشغيل')
-      } else {
-        const parts = [
-          `تمّت مراجعة ${d.reviewed} ليد من بيفاتيل — أُسند ${d.assigned}، بدون مسؤول ${d.noAssignee}، موظف غير مربوط ${d.unmatched}. متبقّي ${d.remaining}.`,
-          `توزيع بالدور: أُسند ${d.roundRobinAssigned} ليد إضافية على الفريق${d.stillUnassigned ? ` — ${d.stillUnassigned} بلا موظفين نشطين لإسنادها إليهم` : ''}.`,
-        ]
-        setBackfillMsg(parts.join(' '))
-      }
-    } catch {
-      setBackfillMsg('تعذّر الاتصال')
-    } finally {
-      setBackfilling(false)
-    }
-  }
-
-  // Bevatel Business Chat agents (id/name/email) — fetched on demand so an
-  // admin can copy the exact email into an employee's "bevatel_agent_id".
-  const [agents, setAgents] = useState<{ id: number; name?: string; email?: string }[] | null>(null)
-  const [loadingAgents, setLoadingAgents] = useState(false)
-  const [agentsError, setAgentsError] = useState('')
-
-  async function loadAgents() {
-    setLoadingAgents(true)
-    setAgentsError('')
-    try {
-      const res = await fetch('/api/client-admin/bevatel/agents')
-      const d = await res.json()
-      if (!res.ok) {
-        setAgentsError(d.error || 'تعذّر الجلب')
-      } else {
-        setAgents(d.agents || [])
-      }
-    } catch {
-      setAgentsError('تعذّر الاتصال')
-    } finally {
-      setLoadingAgents(false)
-    }
-  }
-
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const chatUrl = `${origin}/api/integrations/bevatel/chat/${tenantId}/${currentSecret}`
   const callsUrl = `${origin}/api/integrations/bevatel/calls/${tenantId}/${currentSecret}`
@@ -346,61 +229,6 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
           </button>
           {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
         </div>
-
-        <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs text-muted mb-1">
-            الحالة تتزامن عبر سمة العميل <span dir="ltr" className="font-mono text-muted2">crm_status</span> في بيفاتيل — أي تغيير على أي جهة يظهر في الجهة الأخرى.
-          </p>
-        </div>
-
-        <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">موظفو بيفاتيل شات — لمعرفة الإيميل الصحيح لكل موظف</p>
-          <p className="text-xs text-muted2 mb-2">
-            يجيب قائمة الموظفين المسجّلين في حساب بيفاتيل شات (بالإيميل)، عشان تنسخيه بالظبط في حقل
-            &quot;معرّف الموظف في بيفاتيل&quot; بملف كل موظف.
-          </p>
-          <button onClick={loadAgents} disabled={loadingAgents || !hasToken} className="btn btn-outline text-xs !py-1.5 gap-2">
-            <RefreshCw size={14} className={loadingAgents ? 'animate-spin' : ''} /> عرض موظفي بيفاتيل شات
-          </button>
-          {!hasToken && <p className="text-xs text-muted2 mt-1">احفظي مفتاح API فوق الأول</p>}
-          {agentsError && <p className="text-xs mt-1" style={{ color: 'var(--danger, #dc2626)' }}>{agentsError}</p>}
-          {agents && (
-            <div className="mt-2 rounded-xl border border-[var(--border)] overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--border)] bg-surface2">
-                    <th className="text-start font-medium px-3 py-1.5">الاسم</th>
-                    <th className="text-start font-medium px-3 py-1.5">الإيميل (انسخيه)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map(a => (
-                    <tr key={a.id} className="border-t border-[var(--border)]">
-                      <td className="px-3 py-1.5">{a.name || '—'}</td>
-                      <td className="px-3 py-1.5" dir="ltr">{a.email || '—'}</td>
-                    </tr>
-                  ))}
-                  {agents.length === 0 && (
-                    <tr><td colSpan={2} className="px-3 py-3 text-center text-muted2">لا يوجد موظفون</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">إسناد الليدز القديمة (كل المصادر)</p>
-          <p className="text-xs text-muted2 mb-2">
-            يمرّ على كل الليدز غير المُسندة — من بيفاتيل أو فيسبوك أو تيك توك أو سناب شات أو أي مصدر آخر. يحاول أولًا إسناد ليدز بيفاتيل لموظفها المسؤول هناك، ثم يوزّع أي ليد تبقى بدون إسناد بالدور على فريق المبيعات. آمن للتكرار — اضغطه حتى يصبح المتبقّي صفرًا.
-          </p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <button onClick={runBackfill} disabled={backfilling} className="btn btn-outline text-xs !py-1.5 gap-2">
-              <RefreshCw size={14} className={backfilling ? 'animate-spin' : ''} /> مزامنة إسناد الليدز القديمة
-            </button>
-            {backfillMsg && <span className="text-xs text-muted">{backfillMsg}</span>}
-          </div>
-        </div>
       </div>
 
       <div className="card p-5 mt-4 space-y-4">
@@ -466,47 +294,6 @@ export default function BevatelIntegration({ tenantId, secret, logs, api, callCe
         </div>
       </div>
 
-      <div className="card p-5 mt-4">
-        <h3 className="font-bold text-foreground mb-2 text-sm">كيف يعمل الربط؟</h3>
-        <ul className="text-sm text-muted space-y-1.5 list-disc ps-5">
-          <li>عند أي رسالة أو مكالمة، نبحث عن عميل بنفس رقم الهاتف داخل حسابك.</li>
-          <li>لو العميل موجود، نضيف الحدث في سِجل العميل (Timeline).</li>
-          <li>لو غير موجود، نُنشئ ليد جديدة تلقائيًا برقمه واسمه.</li>
-          <li>نحاول إسناد الليد للموظف المطابق في بيفاتيل (بالبريد أو الرقم)، وإلا تبقى دون إسناد.</li>
-        </ul>
-      </div>
-
-      <div className="card p-5 mt-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="font-bold text-foreground text-sm">آخر الأحداث الواردة</h3>
-            <p className="text-xs text-muted2 mt-0.5">آخر ٥٠ حدث وصلنا من بيفاتيل — لمعرفة سبب عدم إسناد أي ليد.</p>
-          </div>
-        </div>
-        {logs.length === 0 ? (
-          <p className="text-sm text-muted2 py-6 text-center">
-            لم يصل أي حدث بعد. تأكد من لصق الرابط في إعدادات Webhook بلوحة بيفاتيل وتفعيل الأحداث.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted2 text-start">
-                  <th className="py-1.5 px-2 font-medium text-start">الوقت</th>
-                  <th className="py-1.5 px-2 font-medium text-start">النوع</th>
-                  <th className="py-1.5 px-2 font-medium text-start">الاتجاه</th>
-                  <th className="py-1.5 px-2 font-medium text-start">الحدث</th>
-                  <th className="py-1.5 px-2 font-medium text-start">الرقم</th>
-                  <th className="py-1.5 px-2 font-medium text-start">النتيجة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map(log => <LogRow key={log.id} log={log} />)}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
