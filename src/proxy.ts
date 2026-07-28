@@ -50,6 +50,22 @@ export async function proxy(request: NextRequest) {
   // On localhost, treat no subdomain as empty
   if (subdomain === hostname) subdomain = ''
 
+  // ── Next.js prefetch requests never touch auth ──
+  // Every visible <Link> gets auto-prefetched — each one is a full request
+  // through this middleware. Right after the access token expires (exactly
+  // the state after a PWA has been closed a while), several of these can
+  // fire within milliseconds of the real navigation, each independently
+  // calling updateSession()'s getUser() — which re-validates *and refreshes*
+  // against Supabase's Auth server. Supabase rotates refresh tokens, so only
+  // one of several near-simultaneous refresh attempts on the same token can
+  // win; the rest come back unauthenticated, and if one of those "losing"
+  // responses is what the browser ends up keeping, the real navigation looks
+  // logged out even though the fix in updateSession()'s cookie-forwarding is
+  // working correctly. Skipping prefetches removes the biggest source of
+  // that pile-up — a skipped prefetch is harmless, Next.js still fetches the
+  // real page normally the moment it's actually clicked.
+  if (request.headers.get('next-router-prefetch')) return NextResponse.next()
+
   // ── Public: API routes pass through unchanged ──
   if (pathname.startsWith('/api/')) return NextResponse.next()
 
