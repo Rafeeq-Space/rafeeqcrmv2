@@ -4,6 +4,19 @@ import { adminSupabase } from '@/lib/supabase/admin'
 
 type TenantStatus = 'active' | 'suspended' | 'missing'
 
+// `updateSession()` may have refreshed the auth token and written the new
+// cookie onto `supabaseResponse` — but every redirect/rewrite below it builds
+// a BRAND NEW NextResponse, which doesn't carry that cookie along for free.
+// Any exit path taken after `updateSession()` runs must copy it over,
+// otherwise the browser keeps the old (about-to-be-invalidated, since
+// Supabase rotates refresh tokens) cookie and looks logged out on its very
+// next request — this was silently dropping the session on every redirect
+// below except the one `/admin` rewrite that already did this by hand.
+function withSessionCookies(response: NextResponse, supabaseResponse: NextResponse): NextResponse {
+  supabaseResponse.cookies.getAll().forEach(c => response.cookies.set(c.name, c.value))
+  return response
+}
+
 async function getTenantStatus(subdomain: string): Promise<TenantStatus> {
   try {
     const supabase = adminSupabase()
@@ -68,10 +81,10 @@ export async function proxy(request: NextRequest) {
     const { supabaseResponse, user, profile } = await updateSession(request)
 
     if (!user) {
-      return NextResponse.redirect(new URL('/logininin', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/logininin', request.url)), supabaseResponse)
     }
     if (user && profile?.role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/logininin', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/logininin', request.url)), supabaseResponse)
     }
     return supabaseResponse
   }
@@ -94,10 +107,10 @@ export async function proxy(request: NextRequest) {
     const isLoginPath = pathname === '/client-admin/login'
 
     if (!user && !isLoginPath) {
-      return NextResponse.redirect(new URL('/client-admin/login', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/client-admin/login', request.url)), supabaseResponse)
     }
     if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
-      return NextResponse.redirect(new URL('/client-admin/login', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/client-admin/login', request.url)), supabaseResponse)
     }
     return supabaseResponse
   }
@@ -115,16 +128,16 @@ export async function proxy(request: NextRequest) {
     const isLoginPath = pathname === '/admin/login'
 
     if (!user && !isLoginPath) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/login', request.url)), supabaseResponse)
     }
     if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/login', request.url)), supabaseResponse)
     }
     // Tenant isolation: block admins/managers from accessing a different tenant's subdomain
     if (user && (profile?.role === 'client_admin' || profile?.role === 'client_sales_manager') && !isLoginPath) {
       const profileSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (profileSubdomain && profileSubdomain !== subdomain) {
-        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
+        return withSessionCookies(NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url)), supabaseResponse)
       }
     }
 
@@ -161,36 +174,36 @@ export async function proxy(request: NextRequest) {
       const loginUrl = new URL('/login', request.url)
       if (subdomain) loginUrl.searchParams.set('subdomain', subdomain)
       loginUrl.searchParams.set('error', 'suspended')
-      return NextResponse.redirect(loginUrl)
+      return withSessionCookies(NextResponse.redirect(loginUrl), supabaseResponse)
     }
 
     // Unauthenticated → login
     if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/admin')) {
       const loginUrl = new URL('/login', request.url)
       if (subdomain) loginUrl.searchParams.set('subdomain', subdomain)
-      return NextResponse.redirect(loginUrl)
+      return withSessionCookies(NextResponse.redirect(loginUrl), supabaseResponse)
     }
 
     if (pathname.startsWith('/login')) return supabaseResponse
 
     // super_admin has no business on a client subdomain → send to their portal
     if (user && role === 'super_admin') {
-      return NextResponse.redirect(new URL('/saas/dashboard', `${request.nextUrl.protocol}//${isLocalhost ? 'localhost:3000' : rootDomain}`))
+      return withSessionCookies(
+        NextResponse.redirect(new URL('/saas/dashboard', `${request.nextUrl.protocol}//${isLocalhost ? 'localhost:3000' : rootDomain}`)),
+        supabaseResponse
+      )
     }
 
     // client_admin / sales_manager trying to access /app — redirect to admin portal
     if (user && (role === 'client_admin' || role === 'client_sales_manager') && pathname.startsWith('/app')) {
-      return NextResponse.redirect(new URL('/client-admin/dashboard', request.url))
+      return withSessionCookies(NextResponse.redirect(new URL('/client-admin/dashboard', request.url)), supabaseResponse)
     }
 
     // Tenant isolation check (production only) — must run before any rewrite
     if (user && !isLocalhost && profile && subdomain) {
       const userSubdomain = (profile as { tenants?: { subdomain?: string } }).tenants?.subdomain
       if (userSubdomain && userSubdomain !== subdomain) {
-        if (role === 'client_admin' || role === 'client_sales_manager') {
-          return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
-        }
-        return NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url))
+        return withSessionCookies(NextResponse.redirect(new URL('/login?error=wrong_tenant', request.url)), supabaseResponse)
       }
     }
 
@@ -200,7 +213,7 @@ export async function proxy(request: NextRequest) {
     if (pathname.startsWith('/app') || pathname.startsWith('/client-admin') || pathname.startsWith('/two-factor')) {
       const rewriteResponse = NextResponse.rewrite(request.nextUrl.clone())
       if (subdomain) rewriteResponse.headers.set('x-subdomain', subdomain)
-      return rewriteResponse
+      return withSessionCookies(rewriteResponse, supabaseResponse)
     }
 
     // Rewrite /path → /app/path for subdomain requests
@@ -209,7 +222,7 @@ export async function proxy(request: NextRequest) {
       url.pathname = `/app${pathname}`
       const rewriteResponse = NextResponse.rewrite(url)
       rewriteResponse.headers.set('x-subdomain', subdomain)
-      return rewriteResponse
+      return withSessionCookies(rewriteResponse, supabaseResponse)
     }
   }
 
