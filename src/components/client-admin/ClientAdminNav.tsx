@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, BookOpen, Users, Target, Contact,
   LogOut, Menu, X, Radio, Bell, ChevronsLeft, ChevronsRight,
-  FileBarChart, Goal, Archive, UserCircle
+  FileBarChart, Goal, Archive
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -90,12 +90,6 @@ const navItems = [
     desc: 'المنصات الإعلانية والربط مع بيفاتيل',
     icon: Radio,
     adminOnly: true,
-  },
-  {
-    href: '/client-admin/profile',
-    label: 'ملفي الشخصي',
-    desc: 'بياناتك، فريقك، وأداؤك',
-    icon: UserCircle,
   },
 ]
 

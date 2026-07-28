@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   Users, UserPlus, Plus, Trash2, X, Phone, MessageCircle,
   Pencil, PauseCircle, PlayCircle, Crown, ChevronLeft, Goal, ShieldCheck,
@@ -1107,9 +1106,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                     {canAddMember && (
                       <td className="px-5 py-3">
                         {self ? (
-                          <Link href="/client-admin/profile" className="text-muted2 hover:text-primary transition p-1.5 rounded-lg inline-flex" title="ملفي الشخصي">
-                            <Pencil size={15} />
-                          </Link>
+                          <span className="text-muted2 text-xs">—</span>
                         ) : canEditMember(m) ? (
                           <div className="flex items-center gap-1">
                             <button onClick={() => { setEditMember(m); setShowAddMember(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
