@@ -56,6 +56,7 @@ export default async function AppProfilePage() {
       leadStats={leadStats}
       monthlyConverted={bySales.get(user.id) || 0}
       targetsHref="/app/targets"
+      leadsHref="/app/my-leads"
     />
   )
 }

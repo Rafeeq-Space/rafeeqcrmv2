@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2 } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
@@ -151,18 +151,45 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
   )
 }
 
-export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, currentUserId, sharedWithMeIds = [] }: Props) {
+// Status values a caller may deep-link to via `?status=`, beyond the plain
+// per-status keys — 'in_progress' mirrors LeadStats.inProgress (contacted +
+// qualified combined), matching the "قيد المتابعة" stat card on the profile
+// page, which has no single matching `leads.status` value of its own.
+const VALID_STATUS_PARAMS = new Set(['all', 'new', 'contacted', 'qualified', 'converted', 'lost', 'in_progress'])
+const VALID_PERIOD_PARAMS = new Set(['all', 'day', 'week', 'month', 'thisMonth'])
+
+// useSearchParams() (for the profile-page deep-link support below) requires
+// a Suspense boundary — wrapped here so every existing call site doesn't
+// need to add one itself.
+export default function LeadsCenter(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <LeadsCenterInner {...props} />
+    </Suspense>
+  )
+}
+
+function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, currentUserId, sharedWithMeIds = [] }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [view, setView] = useState<'cards' | 'table'>('table')
-  const [status, setStatus] = useState('all')
+  // Deep-link support (e.g. from the profile page's personal stat cards):
+  // ?status=new&mine=1&period=all pre-applies those filters on first render.
+  const [status, setStatus] = useState(() => {
+    const s = searchParams.get('status')
+    return s && VALID_STATUS_PARAMS.has(s) ? s : 'all'
+  })
   const [subStatus, setSubStatus] = useState('all')
   const [campaign, setCampaign] = useState('all')
   const [team, setTeam] = useState('all')
   const [member, setMember] = useState('all')
   const [source, setSource] = useState('all')
-  const [assignedToMe, setAssignedToMe] = useState(false)
+  const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get('mine') === '1')
   const [sharedWithMeOnly, setSharedWithMeOnly] = useState(false)
-  const [period, setPeriod] = useState<PeriodKey>('day')
+  const [period, setPeriod] = useState<PeriodKey>(() => {
+    const p = searchParams.get('period')
+    return p && VALID_PERIOD_PARAMS.has(p) ? (p as PeriodKey) : 'day'
+  })
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [search, setSearch] = useState('')
@@ -260,10 +287,13 @@ export default function LeadsCenter({ leads, role, basePath, tenantId, campaigns
   }, [leads, campaign, team, member, source, assignedToMe, sharedWithMeOnly, currentUserId, sharedWithMeSet, period, customFrom, customTo, search])
 
   const filtered = useMemo(
-    () => scoped.filter(l =>
-      (status === 'all' || l.status === status) &&
-      (subStatus === 'all' || l.sub_status === subStatus)
-    ),
+    () => scoped.filter(l => {
+      const statusMatches =
+        status === 'all' ? true :
+        status === 'in_progress' ? (l.status === 'contacted' || l.status === 'qualified') :
+        l.status === status
+      return statusMatches && (subStatus === 'all' || l.sub_status === subStatus)
+    }),
     [scoped, status, subStatus],
   )
 

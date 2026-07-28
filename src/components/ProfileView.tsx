@@ -40,10 +40,14 @@ interface Props {
   leadStats: LeadStats
   monthlyConverted: number
   targetsHref: string
+  leadsHref: string
 }
 
-export default function ProfileView({ profile, team, leadStats, monthlyConverted, targetsHref }: Props) {
+export default function ProfileView({ profile, team, leadStats, monthlyConverted, targetsHref, leadsHref }: Props) {
   const router = useRouter()
+  // Name/job title are set by client_admin (at signup or via team-member
+  // edit) — a sales rep/manager can see them but not change them themselves.
+  const canEditIdentity = profile.role === 'client_admin'
   const [form, setForm] = useState({
     full_name: profile.full_name,
     phone: profile.phone || '',
@@ -71,9 +75,8 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          full_name: form.full_name,
           phone: form.phone,
-          job_title: form.job_title,
+          ...(canEditIdentity ? { full_name: form.full_name, job_title: form.job_title } : {}),
           ...(form.password ? { password: form.password } : {}),
         }),
       })
@@ -104,12 +107,15 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
     }
   }
 
-  const STAT_CARDS: { label: string; value: number; color: string; icon: typeof User }[] = [
-    { label: 'إجمالي العملاء', value: leadStats.total, color: 'var(--foreground)', icon: User },
-    { label: 'جديد', value: leadStats.new, color: 'var(--primary)', icon: Clock },
-    { label: 'قيد المتابعة', value: leadStats.inProgress, color: 'var(--warning)', icon: TrendingUp },
-    { label: 'تم البيع', value: leadStats.converted, color: 'var(--success)', icon: CheckCircle2 },
-    { label: 'غير مؤهل', value: leadStats.lost, color: 'var(--danger)', icon: XCircle },
+  // statusParam feeds the leads center's own `?status=` deep-link support —
+  // 'in_progress' is a sentinel it expands to contacted+qualified, since
+  // that combined bucket has no single matching `leads.status` value.
+  const STAT_CARDS: { label: string; value: number; color: string; icon: typeof User; statusParam: string }[] = [
+    { label: 'إجمالي العملاء', value: leadStats.total, color: 'var(--foreground)', icon: User, statusParam: 'all' },
+    { label: 'جديد', value: leadStats.new, color: 'var(--primary)', icon: Clock, statusParam: 'new' },
+    { label: 'قيد المتابعة', value: leadStats.inProgress, color: 'var(--warning)', icon: TrendingUp, statusParam: 'in_progress' },
+    { label: 'تم البيع', value: leadStats.converted, color: 'var(--success)', icon: CheckCircle2, statusParam: 'converted' },
+    { label: 'غير مؤهل', value: leadStats.lost, color: 'var(--danger)', icon: XCircle, statusParam: 'lost' },
   ]
 
   return (
@@ -133,12 +139,23 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <label className="label">الاسم الكامل</label>
-              <input className="input" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
+              {canEditIdentity ? (
+                <input className="input" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} required />
+              ) : (
+                <p className="input bg-surface2 text-muted cursor-not-allowed">{form.full_name}</p>
+              )}
             </div>
             <div>
               <label className="label flex items-center gap-1.5"><Briefcase size={13} /> المسمى الوظيفي</label>
-              <input className="input" value={form.job_title} onChange={e => setForm({ ...form, job_title: e.target.value })} placeholder="مثال: أخصائي مبيعات عقارية" />
+              {canEditIdentity ? (
+                <input className="input" value={form.job_title} onChange={e => setForm({ ...form, job_title: e.target.value })} placeholder="مثال: أخصائي مبيعات عقارية" />
+              ) : (
+                <p className="input bg-surface2 text-muted cursor-not-allowed">{form.job_title || '—'}</p>
+              )}
             </div>
+            {!canEditIdentity && (
+              <p className="text-xs text-muted2">الاسم والمسمى الوظيفي بيتحددوا من مدير الحساب — كلمة السر والمصادقة الثنائية تقدر تغيّرهم براحتك.</p>
+            )}
             <div>
               <label className="label flex items-center gap-1.5"><Phone size={13} /> رقم الهاتف</label>
               <input dir="ltr" className="input text-start" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="05XXXXXXXX" />
@@ -220,11 +237,15 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
           {STAT_CARDS.map(c => {
             const Icon = c.icon
             return (
-              <div key={c.label} className="rounded-xl p-4 bg-surface2 border border-border">
+              <Link
+                key={c.label}
+                href={`${leadsHref}?mine=1&period=all&status=${c.statusParam}`}
+                className="rounded-xl p-4 bg-surface2 border border-border transition hover:border-primary"
+              >
                 <Icon size={16} style={{ color: c.color }} />
                 <p className="text-xl font-extrabold mt-2" style={{ color: c.color }}>{c.value}</p>
                 <p className="text-xs text-muted2 mt-0.5">{c.label}</p>
-              </div>
+              </Link>
             )
           })}
         </div>

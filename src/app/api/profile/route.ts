@@ -13,16 +13,22 @@ export async function PATCH(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user.id).single()
   if (!profile?.tenant_id) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const { full_name, phone, job_title, password } = await request.json()
   const admin = adminSupabase()
 
+  // Name and job title are set by client_admin when creating/editing the
+  // employee — a sales rep/manager can view but not change their own, so
+  // this never trusts anything the client-side form sends for those fields
+  // unless the caller actually is the admin.
+  const canEditIdentity = profile.role === 'client_admin'
+
   const updates: Record<string, string | null> = {}
-  if (typeof full_name === 'string' && full_name.trim()) updates.full_name = full_name.trim()
+  if (canEditIdentity && typeof full_name === 'string' && full_name.trim()) updates.full_name = full_name.trim()
   if (typeof phone === 'string') updates.phone = phone || null
-  if (typeof job_title === 'string') updates.job_title = job_title || null
+  if (canEditIdentity && typeof job_title === 'string') updates.job_title = job_title || null
 
   if (Object.keys(updates).length > 0) {
     const { error } = await admin.from('profiles').update(updates).eq('id', user.id)

@@ -56,6 +56,7 @@ export default async function ClientAdminProfilePage() {
       leadStats={leadStats}
       monthlyConverted={bySales.get(user.id) || 0}
       targetsHref="/client-admin/targets"
+      leadsHref="/client-admin/leads"
     />
   )
 }
