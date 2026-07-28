@@ -1,6 +1,7 @@
 import { adminSupabase as createServerClient } from '@/lib/supabase/admin'
 import PublicForm from '@/components/PublicForm'
 import HtmlFormView from '@/components/HtmlFormView'
+import TikTokPixelScript from '@/components/TikTokPixelScript'
 import { notFound } from 'next/navigation'
 
 export default async function PublicFormPage({
@@ -37,16 +38,36 @@ export default async function PublicFormPage({
     fbclid: sp.fbclid || '',
   }
 
+  // Base pixel (page-view tracking) for whichever TikTok connection this
+  // tenant has, if any — separate from the server-side Events API call in
+  // syncEvent.ts, which reports the lead itself and doesn't need this. Only
+  // the pixel id (never the access token) reaches the browser.
+  const { data: tiktokConn } = await supabase
+    .from('ad_connections')
+    .select('pixel_id')
+    .eq('tenant_id', form.tenant_id)
+    .eq('platform', 'tiktok')
+    .limit(1)
+    .maybeSingle()
+
   // HTML-based forms are rendered inside a sandboxed iframe that captures leads.
   if (form.html) {
-    return <HtmlFormView form={form} campaign={form.campaigns} trackingParams={trackingParams} />
+    return (
+      <>
+        {tiktokConn?.pixel_id && <TikTokPixelScript pixelId={tiktokConn.pixel_id} />}
+        <HtmlFormView form={form} campaign={form.campaigns} trackingParams={trackingParams} />
+      </>
+    )
   }
 
   return (
-    <PublicForm
-      form={form}
-      campaign={form.campaigns}
-      trackingParams={trackingParams}
-    />
+    <>
+      {tiktokConn?.pixel_id && <TikTokPixelScript pixelId={tiktokConn.pixel_id} />}
+      <PublicForm
+        form={form}
+        campaign={form.campaigns}
+        trackingParams={trackingParams}
+      />
+    </>
   )
 }
