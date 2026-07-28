@@ -242,7 +242,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             </div>
 
             <div className="space-y-2.5 text-sm border-t border-border pt-4">
-              {phone && <div className="flex items-center gap-2 text-foreground" dir="ltr"><Phone size={15} className="text-muted2" /> {phone}</div>}
+              {phone && <div className="flex items-center gap-2 text-foreground"><Phone size={15} className="text-muted2" /> <span dir="ltr">{phone}</span></div>}
               <div className="flex items-center gap-2 text-foreground flex-wrap"><Megaphone size={15} className="text-muted2" /> {lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'}{lead.campaigns?.name && lead.source && <span className="badge bg-surface2 text-muted2">{SOURCE_LABELS[lead.source] || lead.source}</span>}</div>
               <div className="flex items-center gap-2 text-foreground"><Calendar size={15} className="text-muted2" /> أُنشئ: {new Date(lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
               <div className="flex items-center gap-2 text-foreground"><Clock size={15} className="text-muted2" /> آخر تحديث: {new Date(lead.updated_at || lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
