@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ShieldCheck, LogOut, Copy, Check } from 'lucide-react'
 import Logo from '@/components/Logo'
 
-type Mode = 'loading' | 'enroll' | 'challenge'
+// 'resume' = an unverified factor already exists from an earlier page load, so
+// the authenticator app already holds its secret. We can't re-render its QR
+// (Supabase only returns the secret once, at enroll time), so we ask for the
+// code instead of silently issuing a new secret — see startFresh() below.
+type Mode = 'loading' | 'enroll' | 'resume' | 'challenge'
 
 // Handles both first-time enrolment (scan QR + confirm) and every-login
 // verification (enter code) using Supabase's built-in TOTP MFA.
@@ -29,7 +33,39 @@ export default function TwoFactorForm({ next }: { next: string }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Decide enrol vs challenge on mount.
+  // Issues a brand-new TOTP secret and shows its QR. Only ever called when
+  // there's no pending factor, or when the user explicitly asks to rescan.
+  const beginEnroll = useCallback(async () => {
+    const { data, error: listErr } = await supabase.auth.mfa.listFactors()
+    if (listErr) { setError('تعذّر تحميل بيانات المصادقة، حاول تحديث الصفحة.'); return }
+
+    // enroll() rejects a duplicate friendly name, so clear leftovers first.
+    const stale = (data?.all || []).filter(f => f.factor_type === 'totp' && f.status !== 'verified')
+    for (const f of stale) await supabase.auth.mfa.unenroll({ factorId: f.id })
+
+    const { data: enrolled, error: enrollErr } = await supabase.auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName: 'Authenticator',
+    })
+    if (enrollErr || !enrolled) { setError('تعذّر بدء التفعيل، حاول تحديث الصفحة.'); return }
+    setFactorId(enrolled.id)
+    setQr(enrolled.totp.qr_code)
+    setSecret(enrolled.totp.secret)
+    setCode('')
+    setError('')
+    setMode('enroll')
+  }, [supabase])
+
+  // "I never scanned it / I want a new QR" — the only path that throws the
+  // pending secret away, so it's always a deliberate user action.
+  async function startFresh() {
+    setBusy(true)
+    setError('')
+    await beginEnroll()
+    setBusy(false)
+  }
+
+  // Decide enrol vs resume vs challenge on mount.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -44,24 +80,23 @@ export default function TwoFactorForm({ next }: { next: string }) {
         return
       }
 
-      // No verified factor → enrol. Clear any half-finished (unverified) factor
-      // first, otherwise enroll() errors on the duplicate friendly name.
-      const stale = (data?.all || []).filter(f => f.factor_type === 'totp' && f.status !== 'verified')
-      for (const f of stale) await supabase.auth.mfa.unenroll({ factorId: f.id })
+      // An unverified factor means a previous load of this page already issued
+      // a secret the user very likely scanned. Reuse it instead of unenrolling
+      // and issuing a new one: regenerating on every load silently invalidates
+      // whatever they just scanned, and litters their authenticator app with
+      // several identical-looking entries where only the newest one works —
+      // which reads as "the code is always wrong" with no way to tell why.
+      const pending = (data?.all || []).find(f => f.factor_type === 'totp' && f.status !== 'verified')
+      if (pending) {
+        setFactorId(pending.id)
+        setMode('resume')
+        return
+      }
 
-      const { data: enrolled, error: enrollErr } = await supabase.auth.mfa.enroll({
-        factorType: 'totp',
-        friendlyName: 'Authenticator',
-      })
-      if (cancelled) return
-      if (enrollErr || !enrolled) { setError('تعذّر بدء التفعيل، حاول تحديث الصفحة.'); return }
-      setFactorId(enrolled.id)
-      setQr(enrolled.totp.qr_code)
-      setSecret(enrolled.totp.secret)
-      setMode('enroll')
+      if (!cancelled) await beginEnroll()
     })()
     return () => { cancelled = true }
-  }, [supabase])
+  }, [supabase, beginEnroll])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -71,7 +106,7 @@ export default function TwoFactorForm({ next }: { next: string }) {
 
     const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({ factorId })
     if (chErr || !challenge) {
-      setError('حدث خطأ، حاول مرة أخرى.')
+      setError(`حدث خطأ، حاول مرة أخرى.${chErr?.message ? ` (${chErr.message})` : ''}`)
       setBusy(false)
       return
     }
@@ -81,7 +116,12 @@ export default function TwoFactorForm({ next }: { next: string }) {
       code: code.trim(),
     })
     if (verifyErr) {
-      setError('الرمز غير صحيح أو انتهت صلاحيته. جرّب الرمز الحالي في التطبيق.')
+      // Always surface Supabase's own message alongside the friendly line.
+      // Without it, a rate-limit ("too many requests"), an expired challenge,
+      // or a genuinely wrong code are indistinguishable — all three used to
+      // read as "wrong code", sending the user into a retry loop that makes a
+      // rate-limit worse and leaves nothing to diagnose from.
+      setError(`الرمز غير صحيح أو انتهت صلاحيته. جرّب الرمز الحالي في التطبيق.${verifyErr.message ? ` (${verifyErr.message})` : ''}`)
       setCode('')
       setBusy(false)
       return
@@ -144,6 +184,26 @@ export default function TwoFactorForm({ next }: { next: string }) {
             </div>
           )}
 
+          {mode === 'resume' && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted leading-relaxed">
+                بدأت تفعيل المصادقة قبل كده — لو مسحت الكود بالفعل، اكتب الرمز الظاهر في تطبيق المصادقة دلوقتي.
+              </p>
+              <button
+                type="button"
+                onClick={startFresh}
+                disabled={busy}
+                className="text-xs font-semibold"
+                style={{ color: 'var(--primary)' }}
+              >
+                لم أمسح الكود — أريد كود QR جديد
+              </button>
+              <p className="text-xs text-muted2 leading-relaxed">
+                لو طلبت كود جديد، امسح أي إدخال قديم لهذا الحساب من تطبيق المصادقة الأول — الإدخالات القديمة بتبقى شكلها زي الجديد بالظبط ولكن أكوادها مش هتشتغل.
+              </p>
+            </div>
+          )}
+
           {mode === 'challenge' && (
             <p className="text-sm text-muted mb-4 leading-relaxed">
               افتح تطبيق المصادقة على تليفونك واكتب الرمز المكوّن من 6 أرقام.
@@ -165,7 +225,7 @@ export default function TwoFactorForm({ next }: { next: string }) {
               />
               {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
               <button type="submit" disabled={busy || code.length < 6} className="btn btn-primary w-full">
-                {busy ? 'جارٍ التحقق...' : mode === 'enroll' ? 'تفعيل وتأكيد' : 'دخول'}
+                {busy ? 'جارٍ التحقق...' : mode === 'enroll' || mode === 'resume' ? 'تفعيل وتأكيد' : 'دخول'}
               </button>
             </form>
           )}
