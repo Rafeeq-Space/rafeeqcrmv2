@@ -4,15 +4,7 @@ import { useEffect, useState } from 'react'
 import { BellRing, BellOff, Loader2, Info } from 'lucide-react'
 import { unsubscribePush } from '@/lib/notifications/unsubscribePush'
 import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
-
-// The VAPID public key travels to the push service as raw bytes, but env vars
-// are base64url strings — this is the standard conversion.
-function urlBase64ToUint8Array(base64: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
-  const normalized = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = window.atob(normalized)
-  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
-}
+import { subscribeToPush } from '@/lib/notifications/subscribePush'
 
 type State = 'loading' | 'unsupported' | 'needs-install' | 'off' | 'on' | 'blocked'
 
@@ -67,40 +59,15 @@ export default function PushToggle() {
   async function enable() {
     setBusy(true)
     setError('')
-    try {
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') {
-        setState(permission === 'denied' ? 'blocked' : 'off')
-        return
-      }
-
-      const reg = await navigator.serviceWorker.register('/sw.js')
-      // A freshly-registered worker isn't active yet; subscribing before it is
-      // fails intermittently.
-      await navigator.serviceWorker.ready
-
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!key) throw new Error('مفاتيح الإشعارات غير مضبوطة على السيرفر')
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
-      })
-
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub.toJSON()),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(d.error || 'تعذّر تسجيل الجهاز')
-
+    const result = await subscribeToPush()
+    if (result.ok) {
       setState('on')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذّر تفعيل الإشعارات')
-    } finally {
-      setBusy(false)
+    } else if (result.reason === 'denied') {
+      setState('blocked')
+    } else {
+      setError(result.message || 'تعذّر تفعيل الإشعارات')
     }
+    setBusy(false)
   }
 
   async function disable() {

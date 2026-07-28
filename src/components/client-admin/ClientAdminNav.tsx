@@ -12,6 +12,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import Logo from '@/components/Logo'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import PwaTopBarControls from '@/components/PwaTopBarControls'
+import PushPrompt from '@/components/PushPrompt'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
 import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
 import { useAutoBevatelCallSync } from '@/lib/leads/useAutoBevatelCallSync'
@@ -264,6 +265,8 @@ export default function ClientAdminNav({ profile }: Props) {
 
   return (
     <>
+      <PushPrompt />
+
       {/* Mobile top bar */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
