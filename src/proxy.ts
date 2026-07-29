@@ -4,6 +4,29 @@ import { adminSupabase } from '@/lib/supabase/admin'
 
 type TenantStatus = 'active' | 'suspended' | 'missing'
 
+// Every response this middleware produces depends on who is signed in, so none
+// of them may ever be cached or reused across sessions.
+//
+// Next.js's default for a middleware redirect is `cache-control: public,
+// max-age=0, must-revalidate` with NO `Vary: Cookie`. "public" lets shared and
+// browser HTTP caches store it, and without Vary they're free to replay it for a
+// request carrying a completely different Cookie header. Confirmed live: GET /
+// returned that exact header alongside `location: /login`, meaning a
+// redirect-to-login captured while signed out could be served straight from
+// cache to an authenticated user, never reaching the server at all.
+//
+// That is what broke the installed PWA: relaunching from the icon loads
+// `start_url` ('/'), so it hit the one cache entry most likely to be holding a
+// stale redirect-to-login, while an in-app reload of an already-open deep URL
+// hit an entry captured while authenticated and kept working. It also explains
+// why it reproduced on both iOS and Android, fired within seconds (nothing to do
+// with token expiry), and survived reinstalling the app and logging in again.
+function noStore(response: NextResponse): NextResponse {
+  response.headers.set('cache-control', 'private, no-store, max-age=0, must-revalidate')
+  response.headers.set('vary', 'Cookie')
+  return response
+}
+
 // `updateSession()` may have refreshed the auth token and written the new
 // cookie onto `supabaseResponse` — but every redirect/rewrite below it builds
 // a BRAND NEW NextResponse, which doesn't carry that cookie along for free.
@@ -21,7 +44,7 @@ type TenantStatus = 'active' | 'suspended' | 'missing'
 // the user out on every single close.
 function withSessionCookies(response: NextResponse, supabaseResponse: NextResponse): NextResponse {
   supabaseResponse.cookies.getAll().forEach(c => response.cookies.set(c))
-  return response
+  return noStore(response)
 }
 
 // A rewrite that ALSO forwards the (possibly refreshed) auth cookie to the
@@ -117,7 +140,7 @@ export async function proxy(request: NextRequest) {
     if (user && profile?.role !== 'super_admin') {
       return withSessionCookies(NextResponse.redirect(new URL('/logininin', request.url)), supabaseResponse)
     }
-    return supabaseResponse
+    return noStore(supabaseResponse)
   }
 
   // Block direct access to /admin on the root domain (no subdomain)
@@ -143,7 +166,7 @@ export async function proxy(request: NextRequest) {
     if (user && profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager' && !isLoginPath) {
       return withSessionCookies(NextResponse.redirect(new URL('/client-admin/login', request.url)), supabaseResponse)
     }
-    return supabaseResponse
+    return noStore(supabaseResponse)
   }
 
   // Production: sub.rafeeqcrm.com/admin → rewrite to /client-admin
@@ -214,7 +237,7 @@ export async function proxy(request: NextRequest) {
       return withSessionCookies(NextResponse.redirect(loginUrl), supabaseResponse)
     }
 
-    if (pathname.startsWith('/login')) return supabaseResponse
+    if (pathname.startsWith('/login')) return noStore(supabaseResponse)
 
     // super_admin has no business on a client subdomain → send to their portal
     if (user && role === 'super_admin') {
