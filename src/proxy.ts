@@ -24,6 +24,30 @@ function withSessionCookies(response: NextResponse, supabaseResponse: NextRespon
   return response
 }
 
+// A rewrite that ALSO forwards the (possibly refreshed) auth cookie to the
+// page/layout being rendered, not just back to the browser.
+//
+// `updateSession()` writes a refreshed token onto `request` via
+// `request.cookies.set()`, which updates `request.headers`. `NextResponse.next({
+// request })` propagates that downstream — but a bare `NextResponse.rewrite(url)`
+// does NOT: the rendered layout keeps receiving the ORIGINAL cookie header. It
+// then tries to refresh using a refresh token Supabase has already rotated away,
+// gets no user, and its `redirect('/login')` logs the user out — even though the
+// browser did receive a valid new cookie from the middleware.
+//
+// This is exactly the failure @supabase/ssr warns about ("random logouts, early
+// session termination"). It only bites on requests that actually trigger a
+// refresh, which is why it looked intermittent, and it hit the installed PWA
+// hardest: relaunching from the icon loads `start_url` ('/'), whose rewrite to
+// `/app/*` goes through here, while an in-app reload of an already-open deep
+// URL usually needed no refresh at all.
+function rewriteWithSession(url: URL, request: NextRequest, supabaseResponse: NextResponse): NextResponse {
+  return withSessionCookies(
+    NextResponse.rewrite(url, { request: { headers: request.headers } }),
+    supabaseResponse
+  )
+}
+
 async function getTenantStatus(subdomain: string): Promise<TenantStatus> {
   try {
     const supabase = adminSupabase()
@@ -151,9 +175,9 @@ export async function proxy(request: NextRequest) {
     // Rewrite /admin/* → /client-admin/*
     const url = request.nextUrl.clone()
     url.pathname = pathname.replace(/^\/admin/, '/client-admin')
-    const rewriteResponse = NextResponse.rewrite(url)
+    const rewriteResponse = rewriteWithSession(url, request, supabaseResponse)
     rewriteResponse.headers.set('x-subdomain', subdomain)
-    return withSessionCookies(rewriteResponse, supabaseResponse)
+    return rewriteResponse
   }
 
   // ════════════════════════════════════════════════════
@@ -217,18 +241,19 @@ export async function proxy(request: NextRequest) {
     // as-is. Without listing /two-factor here it would be rewritten to
     // /app/two-factor (which doesn't exist) and 404 on a tenant subdomain.
     if (pathname.startsWith('/app') || pathname.startsWith('/client-admin') || pathname.startsWith('/two-factor')) {
-      const rewriteResponse = NextResponse.rewrite(request.nextUrl.clone())
+      const rewriteResponse = rewriteWithSession(request.nextUrl.clone(), request, supabaseResponse)
       if (subdomain) rewriteResponse.headers.set('x-subdomain', subdomain)
-      return withSessionCookies(rewriteResponse, supabaseResponse)
+      return rewriteResponse
     }
 
-    // Rewrite /path → /app/path for subdomain requests
+    // Rewrite /path → /app/path for subdomain requests — this is the path an
+    // installed PWA takes on every relaunch (start_url is '/').
     if (subdomain) {
       const url = request.nextUrl.clone()
       url.pathname = `/app${pathname}`
-      const rewriteResponse = NextResponse.rewrite(url)
+      const rewriteResponse = rewriteWithSession(url, request, supabaseResponse)
       rewriteResponse.headers.set('x-subdomain', subdomain)
-      return withSessionCookies(rewriteResponse, supabaseResponse)
+      return rewriteResponse
     }
   }
 
