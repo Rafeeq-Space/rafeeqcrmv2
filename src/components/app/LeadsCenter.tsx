@@ -90,12 +90,14 @@ function sourceLabel(lead: Lead) {
 }
 
 // Call / WhatsApp buttons — clicking them must not trigger the row/card
-// navigation. When Bevatel is connected and this lead has a conversation
-// there, each button opens a small menu offering the plain phone/WhatsApp
-// action alongside the matching Bevatel dial panel / chat link — same choice
-// as the lead profile page.
+// navigation. Call always dials directly (tel:) — the OS's own app chooser
+// already covers "personal phone or a softphone app", so there's nothing
+// Bevatel adds here (Bevatel Business Chat has no dial panel; it used to
+// mislabel its own chat link as one). WhatsApp still offers a choice when
+// Bevatel is connected and this lead has a conversation there, so the reply
+// can go out through the tracked Bevatel chat instead of a bare wa.me link.
 function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; bevatel?: { host: string; accountId: string } | null }) {
-  const [menu, setMenu] = useState<'call' | 'wa' | null>(null)
+  const [menu, setMenu] = useState<'wa' | null>(null)
   if (!phone) return null
   const d = digits(phone)
   const cls = 'btn text-xs !py-1.5 !px-2.5 flex items-center gap-1.5'
@@ -114,36 +116,23 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
   }
 
   const close = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(null) }
-  const toggle = (m: 'call' | 'wa') => (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === m ? null : m) }
+  const toggleWa = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === 'wa' ? null : 'wa') }
 
   return (
     <div className="relative flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-      <button onClick={toggle('call')} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></button>
-      <button onClick={toggle('wa')} className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></button>
+      <a href={`tel:${d}`} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></a>
+      <button onClick={toggleWa} className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></button>
 
-      {menu && (
+      {menu === 'wa' && (
         <>
           <div className="fixed inset-0 z-20" onClick={close} />
           <div className="absolute z-30 top-full mt-1 start-0 w-44 rounded-xl border border-border bg-surface shadow-lg p-1">
-            {menu === 'call' ? (
-              <>
-                <a href={`tel:${d}`} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                  <Phone size={15} /> اتصال هاتفي
-                </a>
-                <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                  <ExternalLink size={15} /> لوحة اتصال بيفاتيل
-                </a>
-              </>
-            ) : (
-              <>
-                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                  <MessageCircle size={15} /> واتساب
-                </a>
-                <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                  <ExternalLink size={15} /> شات بيفاتيل
-                </a>
-              </>
-            )}
+            <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+              <MessageCircle size={15} /> واتساب
+            </a>
+            <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+              <ExternalLink size={15} /> شات بيفاتيل
+            </a>
           </div>
         </>
       )}
