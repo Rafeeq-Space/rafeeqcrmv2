@@ -7,11 +7,12 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
-  Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag,
+  Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
+import { useToast } from '@/components/ToastProvider'
 
 interface Option { id: string; name: string }
 
@@ -38,7 +39,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [callPrompt, setCallPrompt] = useState(false)
-  const [contactMenu, setContactMenu] = useState<'call' | 'wa' | null>(null)
+  const [contactMenu, setContactMenu] = useState<'wa' | null>(null)
   const [comment, setComment] = useState('')
   const [mentionId, setMentionId] = useState('')
   const [showAssign, setShowAssign] = useState(false)
@@ -46,6 +47,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [shareId, setShareId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
+  const { showToast } = useToast()
 
   // Polls the timeline (same cadence as the notifications list and leads
   // table) so a colleague's comment/call/status change on this same lead
@@ -82,11 +84,25 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const topEntries = dataEntries.filter(([k]) => /tiktok/i.test(k))
   const restEntries = dataEntries.filter(([k]) => !/tiktok/i.test(k))
 
+  // Shared by every action below. A failure here used to be completely
+  // silent — the caller just saw `r` come back falsy and did nothing, with
+  // no way to tell "it failed" from "there was nothing to do". Now any
+  // non-OK response or network error surfaces the server's own message (or a
+  // generic fallback) as an error toast, and a caller only needs to add its
+  // own success toast for actions with no other visible result.
   async function post(path: string, body: unknown) {
     setBusy(true)
     try {
       const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      return res.ok ? await res.json() : null
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        showToast(data?.error || 'حدث خطأ، حاول مرة أخرى.', 'error')
+        return null
+      }
+      return data
+    } catch {
+      showToast('تعذّر الاتصال بالسيرفر — تحقق من اتصال الإنترنت.', 'error')
+      return null
     } finally {
       setBusy(false)
     }
@@ -117,18 +133,19 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
       setActivities(prev => [...prev, r.activity])
       setComment('')
       setMentionId('')
+      showToast('تم إرسال التعليق')
     }
   }
 
   async function assign(salesId: string, teamId: string) {
     const r = await post(`/api/leads/${lead.id}/assign`, { assigned_sales_id: salesId || null, assigned_team_id: teamId || null })
-    if (r?.lead) { setLead(r.lead); setShowAssign(false) }
+    if (r?.lead) { setLead(r.lead); setShowAssign(false); showToast('تم تحديث الإسناد') }
   }
 
   async function share() {
     if (!shareId) return
     const r = await post(`/api/leads/${lead.id}/share`, { profile_id: shareId })
-    if (r) { setShowShare(false); setShareId('') }
+    if (r) { setShowShare(false); setShareId(''); showToast('تمت المشاركة') }
   }
 
   async function saveAttachments(next: KnowledgeFile[]) {
@@ -186,40 +203,24 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               return (
                 <div className="relative mb-4">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setContactMenu(m => m === 'call' ? null : 'call')} className="btn btn-primary flex-1 flex items-center justify-center gap-2"><Phone size={16} /> اتصال</button>
+                    <a href={`tel:${digits(phone)}`} onClick={() => setTimeout(() => setCallPrompt(true), 300)}
+                      className="btn btn-primary flex-1 flex items-center justify-center gap-2"><Phone size={16} /> اتصال</a>
                     <button onClick={() => setContactMenu(m => m === 'wa' ? null : 'wa')} className="btn flex-1 flex items-center justify-center gap-2" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}><MessageCircle size={16} /> واتساب</button>
                   </div>
 
-                  {contactMenu && (
+                  {contactMenu === 'wa' && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={close} />
                       <div className="absolute z-30 mt-1 w-full rounded-xl border border-border bg-surface shadow-lg p-1">
-                        {contactMenu === 'call' ? (
-                          <>
-                            <a href={`tel:${digits(phone)}`} onClick={() => { close(); setTimeout(() => setCallPrompt(true), 300) }}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                              <Phone size={15} /> اتصال هاتفي
-                            </a>
-                            {convUrl && (
-                              <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                                <ExternalLink size={15} /> لوحة اتصال بيفاتيل
-                              </a>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer" onClick={close}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                              <MessageCircle size={15} /> واتساب
-                            </a>
-                            {convUrl && (
-                              <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close}
-                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                                <ExternalLink size={15} /> شات بيفاتيل
-                              </a>
-                            )}
-                          </>
+                        <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer" onClick={close}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                          <MessageCircle size={15} /> واتساب
+                        </a>
+                        {convUrl && (
+                          <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                            <ExternalLink size={15} /> شات بيفاتيل
+                          </a>
                         )}
                       </div>
                     </>
@@ -382,7 +383,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                   <option value="">إشارة إلى موظف (اختياري)</option>
                   {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
-                <button disabled={busy || !comment.trim()} onClick={submitComment} className="btn btn-primary text-xs !py-1.5 !px-3 flex items-center gap-1.5 ms-auto"><Send size={15} /> إرسال</button>
+                <button disabled={busy || !comment.trim()} onClick={submitComment} className="btn btn-primary text-xs !py-1.5 !px-3 flex items-center gap-1.5 ms-auto">
+                  {busy ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {busy ? 'جارٍ الإرسال...' : 'إرسال'}
+                </button>
               </div>
             </div>
 

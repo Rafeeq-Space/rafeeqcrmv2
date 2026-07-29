@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Tajawal } from 'next/font/google'
+import ToastProvider from '@/components/ToastProvider'
 import './globals.css'
 
 const tajawal = Tajawal({
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   )
 }
