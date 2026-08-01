@@ -2,12 +2,13 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2 } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
+import { useToast } from '@/components/ToastProvider'
 import AddLeadModal from './AddLeadModal'
 
 interface FilterOption {
@@ -90,49 +91,64 @@ function sourceLabel(lead: Lead) {
 }
 
 // Call / WhatsApp buttons — clicking them must not trigger the row/card
-// navigation. Call always dials directly (tel:) — the OS's own app chooser
-// already covers "personal phone or a softphone app", so there's nothing
-// Bevatel adds here (Bevatel Business Chat has no dial panel; it used to
-// mislabel its own chat link as one). WhatsApp still offers a choice when
-// Bevatel is connected and this lead has a conversation there, so the reply
-// can go out through the tracked Bevatel chat instead of a bare wa.me link.
+// navigation. Both always offer two options, regardless of the lead's
+// source: Call → plain tel: (OS chooser covers "personal phone or a
+// softphone app") or copy-for-Bevatel-Softphone (it has no documented
+// click-to-call link, unlike wa.me — copying the number is the honest
+// best-effort). WhatsApp → plain wa.me or Bevatel chat, which opens the
+// existing conversation if there is one, else the contact's own page (still
+// specific to this customer) if we at least have a synced contact id.
 function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; bevatel?: { host: string; accountId: string } | null }) {
-  const [menu, setMenu] = useState<'wa' | null>(null)
+  const [menu, setMenu] = useState<'call' | 'wa' | null>(null)
+  const { showToast } = useToast()
   if (!phone) return null
   const d = digits(phone)
   const cls = 'btn text-xs !py-1.5 !px-2.5 flex items-center gap-1.5'
-  const convUrl = bevatel && lead.bevatel_conversation_id
+  const chatUrl = bevatel && lead.bevatel_conversation_id
     ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/conversations/${lead.bevatel_conversation_id}`
-    : (bevatel ? bevatel.host.replace(/\/+$/, '') : null)
-
-  if (!convUrl) {
-    return (
-      <>
-        <a href={`tel:${d}`} onClick={e => e.stopPropagation()} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></a>
-        <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-          className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></a>
-      </>
-    )
-  }
+    : bevatel && lead.bevatel_contact_id
+    ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/contacts/${lead.bevatel_contact_id}`
+    : null
 
   const close = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(null) }
-  const toggleWa = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === 'wa' ? null : 'wa') }
+  const toggle = (m: 'call' | 'wa') => (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === m ? null : m) }
+  const copyForSoftphone = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard?.writeText(d).catch(() => {})
+    showToast('تم نسخ الرقم — افتح Bevatel Softphone والصقه')
+    setMenu(null)
+  }
 
   return (
     <div className="relative flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-      <a href={`tel:${d}`} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></a>
-      <button onClick={toggleWa} className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></button>
+      <button onClick={toggle('call')} className={`${cls} btn-primary`} title="اتصال"><Phone size={14} /></button>
+      <button onClick={toggle('wa')} className={cls} style={{ background: 'var(--success-soft)', color: 'var(--success)' }} title="واتساب"><MessageCircle size={14} /></button>
 
-      {menu === 'wa' && (
+      {menu && (
         <>
           <div className="fixed inset-0 z-20" onClick={close} />
-          <div className="absolute z-30 top-full mt-1 start-0 w-44 rounded-xl border border-border bg-surface shadow-lg p-1">
-            <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-              <MessageCircle size={15} /> واتساب
-            </a>
-            <a href={convUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-              <ExternalLink size={15} /> شات بيفاتيل
-            </a>
+          <div className="absolute z-30 top-full mt-1 start-0 w-52 rounded-xl border border-border bg-surface shadow-lg p-1">
+            {menu === 'call' ? (
+              <>
+                <a href={`tel:${d}`} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <Phone size={15} /> اتصال هاتفي
+                </a>
+                <button onClick={copyForSoftphone} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <Copy size={15} /> نسخ الرقم لـ Bevatel Softphone
+                </button>
+              </>
+            ) : (
+              <>
+                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <MessageCircle size={15} /> واتساب
+                </a>
+                {chatUrl && (
+                  <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                    <ExternalLink size={15} /> شات بيفاتيل
+                  </a>
+                )}
+              </>
+            )}
           </div>
         </>
       )}
