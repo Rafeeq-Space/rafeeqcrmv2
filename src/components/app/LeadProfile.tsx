@@ -196,15 +196,28 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             </div>
 
             {phone && (() => {
+              // Falls back all the way to the plain account host when this
+              // lead has no synced conversation/contact yet — the option
+              // should always be there whenever Bevatel Chat is connected at
+              // all, not only once this one customer has chat history.
               const chatUrl = bevatel && lead.bevatel_conversation_id
                 ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/conversations/${lead.bevatel_conversation_id}`
                 : bevatel && lead.bevatel_contact_id
                 ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/contacts/${lead.bevatel_contact_id}`
+                : bevatel
+                ? bevatel.host.replace(/\/+$/, '')
                 : null
               const close = () => setContactMenu(null)
-              const copyForSoftphone = () => {
-                navigator.clipboard?.writeText(digits(phone)).catch(() => {})
-                showToast('تم نسخ الرقم — افتح Bevatel Softphone والصقه')
+              // No documented click-to-call link exists for Bevatel Softphone,
+              // so this is a best-effort guess (the sip: URI scheme, which
+              // some SIP softphones register as a handler for) alongside the
+              // clipboard copy, which always works regardless of whether the
+              // app-open attempt does anything.
+              const openSoftphone = () => {
+                const d = digits(phone)
+                navigator.clipboard?.writeText(d).catch(() => {})
+                showToast('تم نسخ الرقم، وجارٍ محاولة فتح Bevatel Softphone — لو ما فتحش تلقائي، الرقم منسوخ وتقدر تلزقه بنفسك')
+                window.location.href = `sip:${d}`
                 close()
               }
               return (
@@ -224,9 +237,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                               <Phone size={15} /> اتصال هاتفي
                             </a>
-                            <button onClick={copyForSoftphone}
+                            <button onClick={openSoftphone}
                               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                              <Copy size={15} /> نسخ الرقم لـ Bevatel Softphone
+                              <Copy size={15} /> فتح Bevatel Softphone
                             </button>
                           </>
                         ) : (

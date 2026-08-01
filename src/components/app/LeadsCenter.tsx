@@ -104,18 +104,29 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
   if (!phone) return null
   const d = digits(phone)
   const cls = 'btn text-xs !py-1.5 !px-2.5 flex items-center gap-1.5'
+  // Falls back all the way to the plain account host when this specific lead
+  // has no synced conversation/contact yet — the option should always be
+  // there whenever Bevatel Chat is connected at all, not only once this one
+  // customer happens to have chat history.
   const chatUrl = bevatel && lead.bevatel_conversation_id
     ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/conversations/${lead.bevatel_conversation_id}`
     : bevatel && lead.bevatel_contact_id
     ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/contacts/${lead.bevatel_contact_id}`
+    : bevatel
+    ? bevatel.host.replace(/\/+$/, '')
     : null
 
   const close = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(null) }
   const toggle = (m: 'call' | 'wa') => (e: React.MouseEvent) => { e.stopPropagation(); setMenu(v => v === m ? null : m) }
-  const copyForSoftphone = (e: React.MouseEvent) => {
+  // No documented click-to-call link exists for Bevatel Softphone, so this is
+  // a best-effort guess (the sip: URI scheme, which some SIP softphones
+  // register as a handler for) alongside the clipboard copy, which always
+  // works regardless of whether the app-open attempt does anything.
+  const openSoftphone = (e: React.MouseEvent) => {
     e.stopPropagation()
     navigator.clipboard?.writeText(d).catch(() => {})
-    showToast('تم نسخ الرقم — افتح Bevatel Softphone والصقه')
+    showToast('تم نسخ الرقم، وجارٍ محاولة فتح Bevatel Softphone — لو ما فتحش تلقائي، الرقم منسوخ وتقدر تلزقه بنفسك')
+    window.location.href = `sip:${d}`
     setMenu(null)
   }
 
@@ -133,8 +144,8 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
                 <a href={`tel:${d}`} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                   <Phone size={15} /> اتصال هاتفي
                 </a>
-                <button onClick={copyForSoftphone} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
-                  <Copy size={15} /> نسخ الرقم لـ Bevatel Softphone
+                <button onClick={openSoftphone} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <Copy size={15} /> فتح Bevatel Softphone
                 </button>
               </>
             ) : (
