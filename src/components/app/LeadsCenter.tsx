@@ -129,6 +129,15 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
     window.location.href = `sip:${d}`
     setMenu(null)
   }
+  // Bevatel's own conversation deep-link only resolves via in-app navigation,
+  // not a fresh external open (confirmed a Bevatel-side routing bug, not
+  // ours — see project memory) — copying the number alongside opening it
+  // lets the user paste straight into Bevatel's own search instead of typing
+  // it, so a manual lookup is at least fast.
+  const copyForChat = () => {
+    navigator.clipboard?.writeText(d).catch(() => {})
+    showToast('تم نسخ رقم العميل — دوّر عليه جوه بيفاتيل لو ما فتحش المحادثة تلقائي')
+  }
 
   return (
     <div className="relative flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -154,7 +163,7 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
                   <MessageCircle size={15} /> واتساب
                 </a>
                 {chatUrl && (
-                  <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={e => { close(e); copyForChat() }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                     <ExternalLink size={15} /> شات بيفاتيل
                   </a>
                 )}
