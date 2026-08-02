@@ -20,9 +20,14 @@ export interface ParsedLeadFields {
  */
 export function findFirstMatch(obj: unknown, patterns: RegExp[], depth = 0): string | undefined {
   if (obj == null || typeof obj !== 'object' || depth > 6) return undefined
-  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (patterns.some(p => p.test(key)) && (typeof value === 'string' || typeof value === 'number') && String(value).trim()) {
-      return String(value)
+  // A name/value pair object's own keys are structural, not field names —
+  // matching them returns the *label* ("full_name") as if it were the
+  // customer's answer. Leave those to findFirstPairMatch and only recurse.
+  if (!isPairObject(obj)) {
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (patterns.some(p => p.test(key)) && (typeof value === 'string' || typeof value === 'number') && String(value).trim()) {
+        return String(value)
+      }
     }
   }
   for (const value of Object.values(obj as Record<string, unknown>)) {
@@ -32,6 +37,79 @@ export function findFirstMatch(obj: unknown, patterns: RegExp[], depth = 0): str
     }
   }
   return undefined
+}
+
+// One entry of the name/value pair convention every major lead-form platform
+// uses in some form: the field's *identity* is a value ("email"), not a key.
+// Covers the spellings seen across Meta (`{name, values: []}`) and the
+// common `{field_name, value}` / `{key, answer}` variants.
+const PAIR_NAME_KEYS = ['name', 'field_name', 'fieldName', 'key', 'label', 'field', 'title', 'question']
+const PAIR_VALUE_KEYS = ['values', 'value', 'answer', 'answers', 'field_value', 'fieldValue', 'text']
+
+/** True for `{ name: 'email', values: [...] }` and its spelling variants. */
+function isPairObject(obj: unknown): boolean {
+  if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) return false
+  const e = obj as Record<string, unknown>
+  return PAIR_NAME_KEYS.some(k => typeof e[k] === 'string')
+    && PAIR_VALUE_KEYS.some(k => e[k] !== undefined)
+}
+
+function pairValue(entry: Record<string, unknown>): string | undefined {
+  for (const k of PAIR_VALUE_KEYS) {
+    const v = entry[k]
+    if (Array.isArray(v) && v.length && String(v[0]).trim()) return String(v[0])
+    if ((typeof v === 'string' || typeof v === 'number') && String(v).trim()) return String(v)
+  }
+  return undefined
+}
+
+/**
+ * Recursively searches for a value held in a name/value *pair* object —
+ * `{ name: 'email', values: ['a@b.c'] }` and friends — where the field's
+ * identity lives in a value rather than a key, so `findFirstMatch` (which
+ * only ever tests keys) can't see it.
+ *
+ * Needed because a webhook payload built this way otherwise parses to
+ * nothing and the lead is dropped as `skipped_unparsed` — i.e. a real
+ * customer silently lost mid-campaign. Confirmed empirically: a simulated
+ * TikTok delivery in this shape recorded the lead id fine but no
+ * email/phone at all.
+ */
+export function findFirstPairMatch(obj: unknown, patterns: RegExp[], depth = 0): string | undefined {
+  if (obj == null || typeof obj !== 'object' || depth > 6) return undefined
+
+  if (Array.isArray(obj)) {
+    for (const entry of obj) {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const e = entry as Record<string, unknown>
+        const label = PAIR_NAME_KEYS.map(k => e[k]).find(v => typeof v === 'string')
+        if (typeof label === 'string' && patterns.some(p => p.test(label))) {
+          const value = pairValue(e)
+          if (value) return value
+        }
+      }
+      const found = findFirstPairMatch(entry, patterns, depth + 1)
+      if (found) return found
+    }
+    return undefined
+  }
+
+  for (const value of Object.values(obj as Record<string, unknown>)) {
+    if (value && typeof value === 'object') {
+      const found = findFirstPairMatch(value, patterns, depth + 1)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
+/**
+ * Key-based lookup first (a flat `{ email: '...' }` payload), then the
+ * name/value pair convention. Both are tried for every field since a single
+ * payload can mix the two (a flat `lead_id` alongside pair-shaped answers).
+ */
+export function findLeadField(payload: unknown, patterns: RegExp[]): string | undefined {
+  return findFirstMatch(payload, patterns) ?? findFirstPairMatch(payload, patterns)
 }
 
 /**
