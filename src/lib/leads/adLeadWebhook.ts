@@ -188,6 +188,7 @@ export async function recordAndImportLead(
       },
       source: platform,
       status: 'new',
+      sub_status: 'new_lead',
       assigned_sales_id,
       assigned_team_id,
       external_lead_id: fields.externalLeadId || null,

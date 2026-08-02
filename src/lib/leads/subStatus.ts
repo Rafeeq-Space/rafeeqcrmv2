@@ -19,7 +19,13 @@ export interface SubStatus {
 }
 
 export const SUB_STATUSES: SubStatus[] = [
-  // جديد
+  // جديد — `new_lead` is set automatically on every lead that arrives as a
+  // *lead* (ad instant form, public form, Google Sheet, manual entry). The
+  // two below describe a first inbound *conversation* instead, so they stay
+  // reserved for the chat/call integrations (Bevatel, Rafeeq Social) — a lead
+  // created from an incoming call or WhatsApp message is not the same event
+  // as a submitted form, and lumping them together would hide which is which.
+  { key: 'new_lead', label: 'جديد', status: 'new' },
   { key: 'first_inbound_call', label: 'أول استقبال اتصال', status: 'new' },
   { key: 'first_inbound_message', label: 'أول استقبال رسالة', status: 'new' },
   // تم التواصل

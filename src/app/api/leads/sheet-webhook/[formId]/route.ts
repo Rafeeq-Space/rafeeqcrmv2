@@ -82,6 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         data: row,
         source: 'google_sheet',
         status: 'new',
+        sub_status: 'new_lead',
         sheet_row: rowIndex,
         assigned_sales_id,
         assigned_team_id,

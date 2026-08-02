@@ -54,6 +54,7 @@ export async function POST(request: Request) {
         ttclid: ttclid || null,
         fbclid: fbclid || null,
         status: 'new',
+        sub_status: 'new_lead',
         assigned_sales_id,
         assigned_team_id,
       })

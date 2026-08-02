@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       data,
       source: 'crm',
       status: 'new',
+      sub_status: 'new_lead',
       campaign_id: campaignId,
       assigned_sales_id: assignedSalesId,
       assigned_team_id: assignedTeamId,
