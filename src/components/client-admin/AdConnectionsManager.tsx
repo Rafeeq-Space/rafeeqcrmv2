@@ -205,7 +205,7 @@ function ConnectionModal({
                 onChange={e => setForm({ ...form, tiktok_crm_access_token: e.target.value.trim() })}
                 placeholder={editing ? 'اتركه كما هو أو أدخل توكن جديد' : ''} />
               <p className="text-xs text-muted2 mt-1">
-                توكن منفصل عن Access Token الأساسي فوق — يُولَّد من نفس صفحة الـ CRM Event Set (زرار &quot;Generate access token&quot;). لو تُرك فارغًا، هيُستخدم الـ Access Token الأساسي كبديل.
+                توكن منفصل عن Access Token الأساسي فوق، ولازم يُولَّد من صفحة الـ CRM Event Set نفسها (زرار &quot;Generate access token&quot;) — كل توكن في تيك توك له صلاحية على الأصل الذي وُلِّد منه فقط، فالتوكن الأساسي لن يعمل هنا ولا هذا التوكن يعمل مع البكسل.
               </p>
             </div>
           )}

@@ -167,6 +167,13 @@ export async function syncLeadEvent(params: {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              // A TikTok token only ever has permission over the asset whose
+              // settings page generated it — verified by sending the same
+              // event both ways: the pixel's token is rejected by the CRM
+              // event set and vice versa, both with "No permission to
+              // operate event source id". So falling back to the pixel token
+              // here won't actually authorize anything; it only makes the
+              // failure land as TikTok's own error rather than a null header.
               'Access-Token': useCrm ? (conn.tiktok_crm_access_token || conn.access_token) : conn.access_token,
             },
             body: JSON.stringify(tiktokPayload),
