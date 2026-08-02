@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         actor_id: null,
         type: 'created',
       })
-      after(() => syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error))
+      after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
       if (assigned_sales_id) {
         await createNotification(supabase, {
           tenantId: form.tenant_id,

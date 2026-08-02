@@ -14,6 +14,23 @@ const STATUS_TO_TIKTOK_EVENT: Record<string, string> = {
   lost: 'CustomizeProduct',
 }
 
+// TikTok's CRM Event Set accepts arbitrary event names — an advertiser maps
+// them to funnel stages by hand in Events Manager. So the pixel's web
+// taxonomy above (ViewContent, CustomizeProduct…) carries no meaning here and
+// only makes that mapping screen unreadable: nobody opening it later would
+// guess `CustomizeProduct` means a lost lead. These names mirror the CRM's own
+// statuses instead, which is what the funnel is actually describing.
+//
+// Renaming after a campaign is live resets TikTok's learning for the renamed
+// events — treat this map as frozen once real spend starts.
+const STATUS_TO_TIKTOK_CRM_EVENT: Record<string, string> = {
+  new: 'New Lead',
+  contacted: 'Contacted',
+  qualified: 'Qualified',
+  converted: 'Won',
+  lost: 'Lost',
+}
+
 const STATUS_TO_META_EVENT: Record<string, string> = {
   new: 'Lead',
   contacted: 'Contact',
@@ -110,8 +127,6 @@ export async function syncLeadEvent(params: {
         continue
       }
 
-      const tiktokEvent = eventType || STATUS_TO_TIKTOK_EVENT[leadStatus] || 'Lead'
-
       // Instant Form leads never carry a ttclid (no external click/pixel
       // session occurs — the form is filled inside TikTok's own app), so
       // reporting them as event_source 'web' against the pixel can't match.
@@ -120,6 +135,10 @@ export async function syncLeadEvent(params: {
       // click id. Website/landing-page leads (ttclid present) keep using the
       // pixel as before.
       const useCrm = !lead.ttclid && conn.tiktok_event_set_id
+
+      const tiktokEvent = eventType
+        || (useCrm ? STATUS_TO_TIKTOK_CRM_EVENT[leadStatus] : STATUS_TO_TIKTOK_EVENT[leadStatus])
+        || (useCrm ? 'New Lead' : 'Lead')
       const tiktokPayload = useCrm
         ? {
             event_source: 'crm',

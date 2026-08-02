@@ -212,7 +212,9 @@ export async function recordAndImportLead(
 
   // Report the new lead back to every connected account for this campaign
   // (same conversion-reporting pipeline every other lead goes through).
-  syncLeadEvent({ leadId: lead.id, status: 'new', eventType: 'Lead' }).catch(console.error)
+  // No explicit eventType — 'new' already resolves to each platform's own
+  // name for it, and hardcoding one here would override TikTok's CRM naming.
+  syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error)
 
   if (assigned_sales_id) {
     await createNotification(supabase, {
