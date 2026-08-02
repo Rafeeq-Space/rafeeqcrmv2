@@ -232,6 +232,12 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         data,
         source,
         status: 'new',
+        // These arrive as a first inbound *conversation*, not a submitted
+        // form, so they get their own opening stage rather than the plain
+        // 'جديد' every ad/form lead is stamped with — a rep seeing this knows
+        // there is already a live thread waiting on a reply. Rafeeq Social is
+        // WhatsApp, so it reads as a message like Bevatel chat does.
+        sub_status: source === 'bevatel_call' ? 'first_inbound_call' : 'first_inbound_message',
         assigned_sales_id: agent?.id ?? null,
         assigned_team_id: agent?.team_id ?? null,
         bevatel_conversation_id: conversationId ?? null,
