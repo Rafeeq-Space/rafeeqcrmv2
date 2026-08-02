@@ -27,9 +27,10 @@ const STATUS_TO_TIKTOK_CRM_EVENT: Record<string, string> = {
   new: 'New Lead',
   contacted: 'Contacted',
   qualified: 'Qualified',
-  // 'Won' was tried first and never appeared in Events Manager at all, while
-  // every other name in this map did — TikTok seems to swallow it silently
-  // (it still answered code 0). Keep these names at full words.
+  // 'Won' was tried first and appeared to be dropped — it was simply slower
+  // to surface in Events Manager than the rest of its batch. Names here can
+  // be anything; expect a lag of tens of minutes before a new one is
+  // droppable onto a funnel stage.
   converted: 'Converted',
   lost: 'Lost',
 }
