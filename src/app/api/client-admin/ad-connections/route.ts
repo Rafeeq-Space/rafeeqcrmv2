@@ -10,7 +10,10 @@ export async function POST(request: Request) {
   const auth = await requireClientAdmin()
   if (!auth) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
 
-  const { platform, name, pixel_id, access_token, default_campaign_id, page_id, form_id } = await request.json()
+  const {
+    platform, name, pixel_id, access_token, default_campaign_id, page_id, form_id,
+    tiktok_event_set_id, tiktok_crm_access_token,
+  } = await request.json()
   if (!platform || !PLATFORMS.includes(platform)) {
     return NextResponse.json({ error: 'منصة غير صالحة' }, { status: 400 })
   }
@@ -30,6 +33,8 @@ export async function POST(request: Request) {
       default_campaign_id: default_campaign_id || null,
       page_id: platform === 'facebook' ? (page_id || null) : null,
       form_id: platform === 'snapchat' ? (form_id || null) : null,
+      tiktok_event_set_id: platform === 'tiktok' ? (tiktok_event_set_id || null) : null,
+      tiktok_crm_access_token: platform === 'tiktok' ? (tiktok_crm_access_token || null) : null,
       // Only used by TikTok/Snapchat's Instant Form lead webhook, but
       // generated for every connection so it's ready if enabled later.
       webhook_secret: crypto.randomBytes(16).toString('hex'),

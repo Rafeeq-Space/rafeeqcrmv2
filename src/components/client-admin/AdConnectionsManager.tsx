@@ -71,6 +71,8 @@ function ConnectionModal({
     page_id: connection?.page_id || '',
     form_id: connection?.form_id || '',
     tiktok_test_event_code: connection?.tiktok_test_event_code || '',
+    tiktok_event_set_id: connection?.tiktok_event_set_id || '',
+    tiktok_crm_access_token: connection?.tiktok_crm_access_token || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -92,6 +94,8 @@ function ConnectionModal({
               page_id: form.page_id || null,
               form_id: form.form_id || null,
               tiktok_test_event_code: form.tiktok_test_event_code || null,
+              tiktok_event_set_id: form.tiktok_event_set_id || null,
+              tiktok_crm_access_token: form.tiktok_crm_access_token || null,
             }),
           })
         : await fetch('/api/client-admin/ad-connections', {
@@ -178,6 +182,30 @@ function ConnectionModal({
               </select>
               <p className="text-xs text-muted2 mt-1">
                 أي ليد جديد يصل عبر النموذج الداخلي لهذه المنصة (وليس رابط الحملة من الـ CRM) سيُنسب تلقائيًا لهذه الحملة.
+              </p>
+            </div>
+          )}
+
+          {form.platform === 'tiktok' && (
+            <div>
+              <label className="label">CRM Event Set ID (اختياري — لتقارير ليدز Instant Form)</label>
+              <input dir="ltr" className="input text-start" value={form.tiktok_event_set_id}
+                onChange={e => setForm({ ...form, tiktok_event_set_id: e.target.value.trim() })}
+                placeholder="مثال: 762223407638037512" />
+              <p className="text-xs text-muted2 mt-1">
+                من Events Manager ← تاب CRM. بدونه، ليدز Instant Form (اللي جاية من الويبهوك) هتفضل تتقرّر كـ event_source: web على البكسل رغم إنها مفيهاش ttclid أصلاً — matching ضعيف.
+              </p>
+            </div>
+          )}
+
+          {form.platform === 'tiktok' && (
+            <div>
+              <label className="label">CRM Access Token (اختياري)</label>
+              <input dir="ltr" type="password" className="input text-start" value={form.tiktok_crm_access_token}
+                onChange={e => setForm({ ...form, tiktok_crm_access_token: e.target.value.trim() })}
+                placeholder={editing ? 'اتركه كما هو أو أدخل توكن جديد' : ''} />
+              <p className="text-xs text-muted2 mt-1">
+                توكن منفصل عن Access Token الأساسي فوق — يُولَّد من نفس صفحة الـ CRM Event Set (زرار &quot;Generate access token&quot;). لو تُرك فارغًا، هيُستخدم الـ Access Token الأساسي كبديل.
               </p>
             </div>
           )}
@@ -385,6 +413,11 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
               )}
               {conn.platform === 'snapchat' && conn.form_id && (
                 <p className="text-sm text-muted mt-0.5" dir="ltr">Form ID: {conn.form_id}</p>
+              )}
+              {conn.platform === 'tiktok' && (
+                <p className="text-sm text-muted mt-0.5" dir="ltr">
+                  CRM Event Set: {conn.tiktok_event_set_id || '—'}
+                </p>
               )}
               <p className="text-sm text-muted2 mt-0.5 flex items-center gap-1" dir="ltr">
                 <KeyRound size={13} /> {maskToken(conn.access_token)}

@@ -112,6 +112,7 @@ export async function recordAndImportLead(
       status: 'new',
       assigned_sales_id,
       assigned_team_id,
+      external_lead_id: fields.externalLeadId || null,
     })
     .select()
     .single()

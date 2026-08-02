@@ -111,27 +111,54 @@ export async function syncLeadEvent(params: {
       }
 
       const tiktokEvent = eventType || STATUS_TO_TIKTOK_EVENT[leadStatus] || 'Lead'
-      const tiktokPayload = {
-        event_source: 'web',
-        event_source_id: conn.pixel_id,
-        data: [
-          {
-            event: tiktokEvent,
-            event_time: eventTime,
-            event_id: `${lead.id}_${eventTime}`,
-            user: {
-              ...(lead.ttclid && { ttclid: lead.ttclid }),
-              ...(email && { email: hashValue(email) }),
-              ...(phone && { phone: hashValue(phone) }),
-            },
-            properties: {
-              lead_id: lead.id,
-              status: leadStatus,
-            },
-          },
-        ],
-        ...(conn.tiktok_test_event_code && { test_event_code: conn.tiktok_test_event_code }),
-      }
+
+      // Instant Form leads never carry a ttclid (no external click/pixel
+      // session occurs — the form is filled inside TikTok's own app), so
+      // reporting them as event_source 'web' against the pixel can't match.
+      // TikTok's CRM Event Set is the correct path for these: it matches by
+      // TikTok's own lead_id (captured at webhook-import time) instead of a
+      // click id. Website/landing-page leads (ttclid present) keep using the
+      // pixel as before.
+      const useCrm = !lead.ttclid && conn.tiktok_event_set_id
+      const tiktokPayload = useCrm
+        ? {
+            event_source: 'crm',
+            event_source_id: conn.tiktok_event_set_id,
+            data: [
+              {
+                event: tiktokEvent,
+                event_time: eventTime,
+                event_id: `${lead.id}_${eventTime}`,
+                ...(lead.external_lead_id && { lead: { lead_id: lead.external_lead_id } }),
+                user: {
+                  ...(email && { email: hashValue(email) }),
+                  ...(phone && { phone: hashValue(phone) }),
+                },
+              },
+            ],
+            ...(conn.tiktok_test_event_code && { test_event_code: conn.tiktok_test_event_code }),
+          }
+        : {
+            event_source: 'web',
+            event_source_id: conn.pixel_id,
+            data: [
+              {
+                event: tiktokEvent,
+                event_time: eventTime,
+                event_id: `${lead.id}_${eventTime}`,
+                user: {
+                  ...(lead.ttclid && { ttclid: lead.ttclid }),
+                  ...(email && { email: hashValue(email) }),
+                  ...(phone && { phone: hashValue(phone) }),
+                },
+                properties: {
+                  lead_id: lead.id,
+                  status: leadStatus,
+                },
+              },
+            ],
+            ...(conn.tiktok_test_event_code && { test_event_code: conn.tiktok_test_event_code }),
+          }
 
       try {
         const tiktokRes = await fetch(
@@ -140,7 +167,7 @@ export async function syncLeadEvent(params: {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Access-Token': conn.access_token,
+              'Access-Token': useCrm ? (conn.tiktok_crm_access_token || conn.access_token) : conn.access_token,
             },
             body: JSON.stringify(tiktokPayload),
           }

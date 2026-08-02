@@ -34,6 +34,12 @@ export interface AdConnection {
   // conversion events are routed to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.
   meta_test_event_code?: string | null
+  // tiktok: CRM Event Set config, used instead of pixel_id/access_token when
+  // reporting status changes for Instant Form leads (event_source: 'crm').
+  // Distinct from the pixel_id/access_token pair, which stay used for
+  // event_source: 'web' (website/landing-page leads that carry a ttclid).
+  tiktok_event_set_id?: string | null
+  tiktok_crm_access_token?: string | null
   created_at: string
 }
 
@@ -292,6 +298,10 @@ export interface Lead {
   utm_campaign?: string
   ttclid?: string
   fbclid?: string
+  // TikTok's own Instant Form lead id — required as the match key when
+  // reporting status-change events back via event_source: 'crm' (Instant
+  // Form leads never carry a ttclid, so 'web'-style pixel matching can't work).
+  external_lead_id?: string | null
   status: LeadStatus
   sub_status?: string | null // detailed stage key (rolls up to status); see subStatus.ts
   assigned_to?: string // legacy: employee id (kept for backward-compat)
