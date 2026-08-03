@@ -120,12 +120,34 @@ function sendNewRowsAndStatusEdits() {
   // throw at the end makes Apps Script email the script owner instead of
   // failing quietly while a campaign is spending.
   var firstError = '';
+  // A source that writes by column *position* (TikTok's sheet export does)
+  // will overwrite whatever sits inside its range. Our status column is only
+  // safe while it stays the last one — if the source has since appended
+  // columns past it, writing there destroys real answers. It happened: the
+  // column ended up at A on a sheet TikTok then filled from A onwards, so
+  // every field was read one column off and the customer's name was
+  // overwritten with 'جديد'. Leads still go to the CRM either way; only the
+  // write-back is held, and the throw at the end reports it.
+  var statusColSafe = statusCol > 0 && statusCol >= lastCol;
+  if (!statusColSafe) {
+    firstError = 'status column is at ' + statusCol + ' of ' + lastCol +
+      ' — not the last column, so writing to it would overwrite data owned by the lead source';
+  }
   if (lastRow > sentRow) {
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     for (var r = sentRow + 1; r <= lastRow; r++) {
       var values = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
       var row = {};
       headers.forEach(function (h, i) { if (h !== STATUS_COL_NAME) row[h] = values[i]; });
+      // Blank rows inside the sheet's used range (left behind after data is
+      // deleted) are not leads — posting them just gets them skipped, and
+      // stamping them writes into the source's next row.
+      var rowHasValue = false;
+      for (var k in row) { if (String(row[k] || '').trim()) { rowHasValue = true; break; } }
+      if (!rowHasValue) {
+        props.setProperty('lastSentRow', String(r));
+        continue;
+      }
       var res = UrlFetchApp.fetch(WEBHOOK_URL, {
         method: 'post',
         contentType: 'application/json',
@@ -138,13 +160,17 @@ function sendNewRowsAndStatusEdits() {
         firstError = 'row ' + r + ' -> HTTP ' + code + ' ' + res.getContentText().slice(0, 300);
         break;
       }
-      sheet.getRange(r, statusCol).setValue(STATUSES[0]);
-      props.setProperty('st_' + r, STATUSES[0]);
+      if (statusColSafe) {
+        sheet.getRange(r, statusCol).setValue(STATUSES[0]);
+        props.setProperty('st_' + r, STATUSES[0]);
+      }
       props.setProperty('lastSentRow', String(r));
     }
   }
 
-  var checkRows = Math.min(lastRow, sentRow);
+  // Reading the status column is only meaningful when it is actually ours —
+  // see statusColSafe above.
+  var checkRows = statusColSafe ? Math.min(lastRow, sentRow) : 0;
   if (checkRows >= 2) {
     var statusValues = sheet.getRange(2, statusCol, checkRows - 1, 1).getValues();
     for (var i = 0; i < statusValues.length; i++) {
