@@ -8,12 +8,23 @@ import LeadDistribution from './LeadDistribution'
 
 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
 
-// STATUS_LABELS must match LEAD_STATUS_LABELS in src/lib/utils.ts exactly.
-const STATUS_LABELS = ['جديد', 'تم التواصل', 'مؤهل', 'تم التحويل', 'غير مؤهل']
+// Must stay in sync with SHEET_STATUS_LABELS in src/lib/utils.ts — the sheet's
+// status column and statusFromLabel() have to agree on the exact strings, in
+// lifecycle order so the dropdown reads as a progression. 'raw' is first: it's
+// what a new row is stamped with.
+const STATUS_LABELS = ['raw', 'contacted', 'qualified', 'converted', 'unqualified']
+
+// The sheet's first four columns are fixed by this script, so the layout is
+// the same on every connected sheet and the ad platform's field mapping has
+// stable positions to point at (its own fields start at column E).
+const FIXED_COLUMNS = ['الحالة', 'الاسم', 'الرقم', 'TikTok Lead ID']
 
 function appsScript(webhookUrl: string, statusWebhookUrl: string, secret: string) {
   const statusList = STATUS_LABELS.map(s => `'${s}'`).join(', ')
-  return `var STATUS_COL_NAME = 'الحالة';
+  const fixedList = FIXED_COLUMNS.map(s => `'${s}'`).join(', ')
+  return `var FIXED_COLUMNS = [${fixedList}];
+var STATUS_COL_NAME = FIXED_COLUMNS[0];
+var STATUS_COL = 1;
 var STATUSES = [${statusList}];
 var WEBHOOK_URL = '${webhookUrl}';
 var STATUS_WEBHOOK_URL = '${statusWebhookUrl}';
@@ -38,7 +49,7 @@ function setupTrigger() {
     .timeBased()
     .everyMinutes(1)
     .create();
-  ensureStatusColumn();
+  ensureLayout();
   // Rows already in the sheet at connect time are history, not new leads.
   // Without this, the first change posts every existing row as a fresh lead —
   // each one assigned, its rep notified, and a conversion event sent to the ad
@@ -51,30 +62,47 @@ function setupTrigger() {
   }
 }
 
-// Finds (or creates) the "الحالة" column and restricts it to a dropdown
-// with the 5 exact status labels, so it can never contain a typo.
-function ensureStatusColumn() {
+// Writes the four fixed headers into A1:D1 and puts the status dropdown on
+// column A. This script owns that layout: the ad platform's field mapping is
+// pointed at these columns by position, which only stays correct if the
+// positions never move.
+//
+// A header cell holding something else is not overwritten — that means the
+// mapping disagrees with this layout, and silently relabelling a column the
+// platform is already writing into is how a phone ends up stored as a name.
+// Returns '' when the layout is good, or a description of the conflict.
+function ensureLayout() {
   var sheet = SpreadsheetApp.getActiveSheet();
-  var lastCol = sheet.getLastColumn();
-  // A sheet with no header row yet has nothing to append to — the column
-  // would land in A1, ahead of the headers the lead source is about to write,
-  // and every row after that would be read against the wrong column names.
-  // Connect the sheet to its source first, then install this script.
-  if (lastCol === 0) return 0;
-  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  var col = headers.indexOf(STATUS_COL_NAME) + 1;
-  if (col === 0) {
-    col = lastCol + 1;
-    sheet.getRange(1, col).setValue(STATUS_COL_NAME);
+  var headers = sheet.getRange(1, 1, 1, FIXED_COLUMNS.length).getValues()[0];
+  for (var i = 0; i < FIXED_COLUMNS.length; i++) {
+    var current = String(headers[i] || '').trim();
+    if (current === FIXED_COLUMNS[i]) continue;
+    if (current === '') {
+      sheet.getRange(1, i + 1).setValue(FIXED_COLUMNS[i]);
+      continue;
+    }
+    return 'column ' + (i + 1) + ' header is "' + current + '", expected "' + FIXED_COLUMNS[i] + '"';
   }
   var lastRow = Math.max(sheet.getLastRow(), 2);
   var rule = SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).setAllowInvalid(false).build();
-  sheet.getRange(2, col, lastRow - 1, 1).setDataValidation(rule);
-  return col;
+  sheet.getRange(2, STATUS_COL, lastRow - 1, 1).setDataValidation(rule);
+  return '';
+}
+
+// True when the status cell is ours to write: empty, or already holding one of
+// the known statuses. Anything else is another writer's value — refuse rather
+// than overwrite it, which is exactly how a customer's name was destroyed.
+function statusCellIsOurs(sheet, r) {
+  var v = String(sheet.getRange(r, STATUS_COL).getValue() || '').trim();
+  if (!v) return true;
+  for (var i = 0; i < STATUSES.length; i++) {
+    if (STATUSES[i] === v.toLowerCase()) return true;
+  }
+  return false;
 }
 
 // Fires on every edit/change to the sheet, and once a minute regardless:
-// 1) sends brand-new rows to the CRM as leads (and stamps them "جديد").
+// 1) sends brand-new rows to the CRM as leads (and stamps them 'raw').
 // 2) detects manual edits to the status dropdown and forwards them to the CRM.
 //
 // Two triggers call this, so a run can start while another is mid-flight and
@@ -98,7 +126,7 @@ function sendNewRowsAndStatusEdits() {
   if (lastRow < 1 || lastCol === 0) return;
 
   var props = PropertiesService.getScriptProperties();
-  var statusCol = ensureStatusColumn();
+  var layoutError = ensureLayout();
   var sentRow = parseInt(props.getProperty('lastSentRow') || '1', 10);
 
   // The pointer only ever moves forward, so if the sheet shrank — rows
@@ -112,27 +140,15 @@ function sendNewRowsAndStatusEdits() {
     props.setProperty('lastSentRow', String(lastRow));
   }
 
-  // The response used to be discarded and the pointer advanced past the whole
-  // batch regardless, so a rejected row was lost permanently and in silence —
-  // the sheet kept filling while the CRM received nothing. Now the pointer
-  // moves one row at a time and only after that row is accepted, the first
-  // failure stops the run so the next minute retries the same row, and the
-  // throw at the end makes Apps Script email the script owner instead of
-  // failing quietly while a campaign is spending.
-  var firstError = '';
-  // A source that writes by column *position* (TikTok's sheet export does)
-  // will overwrite whatever sits inside its range. Our status column is only
-  // safe while it stays the last one — if the source has since appended
-  // columns past it, writing there destroys real answers. It happened: the
-  // column ended up at A on a sheet TikTok then filled from A onwards, so
-  // every field was read one column off and the customer's name was
-  // overwritten with 'جديد'. Leads still go to the CRM either way; only the
-  // write-back is held, and the throw at the end reports it.
-  var statusColSafe = statusCol > 0 && statusCol >= lastCol;
-  if (!statusColSafe) {
-    firstError = 'status column is at ' + statusCol + ' of ' + lastCol +
-      ' — not the last column, so writing to it would overwrite data owned by the lead source';
-  }
+  // The pointer moves one row at a time and only after that row is accepted,
+  // the first failure ends the run so the next minute retries the same row,
+  // and the throw at the end makes Apps Script email the script owner instead
+  // of failing quietly while a campaign is spending.
+  //
+  // A layout conflict starts the run already in the error state: leads still
+  // go to the CRM, but nothing is written back into a sheet whose columns
+  // don't match what this script expects.
+  var firstError = layoutError;
   if (lastRow > sentRow) {
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     for (var r = sentRow + 1; r <= lastRow; r++) {
@@ -160,19 +176,20 @@ function sendNewRowsAndStatusEdits() {
         firstError = 'row ' + r + ' -> HTTP ' + code + ' ' + res.getContentText().slice(0, 300);
         break;
       }
-      if (statusColSafe) {
-        sheet.getRange(r, statusCol).setValue(STATUSES[0]);
+      if (!layoutError && statusCellIsOurs(sheet, r)) {
+        sheet.getRange(r, STATUS_COL).setValue(STATUSES[0]);
         props.setProperty('st_' + r, STATUSES[0]);
+      } else if (!firstError) {
+        firstError = 'row ' + r + ' status cell holds a value this script did not write — not overwriting it';
       }
       props.setProperty('lastSentRow', String(r));
     }
   }
 
-  // Reading the status column is only meaningful when it is actually ours —
-  // see statusColSafe above.
-  var checkRows = statusColSafe ? Math.min(lastRow, sentRow) : 0;
+  // Reading the status column is only meaningful when the layout is ours.
+  var checkRows = layoutError ? 0 : Math.min(lastRow, sentRow);
   if (checkRows >= 2) {
-    var statusValues = sheet.getRange(2, statusCol, checkRows - 1, 1).getValues();
+    var statusValues = sheet.getRange(2, STATUS_COL, checkRows - 1, 1).getValues();
     for (var i = 0; i < statusValues.length; i++) {
       var r2 = i + 2;
       var val = String(statusValues[i][0] || '').trim();
@@ -221,10 +238,10 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ error: 'unauthorized' }));
   }
   var sheet = SpreadsheetApp.getActiveSheet();
-  var statusCol = ensureStatusColumn();
+  var layoutError = ensureLayout();
   var row = parseInt(body.rowIndex, 10);
-  if (statusCol > 0 && row >= 2 && body.status) {
-    sheet.getRange(row, statusCol).setValue(body.status);
+  if (!layoutError && row >= 2 && body.status) {
+    sheet.getRange(row, STATUS_COL).setValue(body.status);
     PropertiesService.getScriptProperties().setProperty('st_' + row, String(body.status));
   }
   return ContentService.createTextOutput(JSON.stringify({ success: true }));

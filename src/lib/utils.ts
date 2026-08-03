@@ -25,12 +25,30 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   lost: 'غير مؤهل',
 }
 
-// Reverse of LEAD_STATUS_LABELS — used to interpret a status value typed
-// (or picked from a dropdown) inside a connected Google Sheet.
+// Labels used in a connected Google Sheet's status column. Kept separate from
+// LEAD_STATUS_LABELS because that sheet is shared with the ad platform writing
+// leads into it, whose own lead vocabulary is English (raw / qualified / …),
+// while the CRM's own screens stay Arabic. 'raw' is first: it's what a
+// brand-new row is stamped with.
+export const SHEET_STATUS_LABELS: Record<string, string> = {
+  new: 'raw',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  converted: 'converted',
+  lost: 'unqualified',
+}
+
+// Reverse of both label sets — used to interpret a status value typed (or
+// picked from a dropdown) inside a connected Google Sheet. Both are accepted
+// so a sheet still using the Arabic labels keeps working.
 export function statusFromLabel(label: string): string | null {
   const t = (label || '').trim()
   for (const [status, l] of Object.entries(LEAD_STATUS_LABELS)) {
     if (l === t) return status
+  }
+  const lower = t.toLowerCase()
+  for (const [status, l] of Object.entries(SHEET_STATUS_LABELS)) {
+    if (l === lower) return status
   }
   return null
 }
@@ -63,7 +81,10 @@ export const SOURCE_LABELS: Record<string, string> = {
 // Field labels arrive as keys with spaces turned into underscores, so matching
 // normalizes underscores/dashes, unifies Arabic alef forms, and strips tatweel.
 const NAME_KEYS = ['name', 'full_name', 'fullname', 'your name', 'الاسم', 'الاسم الكامل', 'اسم', 'اسم العميل', 'الاسم الاول', 'اسمك']
-const PHONE_KEYS = ['phone', 'tel', 'mobile', 'phone_number', 'whatsapp', 'الهاتف', 'الجوال', 'جوال', 'موبايل', 'هاتف', 'تليفون', 'رقم الهاتف', 'رقم الجوال', 'رقم الواتساب', 'واتساب', 'رقم التواصل']
+// 'الرقم' is the header a connected sheet's fixed layout uses for the phone
+// column; without it the phone is read as empty and the lead arrives with no
+// number to call.
+const PHONE_KEYS = ['phone', 'tel', 'mobile', 'phone_number', 'whatsapp', 'الهاتف', 'الجوال', 'جوال', 'موبايل', 'هاتف', 'تليفون', 'الرقم', 'رقم الهاتف', 'رقم الجوال', 'رقم الواتساب', 'واتساب', 'رقم التواصل']
 const EMAIL_KEYS = ['email', 'e-mail', 'mail', 'البريد', 'البريد الالكتروني', 'الايميل', 'ايميل']
 
 function norm(s: string): string {

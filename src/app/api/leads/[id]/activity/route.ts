@@ -6,7 +6,7 @@ import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { pushSubStatusToBevatel, pushNoteToBevatel } from '@/lib/leads/bevatelSync'
 import { pushSubStatusToRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 import { statusForSubStatus } from '@/lib/leads/subStatus'
-import { LEAD_STATUS_LABELS } from '@/lib/utils'
+import { SHEET_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // If this lead came from a connected Google Sheet, push the new status into
@@ -27,7 +27,7 @@ async function pushStatusToSheet(supa: ReturnType<typeof adminSupabase>, lead: L
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         rowIndex: lead.sheet_row,
-        status: LEAD_STATUS_LABELS[to] || to,
+        status: SHEET_STATUS_LABELS[to] || to,
         secret: form.sheet_webhook_secret,
       }),
     })
