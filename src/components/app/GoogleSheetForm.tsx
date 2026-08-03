@@ -73,11 +73,20 @@ function setupTrigger() {
 // Returns '' when the layout is good, or a description of the conflict.
 function ensureLayout() {
   var sheet = SpreadsheetApp.getActiveSheet();
+  // The status dropdown belongs on the data rows, never on the header. It can
+  // still end up there — deleting the header row promotes row 2, validation and
+  // all — and then writing the header text is rejected outright for violating
+  // the rule, which stops setup with a Google exception. Clearing it first is
+  // harmless when there was none.
+  sheet.getRange(1, 1, 1, FIXED_COLUMNS.length).setDataValidation(null);
   var headers = sheet.getRange(1, 1, 1, FIXED_COLUMNS.length).getValues()[0];
   for (var i = 0; i < FIXED_COLUMNS.length; i++) {
     var current = String(headers[i] || '').trim();
     if (current === FIXED_COLUMNS[i]) continue;
-    if (current === '') {
+    // A status value sitting in the header row is this script's own leftover
+    // from a deleted header row, not another writer's data — safe to replace.
+    // Anything else still blocks, which is the protection that matters.
+    if (current === '' || isKnownStatus(current)) {
       sheet.getRange(1, i + 1).setValue(FIXED_COLUMNS[i]);
       continue;
     }
@@ -89,16 +98,20 @@ function ensureLayout() {
   return '';
 }
 
+function isKnownStatus(v) {
+  var t = String(v || '').trim().toLowerCase();
+  for (var i = 0; i < STATUSES.length; i++) {
+    if (STATUSES[i] === t) return true;
+  }
+  return false;
+}
+
 // True when the status cell is ours to write: empty, or already holding one of
 // the known statuses. Anything else is another writer's value — refuse rather
 // than overwrite it, which is exactly how a customer's name was destroyed.
 function statusCellIsOurs(sheet, r) {
   var v = String(sheet.getRange(r, STATUS_COL).getValue() || '').trim();
-  if (!v) return true;
-  for (var i = 0; i < STATUSES.length; i++) {
-    if (STATUSES[i] === v.toLowerCase()) return true;
-  }
-  return false;
+  return !v || isKnownStatus(v);
 }
 
 // Fires on every edit/change to the sheet, and once a minute regardless:
