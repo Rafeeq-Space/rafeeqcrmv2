@@ -20,9 +20,23 @@ var STATUS_WEBHOOK_URL = '${statusWebhookUrl}';
 var SECRET = '${secret}';
 
 function setupTrigger() {
+  // Re-running setup must not stack duplicate triggers on the same sheet.
+  var existing = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].getHandlerFunction() === 'onSheetChange') ScriptApp.deleteTrigger(existing[i]);
+  }
   ScriptApp.newTrigger('onSheetChange')
     .forSpreadsheet(SpreadsheetApp.getActive())
     .onChange()
+    .create();
+  // Spreadsheet triggers only fire for edits a person makes in the UI — a
+  // lead source appending rows through the Sheets API (TikTok, Meta, Zapier)
+  // never fires one, so onChange alone sees nothing at all on the sheets this
+  // integration exists for. The time-driven trigger is what actually catches
+  // those rows; onChange above just makes a manual edit land instantly.
+  ScriptApp.newTrigger('onSheetChange')
+    .timeBased()
+    .everyMinutes(1)
     .create();
   ensureStatusColumn();
   // Rows already in the sheet at connect time are history, not new leads.
@@ -59,10 +73,25 @@ function ensureStatusColumn() {
   return col;
 }
 
-// Fires on every edit/change to the sheet:
+// Fires on every edit/change to the sheet, and once a minute regardless:
 // 1) sends brand-new rows to the CRM as leads (and stamps them "جديد").
 // 2) detects manual edits to the status dropdown and forwards them to the CRM.
+//
+// Two triggers call this, so a run can start while another is mid-flight and
+// post the same row twice — lastSentRow is only written after the loop
+// finishes. The lock serialises them; a run that can't get it exits, because
+// the run holding the lock is already covering the same rows.
 function onSheetChange() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return;
+  try {
+    sendNewRowsAndStatusEdits();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sendNewRowsAndStatusEdits() {
   var sheet = SpreadsheetApp.getActiveSheet();
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
