@@ -346,6 +346,20 @@ export interface LeadActivity {
   mentioned?: { id: string; full_name: string } | null
 }
 
+// One conversion event reported to an ad platform for a lead — what was sent
+// and what the platform answered. Stored by syncEvent.ts on every status
+// change; surfaced on the lead page so a rejected postback is visible to the
+// person who caused it rather than only in the database.
+export interface LeadEvent {
+  id: string
+  lead_id: string
+  event_type: string
+  platform: string
+  payload?: Record<string, unknown>
+  response?: { code?: number; message?: string } & Record<string, unknown>
+  sent_at: string
+}
+
 export interface LeadShare {
   id: string
   tenant_id: string

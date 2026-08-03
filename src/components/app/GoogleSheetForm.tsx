@@ -154,7 +154,27 @@ function sendNewRowsAndStatusEdits() {
     for (var r = sentRow + 1; r <= lastRow; r++) {
       var values = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
       var row = {};
-      headers.forEach(function (h, i) { if (h !== STATUS_COL_NAME) row[h] = values[i]; });
+      var unheaded = 0;
+      headers.forEach(function (h, i) {
+        var key = String(h || '').trim();
+        if (key === STATUS_COL_NAME) return;
+        // A column carrying answers under a blank header would otherwise take
+        // the same empty key as every other unheaded column: each overwrites
+        // the last and only one value survives — and the CRM ignores a blank
+        // key anyway, so the rest of the customer's answers just vanish. Keep
+        // them under a positional name so nothing is lost while the mapping
+        // that should have created the header gets fixed.
+        if (!key) {
+          if (!String(values[i] || '').trim()) return;
+          key = 'عمود ' + (i + 1);
+          unheaded++;
+        }
+        row[key] = values[i];
+      });
+      if (unheaded && !firstError) {
+        firstError = 'row ' + r + ' has ' + unheaded + ' column(s) with data but no header —' +
+          ' map those fields in the lead source so the headers exist';
+      }
       // Blank rows inside the sheet's used range (left behind after data is
       // deleted) are not leads — posting them just gets them skipped, and
       // stamping them writes into the source's next row.

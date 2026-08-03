@@ -8,8 +8,9 @@ import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
+  Radio, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
-import type { Lead, LeadActivity, KnowledgeFile } from '@/lib/types'
+import type { Lead, LeadActivity, KnowledgeFile, LeadEvent } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
 import { useToast } from '@/components/ToastProvider'
@@ -26,13 +27,14 @@ interface Props {
   members?: Option[]
   teams?: Option[]
   bevatel?: { host: string; accountId: string } | null
+  conversionEvents?: LeadEvent[]
 }
 
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
-export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null }: Props) {
+export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null, conversionEvents = [] }: Props) {
   const [lead, setLead] = useState(initialLead)
   const [activities, setActivities] = useState<LeadActivity[]>(initialActivities)
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
@@ -354,6 +356,47 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Conversion events reported to the ad platforms. Every status
+              change fires one, and until now the platform's own answer was
+              only ever visible in the database — so a rejected postback (an
+              expired token, a wrong event set id) looked identical to a
+              working one from here, while the campaign quietly stopped
+              learning. */}
+          {conversionEvents.length > 0 && (
+            <div className="card p-5">
+              <p className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Radio size={15} style={{ color: 'var(--primary)' }} /> إبلاغ المنصات الإعلانية
+              </p>
+              <div className="space-y-2.5">
+                {conversionEvents.map(ev => {
+                  const ok = ev.response?.code === 0
+                  return (
+                    <div key={ev.id} className="flex items-start gap-2 text-sm">
+                      {ok
+                        ? <CheckCircle2 size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--success)' }} />
+                        : <AlertTriangle size={15} className="mt-0.5 shrink-0" style={{ color: 'var(--danger)' }} />}
+                      <div className="min-w-0">
+                        <span className="text-foreground font-semibold" dir="ltr">{ev.event_type}</span>
+                        <span className="text-muted2 text-xs"> · {SOURCE_LABELS[ev.platform] || ev.platform}</span>
+                        <span className="block text-xs text-muted2">
+                          {new Date(ev.sent_at).toLocaleString('ar-EG')}
+                        </span>
+                        {!ok && (
+                          <span className="block text-xs mt-0.5" style={{ color: 'var(--danger)' }}>
+                            {ev.response?.message || 'لم تقبله المنصة'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-muted2 mt-3 pt-3 border-t border-border">
+                كل تغيير في حالة الليد بيتبعت للمنصة عشان الخوارزمية تتعلّم. العلامة الخضراء معناها إن المنصة قبلته.
+              </p>
             </div>
           )}
 

@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import LeadProfile from '@/components/app/LeadProfile'
-import type { Lead } from '@/lib/types'
+import type { Lead, LeadEvent } from '@/lib/types'
 
 const LEAD_DETAIL_SELECT =
   '*, campaigns(id, name, source), forms(id, name), assigned_sales:profiles!assigned_sales_id(id, full_name), assigned_team:teams!assigned_team_id(id, name, manager_id)'
@@ -23,6 +23,13 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
     .select('*, actor:profiles!actor_id(id, full_name), mentioned:profiles!mentioned_id(id, full_name)')
     .eq('lead_id', id)
     .order('created_at', { ascending: true })
+
+  // Newest first — the latest attempt is the one that matters.
+  const { data: conversionEvents } = await supa
+    .from('lead_events')
+    .select('id, lead_id, event_type, platform, response, sent_at')
+    .eq('lead_id', id)
+    .order('sent_at', { ascending: false })
 
   // Sales can mention teammates in comments (task hand-off) but can't reassign.
   const { data: members } = await supa
@@ -50,6 +57,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
       viewerId={viewer.id}
       members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
       bevatel={bevatel}
+      conversionEvents={(conversionEvents || []) as LeadEvent[]}
     />
   )
 }
