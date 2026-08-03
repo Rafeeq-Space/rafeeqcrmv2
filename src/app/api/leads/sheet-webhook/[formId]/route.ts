@@ -73,6 +73,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
 
     const { assigned_sales_id, assigned_team_id } = await assignRoundRobin(supabase, formId)
 
+    // TikTok's own Google Sheets export includes a "TikTok Lead ID" column, so
+    // a lead arriving this way can still be reported back with the identifier
+    // the platform matches on, instead of falling back to hashed phone/email.
+    // Matched on the column *name* since the sheet's headers are written by
+    // whichever source owns it, not by us.
+    const externalLeadId = Object.entries(row)
+      .find(([k]) => /lead[\s_-]*id/i.test(k))?.[1]
+
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
@@ -84,6 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         status: 'new',
         sub_status: 'new_lead',
         sheet_row: rowIndex,
+        external_lead_id: String(externalLeadId ?? '').trim() || null,
         assigned_sales_id,
         assigned_team_id,
       })

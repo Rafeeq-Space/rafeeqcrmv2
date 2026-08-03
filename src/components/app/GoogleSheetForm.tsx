@@ -101,6 +101,17 @@ function sendNewRowsAndStatusEdits() {
   var statusCol = ensureStatusColumn();
   var sentRow = parseInt(props.getProperty('lastSentRow') || '1', 10);
 
+  // The pointer only ever moves forward, so if the sheet shrank — rows
+  // deleted, or this script project reused on a smaller sheet — it can
+  // end up above the sheet's own row count. Then lastRow > sentRow is false
+  // forever and the script silently stops sending anything, with no error to
+  // explain it. Resume from the current end rather than replaying history;
+  // importing the backlog is what resendAllRows is for.
+  if (sentRow > lastRow) {
+    sentRow = lastRow;
+    props.setProperty('lastSentRow', String(lastRow));
+  }
+
   if (lastRow > sentRow) {
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     for (var r = sentRow + 1; r <= lastRow; r++) {
@@ -140,6 +151,15 @@ function sendNewRowsAndStatusEdits() {
       }
     }
   }
+}
+
+// Run by hand to pull in rows that were already in the sheet when the script
+// was installed (or that a stale pointer skipped). Deliberately manual: it
+// posts every row from 2 onwards as a new lead, each one assigned, its rep
+// notified, and a conversion event sent to the ad platform dated today.
+function resendAllRows() {
+  PropertiesService.getScriptProperties().deleteProperty('lastSentRow');
+  onSheetChange();
 }
 
 // Web App entry point — called by the CRM when a lead's status changes there,
