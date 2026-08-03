@@ -112,23 +112,36 @@ function sendNewRowsAndStatusEdits() {
     props.setProperty('lastSentRow', String(lastRow));
   }
 
+  // The response used to be discarded and the pointer advanced past the whole
+  // batch regardless, so a rejected row was lost permanently and in silence —
+  // the sheet kept filling while the CRM received nothing. Now the pointer
+  // moves one row at a time and only after that row is accepted, the first
+  // failure stops the run so the next minute retries the same row, and the
+  // throw at the end makes Apps Script email the script owner instead of
+  // failing quietly while a campaign is spending.
+  var firstError = '';
   if (lastRow > sentRow) {
     var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     for (var r = sentRow + 1; r <= lastRow; r++) {
       var values = sheet.getRange(r, 1, 1, lastCol).getValues()[0];
       var row = {};
       headers.forEach(function (h, i) { if (h !== STATUS_COL_NAME) row[h] = values[i]; });
-      UrlFetchApp.fetch(WEBHOOK_URL, {
+      var res = UrlFetchApp.fetch(WEBHOOK_URL, {
         method: 'post',
         contentType: 'application/json',
         headers: { 'x-webhook-secret': SECRET },
         payload: JSON.stringify({ row: row, rowIndex: r }),
         muteHttpExceptions: true
       });
+      var code = res.getResponseCode();
+      if (code < 200 || code >= 300) {
+        firstError = 'row ' + r + ' -> HTTP ' + code + ' ' + res.getContentText().slice(0, 300);
+        break;
+      }
       sheet.getRange(r, statusCol).setValue(STATUSES[0]);
       props.setProperty('st_' + r, STATUSES[0]);
+      props.setProperty('lastSentRow', String(r));
     }
-    props.setProperty('lastSentRow', String(lastRow));
   }
 
   var checkRows = Math.min(lastRow, sentRow);
@@ -140,17 +153,28 @@ function sendNewRowsAndStatusEdits() {
       if (!val) continue;
       var known = props.getProperty('st_' + r2);
       if (val !== known) {
-        UrlFetchApp.fetch(STATUS_WEBHOOK_URL, {
+        var sres = UrlFetchApp.fetch(STATUS_WEBHOOK_URL, {
           method: 'post',
           contentType: 'application/json',
           headers: { 'x-webhook-secret': SECRET },
           payload: JSON.stringify({ rowIndex: r2, status: val }),
           muteHttpExceptions: true
         });
-        props.setProperty('st_' + r2, val);
+        var scode = sres.getResponseCode();
+        // Only remember the new value once the CRM has it — otherwise a
+        // rejected change looks synced and is never retried.
+        if (scode >= 200 && scode < 300) {
+          props.setProperty('st_' + r2, val);
+        } else if (!firstError) {
+          firstError = 'status row ' + r2 + ' -> HTTP ' + scode + ' ' + sres.getContentText().slice(0, 300);
+        }
       }
     }
   }
+
+  // Apps Script emails the script owner when a trigger throws, so this is the
+  // only thing making a broken sheet connection noticeable while it is broken.
+  if (firstError) throw new Error('CRM sync failed: ' + firstError);
 }
 
 // Run by hand to pull in rows that were already in the sheet when the script
