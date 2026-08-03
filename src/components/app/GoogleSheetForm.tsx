@@ -42,7 +42,12 @@ function setupTrigger() {
 function ensureStatusColumn() {
   var sheet = SpreadsheetApp.getActiveSheet();
   var lastCol = sheet.getLastColumn();
-  var headers = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  // A sheet with no header row yet has nothing to append to — the column
+  // would land in A1, ahead of the headers the lead source is about to write,
+  // and every row after that would be read against the wrong column names.
+  // Connect the sheet to its source first, then install this script.
+  if (lastCol === 0) return 0;
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   var col = headers.indexOf(STATUS_COL_NAME) + 1;
   if (col === 0) {
     col = lastCol + 1;
@@ -119,7 +124,7 @@ function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSheet();
   var statusCol = ensureStatusColumn();
   var row = parseInt(body.rowIndex, 10);
-  if (row >= 2 && body.status) {
+  if (statusCol > 0 && row >= 2 && body.status) {
     sheet.getRange(row, statusCol).setValue(body.status);
     PropertiesService.getScriptProperties().setProperty('st_' + row, String(body.status));
   }
