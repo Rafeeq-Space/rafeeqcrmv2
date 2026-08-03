@@ -25,6 +25,16 @@ function setupTrigger() {
     .onChange()
     .create();
   ensureStatusColumn();
+  // Rows already in the sheet at connect time are history, not new leads.
+  // Without this, the first change posts every existing row as a fresh lead —
+  // each one assigned, its rep notified, and a conversion event sent to the ad
+  // platform stamped with today's date, which distorts optimization data for a
+  // sheet that has been collecting leads for months. Only rows added after
+  // setup are sent; importing the backlog is a separate, deliberate action.
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('lastSentRow') === null) {
+    props.setProperty('lastSentRow', String(Math.max(SpreadsheetApp.getActiveSheet().getLastRow(), 1)));
+  }
 }
 
 // Finds (or creates) the "الحالة" column and restricts it to a dropdown
