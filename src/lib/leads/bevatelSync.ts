@@ -51,19 +51,30 @@ export async function pushSubStatusToBevatel(lead: Lead, subStatusKey: string): 
 // CRM comment → post it as a PRIVATE note on the Bevatel conversation (internal,
 // the customer never sees it). Returns the created Bevatel message id so the
 // caller can dedupe the echoed webhook, or null.
-export async function pushNoteToBevatel(lead: Lead, content: string): Promise<string | null> {
+//
+// The note goes out on the tenant's account-level token, so Bevatel shows it as
+// authored by the account itself — a colleague reading it there sees the company
+// name and has no way to tell which rep wrote it. Naming the author inside the
+// text is the only attribution available over this API.
+export async function pushNoteToBevatel(
+  lead: Lead,
+  content: string,
+  authorName?: string | null,
+): Promise<string | null> {
   const convId = lead.bevatel_conversation_id
   if (!convId || !content.trim()) return null
 
   const creds = await tenantCreds(lead.tenant_id)
   if (!creds) return null
 
+  const body = authorName ? `${authorName}:\n${content}` : content
+
   const url = `${creds.host}/api/v1/accounts/${creds.accountId}/conversations/${convId}/messages`
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { api_access_token: creds.token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, message_type: 'outgoing', private: true }),
+      body: JSON.stringify({ content: body, message_type: 'outgoing', private: true }),
     })
     if (!res.ok) return null
     const msg = await res.json()

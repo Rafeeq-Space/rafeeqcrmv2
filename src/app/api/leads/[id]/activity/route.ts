@@ -147,7 +147,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (type === 'comment' && record.body) {
     after(async () => {
       try {
-        const msgId = await pushNoteToBevatel(lead as Lead, record.body as string)
+        const { data: author } = await supa
+          .from('profiles')
+          .select('full_name')
+          .eq('id', viewer.id)
+          .single()
+        const msgId = await pushNoteToBevatel(lead as Lead, record.body as string, author?.full_name as string | null)
         if (msgId && activity?.id) {
           await supa.from('lead_activities').update({ external_id: `bevatel_msg_${msgId}` }).eq('id', activity.id)
         }
