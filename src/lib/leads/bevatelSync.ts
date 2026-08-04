@@ -103,6 +103,37 @@ export async function fetchBevatelAgents(tenantId: string): Promise<{ id: number
   }
 }
 
+// Reads a conversation's current assignee straight from Bevatel.
+//
+// Needed because a webhook can be emitted before Bevatel finishes its own
+// auto-assignment, so its payload shows no assignee for a conversation that
+// does have one moments later. Round-robining off that stale view overwrites
+// their assignment and posts a second "assigned to …" line into the thread.
+// Returns the agent's email/name to resolve against profiles, or null.
+export async function fetchConversationAssignee(
+  tenantId: string,
+  conversationId: string,
+): Promise<{ email?: string; name?: string } | null> {
+  const creds = await tenantCreds(tenantId)
+  if (!creds) return null
+  try {
+    const res = await fetch(
+      `${creds.host}/api/v1/accounts/${creds.accountId}/conversations/${conversationId}`,
+      { headers: { api_access_token: creds.token, 'Content-Type': 'application/json' } },
+    )
+    if (!res.ok) return null
+    const conv = await res.json()
+    const a = conv?.meta?.assignee
+    if (!a) return null
+    const email = typeof a.email === 'string' ? a.email : undefined
+    const name = typeof a.name === 'string' ? a.name : (typeof a.available_name === 'string' ? a.available_name : undefined)
+    return email || name ? { email, name } : null
+  } catch (err) {
+    console.error('fetchConversationAssignee failed', err)
+    return null
+  }
+}
+
 // CRM assignment → set the Bevatel conversation's assignee to the matching agent.
 // Resolves the Bevatel agent by the rep's bevatel_agent_id (their Bevatel email).
 export async function pushAssigneeToBevatel(lead: Lead, salesId: string | null): Promise<void> {

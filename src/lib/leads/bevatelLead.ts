@@ -2,7 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
-import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
+import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
 import type { Lead } from '@/lib/types'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
@@ -384,11 +384,14 @@ async function assignChatRoundRobin(tenantId: string): Promise<{ id: string; tea
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended')
+    .select('id, team_id, suspended, excluded_from_distribution')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
-  const reps = (repsRaw || []).filter(r => !r.suspended)
+  // This is real distribution — nobody claimed it, so a rep is picked by
+  // rotation. It has to honour the exclusion, unlike an answered call or an
+  // assigned conversation, where the agent reflects work someone actually did.
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('bevatel_chat_rr_index').eq('id', tenantId).single()
@@ -531,26 +534,48 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
       .eq('id', res.leadId)
       .single()
     if (leadRow && !leadRow.assigned_sales_id) {
-      const rep = await assignChatRoundRobin(tenantId)
+      // Ask Bevatel who owns the conversation right now before deciding
+      // anything. Several deliveries for one message are processed in parallel
+      // and a payload can predate Bevatel's own auto-assignment, so the
+      // assignee seen above may simply be stale — round-robining off that
+      // overwrites their choice and posts a second "assigned to …" line into
+      // the thread, which is what the team saw.
+      let rep: { id: string; team_id: string | null } | null = null
+      const convId = leadRow.bevatel_conversation_id as string | null
+      if (convId) {
+        const live = await fetchConversationAssignee(tenantId, convId)
+        if (live) rep = await matchAgent(tenantId, live)
+      }
+      // Genuinely unclaimed on their side too — now it's ours to distribute.
+      if (!rep) rep = await assignChatRoundRobin(tenantId)
       if (rep) {
-        await adminSupabase()
+        // Only claim it if it is *still* unowned: a sibling delivery may have
+        // assigned the agent it saw while this one was deciding, and last write
+        // would otherwise win at random.
+        const { data: claimed } = await adminSupabase()
           .from('leads')
           .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id, updated_at: new Date().toISOString() })
           .eq('id', res.leadId)
-        await adminSupabase().from('lead_activities').insert({
-          tenant_id: tenantId,
-          lead_id: res.leadId,
-          actor_id: null,
-          type: 'assignment',
-          mentioned_id: rep.id,
-        })
-        await createNotification(adminSupabase(), {
-          tenantId,
-          recipientId: rep.id,
-          type: 'lead_assigned',
-          leadId: res.leadId,
-        })
-        await pushAssigneeToBevatel({ ...leadRow, id: res.leadId } as Lead, rep.id).catch(() => {})
+          .is('assigned_sales_id', null)
+          .select('id')
+        // Nothing updated → a sibling delivery got there first. Leave its
+        // assignment alone and log nothing, so the thread gets one line.
+        if (claimed?.length) {
+          await adminSupabase().from('lead_activities').insert({
+            tenant_id: tenantId,
+            lead_id: res.leadId,
+            actor_id: null,
+            type: 'assignment',
+            mentioned_id: rep.id,
+          })
+          await createNotification(adminSupabase(), {
+            tenantId,
+            recipientId: rep.id,
+            type: 'lead_assigned',
+            leadId: res.leadId,
+          })
+          await pushAssigneeToBevatel({ ...leadRow, id: res.leadId } as Lead, rep.id).catch(() => {})
+        }
       }
     }
   }
@@ -583,11 +608,14 @@ async function assignMissedCallRoundRobin(tenantId: string): Promise<{ id: strin
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended')
+    .select('id, team_id, suspended, excluded_from_distribution')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
-  const reps = (repsRaw || []).filter(r => !r.suspended)
+  // This is real distribution — nobody claimed it, so a rep is picked by
+  // rotation. It has to honour the exclusion, unlike an answered call or an
+  // assigned conversation, where the agent reflects work someone actually did.
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('bevatel_call_rr_index').eq('id', tenantId).single()
@@ -699,23 +727,29 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     if (leadRow && !leadRow.assigned_sales_id) {
       const rep = await assignMissedCallRoundRobin(tenantId)
       if (rep) {
-        await adminSupabase()
+        // Same guard as the chat path: only claim a lead that is still unowned,
+        // so a sibling delivery's assignment isn't overwritten at random.
+        const { data: claimed } = await adminSupabase()
           .from('leads')
           .update({ assigned_sales_id: rep.id, assigned_team_id: rep.team_id, updated_at: new Date().toISOString() })
           .eq('id', res.leadId)
-        await adminSupabase().from('lead_activities').insert({
-          tenant_id: tenantId,
-          lead_id: res.leadId,
-          actor_id: null,
-          type: 'assignment',
-          mentioned_id: rep.id,
-        })
-        await createNotification(adminSupabase(), {
-          tenantId,
-          recipientId: rep.id,
-          type: 'lead_assigned',
-          leadId: res.leadId,
-        })
+          .is('assigned_sales_id', null)
+          .select('id')
+        if (claimed?.length) {
+          await adminSupabase().from('lead_activities').insert({
+            tenant_id: tenantId,
+            lead_id: res.leadId,
+            actor_id: null,
+            type: 'assignment',
+            mentioned_id: rep.id,
+          })
+          await createNotification(adminSupabase(), {
+            tenantId,
+            recipientId: rep.id,
+            type: 'lead_assigned',
+            leadId: res.leadId,
+          })
+        }
       }
     }
   }
