@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, email, monthly_target } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, email, monthly_target, excluded_from_distribution } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -63,6 +63,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     updates.monthly_target = Number.isFinite(Number(monthly_target)) && Number(monthly_target) >= 0
       ? Math.round(Number(monthly_target))
       : null
+  }
+  if (excluded_from_distribution !== undefined) {
+    updates.excluded_from_distribution = !!excluded_from_distribution
   }
   // Permissions/role — only sales user or sales manager can be set here.
   if (role !== undefined && (role === 'client_user' || role === 'client_sales_manager')) {

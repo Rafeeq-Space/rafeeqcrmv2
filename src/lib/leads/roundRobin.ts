@@ -15,7 +15,19 @@ export async function assignRoundRobin(
     .eq('id', formId)
     .single()
 
-  const pool: string[] = Array.isArray(form?.assignee_ids) ? form!.assignee_ids : []
+  const saved: string[] = Array.isArray(form?.assignee_ids) ? form!.assignee_ids : []
+  if (!saved.length) return { assigned_sales_id: null, assigned_team_id: null }
+
+  // Someone taken out of distribution (or suspended) stays in whatever pools
+  // were saved before that, so filter here rather than trusting the stored list
+  // — otherwise the flag would silently do nothing for every existing form.
+  const { data: members } = await supabase
+    .from('profiles')
+    .select('id, team_id, suspended, excluded_from_distribution')
+    .in('id', saved)
+  const eligible = (members || []).filter(m => !m.suspended && !m.excluded_from_distribution)
+  // Keep the admin's chosen order — `in` returns rows in whatever order it likes.
+  const pool = saved.filter(id => eligible.some(m => m.id === id))
   if (!pool.length) return { assigned_sales_id: null, assigned_team_id: null }
 
   const idx = ((form?.rr_index ?? 0) % pool.length + pool.length) % pool.length
@@ -24,9 +36,7 @@ export async function assignRoundRobin(
   // Advance the counter for the next submission.
   await supabase.from('forms').update({ rr_index: idx + 1 }).eq('id', formId)
 
-  // Resolve the member's team so the lead is scoped to the right team.
-  const { data: prof } = await supabase.from('profiles').select('team_id').eq('id', assigned_sales_id).single()
-  const assigned_team_id = prof?.team_id || null
+  const assigned_team_id = eligible.find(m => m.id === assigned_sales_id)?.team_id || null
 
   return { assigned_sales_id, assigned_team_id }
 }
@@ -44,11 +54,11 @@ export async function assignRoundRobinTenantWide(
 ): Promise<{ assigned_sales_id: string | null; assigned_team_id: string | null }> {
   const { data: repsRaw } = await supabase
     .from('profiles')
-    .select('id, team_id, suspended')
+    .select('id, team_id, suspended, excluded_from_distribution')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
-  const reps = (repsRaw || []).filter(r => !r.suspended)
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
   if (!reps.length) return { assigned_sales_id: null, assigned_team_id: null }
 
   const { data: connection } = await supabase

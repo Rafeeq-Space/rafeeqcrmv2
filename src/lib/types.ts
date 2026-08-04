@@ -160,6 +160,10 @@ export interface TeamMember {
   rafeeqsocial_team_member_id?: string | null
   // Monthly sales target (number of leads to convert to "sold" per calendar month).
   monthly_target?: number | null
+  // Skipped by automatic lead distribution (round-robin) while keeping full
+  // access — unlike `suspended`, which also blocks signing in. Explicit
+  // assignment still reaches them; see the migration for the reasoning.
+  excluded_from_distribution?: boolean
   created_at: string
 }
 

@@ -107,6 +107,7 @@ function MemberModal({
       bevatel_extension: '',
       rafeeqsocial_team_member_id: '',
       monthly_target: '',
+      excluded_from_distribution: false,
     }
   }
   const [form, setForm] = useState(() => editing ? {
@@ -122,6 +123,7 @@ function MemberModal({
     bevatel_extension: member?.bevatel_extension || '',
     rafeeqsocial_team_member_id: member?.rafeeqsocial_team_member_id || '',
     monthly_target: member?.monthly_target != null ? String(member.monthly_target) : '',
+    excluded_from_distribution: !!member?.excluded_from_distribution,
   } : blankForm())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -183,6 +185,7 @@ function MemberModal({
           bevatel_extension: form.bevatel_extension,
           rafeeqsocial_team_member_id: form.rafeeqsocial_team_member_id,
           monthly_target: form.monthly_target === '' ? null : form.monthly_target,
+          excluded_from_distribution: form.excluded_from_distribution,
         }
         if (form.password) payload.password = form.password
         res = await fetch(`/api/client-admin/team-members/${member!.id}`, {
@@ -206,6 +209,7 @@ function MemberModal({
             bevatel_extension: form.bevatel_extension,
             rafeeqsocial_team_member_id: form.rafeeqsocial_team_member_id,
             monthly_target: form.monthly_target === '' ? null : form.monthly_target,
+            excluded_from_distribution: form.excluded_from_distribution,
           }),
         })
       }
@@ -292,6 +296,24 @@ function MemberModal({
               onChange={e => setForm({ ...form, monthly_target: e.target.value })}
               placeholder="عدد العملاء المطلوب تحويلهم للبيع شهرياً"
             />
+          </div>
+
+          <div>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1 shrink-0"
+                checked={form.excluded_from_distribution}
+                onChange={e => setForm({ ...form, excluded_from_distribution: e.target.checked })}
+              />
+              <span>
+                <span className="text-sm font-semibold text-foreground">استثناء من توزيع العملاء الجدد</span>
+                <span className="block text-xs text-muted2 mt-0.5">
+                  يظل الحساب مفتوحاً ويكمل العمل على عملائه الحاليين، لكن التوزيع التلقائي يتخطاه.
+                  الإسناد اليدوي — ومنه إسناد محادثة له في بيفاتيل أو رفيق سوشيال — يظل يعمل.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div>

@@ -234,11 +234,11 @@ async function assignRafeeqSocialRoundRobin(tenantId: string): Promise<{ id: str
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended')
+    .select('id, team_id, suspended, excluded_from_distribution')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
-  const reps = (repsRaw || []).filter(r => !r.suspended)
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('rafeeqsocial_rr_index').eq('id', tenantId).single()

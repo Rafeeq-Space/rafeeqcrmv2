@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'ليس لديك صلاحية إضافة موظفين' }, { status: 403 })
   }
 
-  const { full_name, email, password, phone, job_title, team_id, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, monthly_target } = await request.json()
+  const { full_name, email, password, phone, job_title, team_id, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, monthly_target, excluded_from_distribution } = await request.json()
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'الاسم والبريد وكلمة السر مطلوبة' }, { status: 400 })
   }
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     bevatel_extension: bevatel_extension || null,
     rafeeqsocial_team_member_id: rafeeqsocial_team_member_id || null,
     monthly_target: target,
+    excluded_from_distribution: !!excluded_from_distribution,
     suspended: false,
   }, { onConflict: 'id' })
 
