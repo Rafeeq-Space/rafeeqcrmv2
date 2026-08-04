@@ -129,6 +129,12 @@ export interface AppendArgs {
   conversationId?: string
   contactId?: string
   agent: AgentHint
+  // True when `agent` came from the conversation's own assignee rather than
+  // from whoever happened to send this message. The assignee is an explicit
+  // statement of ownership on the platform's side, so it takes over a lead that
+  // already has a different owner; a message sender does not, because a
+  // colleague replying once must not silently take a lead off its owner.
+  agentIsAssignee?: boolean
 }
 
 export interface AppendResult {
@@ -277,10 +283,17 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     }
   }
 
-  // Existing (or just-adopted) lead with no owner — or one still sitting on
-  // the account owner because the first contact never reached a real rep —
-  // hand it to the agent who just replied / answered, and log it on the timeline.
-  if (leadId && !created && agent && (!existingAssignedId || existingAssignedIsAdmin)) {
+  // Hand the lead over when:
+  //  - nobody owns it yet, or it's still sitting on the account owner because
+  //    the first contact never reached a real rep; or
+  //  - the platform's own conversation assignee is someone else. That one is an
+  //    explicit ownership decision made on their side, and the rep working the
+  //    thread there is the one who should see it here — a lead stuck on a
+  //    different owner in the CRM than in Bevatel is invisibly wrong, which is
+  //    exactly what happened: Bevatel reported "Mohammed Ali" on all 31
+  //    deliveries while the CRM kept showing someone else.
+  const assigneeDisagrees = !!args.agentIsAssignee && !!agent && agent.id !== existingAssignedId
+  if (leadId && !created && agent && (!existingAssignedId || existingAssignedIsAdmin || assigneeDisagrees)) {
     await supa
       .from('leads')
       .update({ assigned_sales_id: agent.id, assigned_team_id: agent.team_id })
@@ -475,6 +488,13 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     email: pick('email'),
     name: pick('name') || pick('available_name'),
   }
+  // Incoming always reads the assignee; outgoing only falls back to it when the
+  // sender carried no identity of its own. Either way the resulting hint is an
+  // ownership statement, not just "who typed this" — see AppendArgs.
+  const senderHasIdentity = !!(
+    (topSender.email as string) || (topSender.name as string) || (topSender.available_name as string)
+  )
+  const agentIsAssignee = incoming || !senderHasIdentity
 
   const res = await appendToLead({
     tenantId,
@@ -488,6 +508,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     conversationId: convId,
     contactId,
     agent,
+    agentIsAssignee,
   })
 
   // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
