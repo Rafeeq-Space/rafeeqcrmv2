@@ -120,3 +120,34 @@ function pick(data: Record<string, string> | undefined, keys: string[]): string 
 export const leadName = (data?: Record<string, string>) => pick(data, NAME_KEYS) || 'عميل بدون اسم'
 export const leadPhone = (data?: Record<string, string>) => pick(data, PHONE_KEYS)
 export const leadEmail = (data?: Record<string, string>) => pick(data, EMAIL_KEYS)
+
+// Reduce a phone number to bare ASCII digits so the same number written any way
+// still compares equal. Stored numbers arrive formatted differently depending
+// on who wrote them — "+966505845214" from one source, "+966 50 5845214" from
+// another — and a number copied out of an Arabic interface carries invisible
+// bidi marks and can use Arabic-Indic digits, none of which a plain substring
+// match survives.
+export function phoneDigits(raw?: string | null): string {
+  if (!raw) return ''
+  return String(raw)
+    // Arabic-Indic (٠-٩) and Extended Arabic-Indic (۰-۹) → ASCII.
+    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0))
+    .replace(/\D/g, '')
+}
+
+// True when `query` refers to the same number as `stored`, ignoring formatting
+// and country-code style.
+//
+// A full number is compared on its last 9 digits — the same convention
+// phoneKey() already uses for dedupe — so "+966501234567", "0501234567" and
+// "501234567" all agree: the trunk zero and the country code both fall outside
+// the tail. Anything shorter is treated as a partial search and matched as a
+// substring, so typing part of a number still narrows the list.
+export function phoneMatches(stored?: string | null, query?: string | null): boolean {
+  const a = phoneDigits(stored)
+  const b = phoneDigits(query)
+  if (!a || !b) return false
+  if (b.length >= 9) return a.slice(-9) === b.slice(-9)
+  return a.includes(b)
+}

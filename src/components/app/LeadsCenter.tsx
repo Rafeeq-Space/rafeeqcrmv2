@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
-import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
+import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits, phoneMatches } from '@/lib/utils'
 import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
 import { useToast } from '@/components/ToastProvider'
@@ -292,6 +292,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
       minTime = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
     }
     const q = search.trim().toLowerCase()
+    const qDigits = phoneDigits(q)
 
     return leads.filter(l => {
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
@@ -304,8 +305,12 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
       if (minTime !== null && t < minTime) return false
       if (maxTime !== null && t > maxTime) return false
       if (q) {
-        const hay = `${leadName(l.data)} ${leadPhone(l.data)}`.toLowerCase()
-        if (!hay.includes(q)) return false
+        // A phone query is matched on digits, not text: the same number is
+        // stored formatted differently by different sources ("+966505845214"
+        // vs "+966 50 5845214"), and one copied out of an Arabic interface
+        // carries invisible bidi marks — a substring match finds neither.
+        const byPhone = qDigits.length >= 4 && phoneMatches(leadPhone(l.data), q)
+        if (!byPhone && !leadName(l.data).toLowerCase().includes(q)) return false
       }
       return true
     })
