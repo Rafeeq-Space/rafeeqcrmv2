@@ -7,13 +7,15 @@ import { pushAssigneeToRafeeqSocial } from '@/lib/leads/rafeeqSocialAssign'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
-// Only client_admin and client_sales_manager may assign.
+//
+// Managers may assign any lead they can see, to anyone, and may clear the
+// assignment. A sales rep may hand on a lead they own — so the team can pass
+// work between themselves without waiting for a manager — but only their own
+// lead, only to a real person (never leaving it ownerless), and the receiving
+// rep's own team comes with them rather than whatever the client sent.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await requireTenantUser()
   if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!['client_admin', 'client_sales_manager'].includes(viewer.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   const { id: leadId } = await params
   const supa = adminSupabase()
@@ -31,6 +33,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
+  const isManager = ['client_admin', 'client_sales_manager'].includes(viewer.role)
+  if (!isManager) {
+    if (lead.assigned_sales_id !== viewer.id) {
+      return NextResponse.json({ error: 'يمكنك إسناد عملائك فقط' }, { status: 403 })
+    }
+    if (!body.assigned_sales_id) {
+      return NextResponse.json({ error: 'اختر الموظف الذي سيتولى العميل' }, { status: 400 })
+    }
+  }
+
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if ('assigned_sales_id' in body) update.assigned_sales_id = body.assigned_sales_id || null
   if ('assigned_team_id' in body) update.assigned_team_id = body.assigned_team_id || null
@@ -39,11 +51,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (update.assigned_sales_id) {
     const { data: p } = await supa
       .from('profiles')
-      .select('id')
+      .select('id, team_id')
       .eq('id', update.assigned_sales_id)
       .eq('tenant_id', viewer.tenantId)
       .single()
     if (!p) return NextResponse.json({ error: 'Invalid sales rep' }, { status: 400 })
+    // A rep hands the lead to a person, not to a team — the team follows whoever
+    // receives it, so a lead can't be parked in a team they don't belong to.
+    if (!isManager) update.assigned_team_id = p.team_id ?? null
   }
   if (update.assigned_team_id) {
     const { data: t } = await supa

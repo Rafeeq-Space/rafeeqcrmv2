@@ -50,7 +50,12 @@ export default async function ClientAdminLeadsPage() {
             <h1 className="text-2xl font-extrabold text-foreground">مركز العملاء</h1>
             <p className="text-muted text-sm mt-1">إدارة العملاء المحتملين — الحملات، الإسناد، والمتابعة</p>
           </div>
-          {viewer.role === 'client_admin' && <LeadsAdminActions leadCount={leads.length} />}
+          {viewer.role === 'client_admin' && (
+            <LeadsAdminActions
+              leadCount={leads.length}
+              members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
+            />
+          )}
           <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
         </div>
         <LeadsCenter

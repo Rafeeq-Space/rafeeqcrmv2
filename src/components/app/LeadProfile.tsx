@@ -70,6 +70,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   usePollWhenVisible(refreshActivities, 12000)
 
   const canManage = role === 'client_admin' || role === 'client_sales_manager'
+  // A rep can hand their own lead to a colleague without going through a
+  // manager. Only their own, and only *to* someone — the server enforces both.
+  const canHandOff = !canManage && lead.assigned_sales_id === viewerId
   // You can't share a lead with yourself.
   const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)
@@ -317,13 +320,26 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="flex items-center gap-2"><Users2 size={15} className="text-muted2" /><span className="text-muted2">الفريق:</span><span className="text-foreground font-semibold">{lead.assigned_team?.name || 'غير محدد'}</span></div>
             </div>
 
-            {canManage && (
+            {(canManage || canHandOff) && (
               <div className="flex flex-wrap gap-2 mt-4">
-                <button onClick={() => setShowAssign(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5"><UserPlus size={15} /> إسناد</button>
-                <button onClick={() => setShowShare(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5"><Share2 size={15} /> مشاركة</button>
+                <button onClick={() => setShowAssign(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5">
+                  <UserPlus size={15} /> {canManage ? 'إسناد' : 'تحويل لزميل'}
+                </button>
+                {canManage && (
+                  <button onClick={() => setShowShare(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5"><Share2 size={15} /> مشاركة</button>
+                )}
               </div>
             )}
-            {showAssign && canManage && <AssignForm members={members} teams={teams} lead={lead} busy={busy} onSubmit={assign} />}
+            {showAssign && (canManage || canHandOff) && (
+              <AssignForm
+                members={canManage ? members : shareMembers}
+                teams={teams}
+                lead={lead}
+                busy={busy}
+                onSubmit={assign}
+                canPickTeam={canManage}
+              />
+            )}
             {showShare && canManage && (
               <div className="mt-3 p-3 rounded-xl bg-surface2 border border-border space-y-2">
                 <select className="input" value={shareId} onChange={e => setShareId(e.target.value)}>
@@ -495,29 +511,42 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   )
 }
 
-function AssignForm({ members, teams, lead, busy, onSubmit }: {
+// canPickTeam is false for a rep handing their own lead on: they choose a
+// person, and the server puts the lead in whichever team that person belongs
+// to. Leaving it unassigned isn't offered either — a handed-off lead always
+// has an owner.
+function AssignForm({ members, teams, lead, busy, onSubmit, canPickTeam = true }: {
   members: Option[]; teams: Option[]; lead: Lead; busy: boolean;
   onSubmit: (salesId: string, teamId: string) => void
+  canPickTeam?: boolean
 }) {
-  const [sales, setSales] = useState(lead.assigned_sales_id || '')
+  const [sales, setSales] = useState(canPickTeam ? (lead.assigned_sales_id || '') : '')
   const [team, setTeam] = useState(lead.assigned_team_id || '')
   return (
     <div className="mt-3 p-3 rounded-xl bg-surface2 border border-border space-y-3">
+      {canPickTeam && (
+        <label className="text-sm block">
+          <span className="block text-muted2 mb-1">الفريق</span>
+          <select className="input" value={team} onChange={e => setTeam(e.target.value)}>
+            <option value="">بدون فريق</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+      )}
       <label className="text-sm block">
-        <span className="block text-muted2 mb-1">الفريق</span>
-        <select className="input" value={team} onChange={e => setTeam(e.target.value)}>
-          <option value="">بدون فريق</option>
-          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-      </label>
-      <label className="text-sm block">
-        <span className="block text-muted2 mb-1">موظف المبيعات</span>
+        <span className="block text-muted2 mb-1">{canPickTeam ? 'موظف المبيعات' : 'تحويل إلى'}</span>
         <select className="input" value={sales} onChange={e => setSales(e.target.value)}>
-          <option value="">غير مُسنَد</option>
+          <option value="">{canPickTeam ? 'غير مُسنَد' : 'اختر زميلاً'}</option>
           {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
       </label>
-      <button disabled={busy} onClick={() => onSubmit(sales, team)} className="btn btn-primary w-full">حفظ الإسناد</button>
+      <button
+        disabled={busy || (!canPickTeam && !sales)}
+        onClick={() => onSubmit(sales, team)}
+        className="btn btn-primary w-full"
+      >
+        {canPickTeam ? 'حفظ الإسناد' : 'تحويل العميل'}
+      </button>
     </div>
   )
 }
