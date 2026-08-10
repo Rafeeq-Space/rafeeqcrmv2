@@ -151,3 +151,35 @@ export function phoneMatches(stored?: string | null, query?: string | null): boo
   if (b.length >= 9) return a.slice(-9) === b.slice(-9)
   return a.includes(b)
 }
+
+// Reduce a phone number to digits + a single leading "+" (when the original
+// had one), rather than digits alone — this is the display/storage form used
+// wherever a human still needs to read the number (unlike phoneDigits, which
+// exists purely for comparison). "+966 55 004 4984" → "+966550044984".
+function normalizePhoneValue(raw: string): string {
+  const hadPlus = raw.includes('+')
+  const digits = phoneDigits(raw)
+  if (!digits) return raw
+  return hadPlus ? `+${digits}` : digits
+}
+
+// Rewrites the one field in a data row that leadPhone()/PHONE_KEYS would
+// resolve as the phone number, stripping spaces/dashes so it's stored the
+// same way regardless of source formatting. Every other field — including
+// which key the phone lives under — is left untouched. No-op if no field
+// matches or the matched value has no separators to strip.
+export function normalizeRowPhone<T extends Record<string, string>>(row: T): T {
+  const nkeys = PHONE_KEYS.map(norm)
+  for (const k of Object.keys(row)) {
+    const v = row[k]
+    if (!v) continue
+    const nk = norm(k)
+    if (!nk) continue
+    if (nkeys.some(key => nk === key || nk.includes(key) || key.includes(nk))) {
+      const cleaned = normalizePhoneValue(String(v))
+      if (cleaned === v) return row
+      return { ...row, [k]: cleaned }
+    }
+  }
+  return row
+}

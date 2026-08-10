@@ -2,7 +2,7 @@ import { NextResponse, after } from 'next/server'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { leadPhone, leadEmail } from '@/lib/utils'
+import { leadPhone, leadEmail, normalizeRowPhone } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
 
 // Digits-only comparison so "05xxxxxxxx", "+9665xxxxxxxx" and "5xxxxxxxx"
@@ -48,11 +48,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       return NextResponse.json({ success: true, skipped: true, reason: 'empty' })
     }
 
+    // TikTok's own export writes the phone column with spaces ("+966 55 004
+    // 4984") — stripped here so it's stored the same way every other source
+    // (Bevatel, the public form) already writes it. Every other column is
+    // untouched.
+    const normalizedRow = normalizeRowPhone(row)
+
     // Deduplicate against leads already captured from this same sheet, by
     // sheet row (most reliable), phone, or email — so re-runs / re-edits of
     // the sheet don't create duplicate leads or re-trigger round-robin assignment.
-    const phone = digitsOnly(leadPhone(row))
-    const email = leadEmail(row).trim().toLowerCase()
+    const phone = digitsOnly(leadPhone(normalizedRow))
+    const email = leadEmail(normalizedRow).trim().toLowerCase()
     {
       const { data: existing } = await supabase
         .from('leads')
@@ -78,7 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
     // the platform matches on, instead of falling back to hashed phone/email.
     // Matched on the column *name* since the sheet's headers are written by
     // whichever source owns it, not by us.
-    const externalLeadId = Object.entries(row)
+    const externalLeadId = Object.entries(normalizedRow)
       .find(([k]) => /lead[\s_-]*id/i.test(k))?.[1]
 
     const { data: lead, error } = await supabase
@@ -87,7 +93,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         form_id: formId,
         campaign_id: form.campaign_id,
         tenant_id: form.tenant_id,
-        data: row,
+        data: normalizedRow,
         source: 'google_sheet',
         status: 'new',
         sub_status: 'new_lead',
