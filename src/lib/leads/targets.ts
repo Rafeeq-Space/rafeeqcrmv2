@@ -1,5 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { managedTeamIds, type Viewer } from '@/lib/leads/access'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 // Progress toward monthly sales targets.
 //
@@ -34,25 +35,30 @@ export async function computeMonthlyProgress(tenantId: string): Promise<MonthlyP
 
   // Every "→ converted" status change logged this month. One lead may appear
   // more than once (converted, moved away, converted again); dedupe to leads.
-  const { data: acts } = await supa
-    .from('lead_activities')
-    .select('lead_id')
-    .eq('tenant_id', tenantId)
-    .eq('type', 'status_change')
-    .eq('to_status', 'converted')
-    .gte('created_at', start.toISOString())
+  // Paginated — an active tenant can easily log over 1000 status-change
+  // activities in a month, and a plain .select() silently truncates past
+  // Supabase's default row cap (see fetchAllRows).
+  const acts = await fetchAllRows(
+    (from, to) => supa
+      .from('lead_activities')
+      .select('lead_id')
+      .eq('tenant_id', tenantId)
+      .eq('type', 'status_change')
+      .eq('to_status', 'converted')
+      .gte('created_at', start.toISOString())
+      .range(from, to)
+  )
 
-  const leadIds = [...new Set((acts || []).map(a => a.lead_id).filter(Boolean))]
+  const leadIds = [...new Set(acts.map(a => a.lead_id).filter(Boolean))]
   if (!leadIds.length) return { bySales, byTeam, monthStart: start }
 
   // Attribute each converted lead to its current owner / team. Only leads still
   // marked converted count, so a later revert removes the credit.
-  const { data: leads } = await supa
-    .from('leads')
-    .select('id, status, assigned_sales_id, assigned_team_id')
-    .in('id', leadIds)
+  const leads = await fetchAllRows(
+    (from, to) => supa.from('leads').select('id, status, assigned_sales_id, assigned_team_id').in('id', leadIds).range(from, to)
+  )
 
-  for (const l of leads || []) {
+  for (const l of leads) {
     if (l.status !== 'converted') continue
     if (l.assigned_sales_id) bySales.set(l.assigned_sales_id, (bySales.get(l.assigned_sales_id) || 0) + 1)
     if (l.assigned_team_id) byTeam.set(l.assigned_team_id, (byTeam.get(l.assigned_team_id) || 0) + 1)

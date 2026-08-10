@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
 
 export default async function AppTeamPage() {
@@ -29,15 +30,16 @@ export default async function AppTeamPage() {
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
 
-  // Lead counters per team (open = new, pending = in-progress).
-  const { data: leads } = await adminSupabase
-    .from('leads')
-    .select('assigned_to, status')
-    .eq('tenant_id', tenantId)
+  // Lead counters per team (open = new, pending = in-progress). Paginated —
+  // a plain .select() silently under-counted past Supabase's default
+  // 1000-row cap (see fetchAllRows).
+  const leads = await fetchAllRows(
+    (from, to) => adminSupabase.from('leads').select('assigned_to, status').eq('tenant_id', tenantId).range(from, to)
+  )
 
   const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
   const leadStats: Record<string, { new: number; contacted: number; unqualified: number }> = {}
-  for (const lead of leads || []) {
+  for (const lead of leads) {
     const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
     if (!teamId) continue
     if (!leadStats[teamId]) leadStats[teamId] = { new: 0, contacted: 0, unqualified: 0 }

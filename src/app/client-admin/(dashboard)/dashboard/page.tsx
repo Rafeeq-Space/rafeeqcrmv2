@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase, fetchVisibleLeads, managedTeamIds, type Viewer } from '@/lib/leads/access'
 import { avgResponseGapMs } from '@/lib/leads/stats'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import DashboardView from '@/components/app/DashboardView'
 
 export default async function ClientAdminDashboardPage() {
@@ -30,8 +31,13 @@ export default async function ClientAdminDashboardPage() {
   ])
 
   // Leads are role-scoped: admins see all; managers see their team's leads.
+  // Paginated (not a single unbounded .select()) — this tenant-wide fetch
+  // silently under-counted past Supabase's default 1000-row cap otherwise
+  // (the "إجمالي عدد العملاء" stat card would stall at exactly 1000 forever).
   const leads = isAdmin
-    ? (await supa.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false })).data || []
+    ? await fetchAllRows(
+        (from, to) => supa.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).range(from, to)
+      )
     : await fetchVisibleLeads(viewer)
 
   // Teams + members for selection and the performance table (scoped for managers).
@@ -54,11 +60,10 @@ export default async function ClientAdminDashboardPage() {
   let avgResponseMs: number | null = null
   const leadIds = leads.map(l => l.id)
   if (leadIds.length) {
-    const { data: acts } = await supa
-      .from('lead_activities')
-      .select('lead_id, created_at')
-      .in('lead_id', leadIds)
-    avgResponseMs = avgResponseGapMs(acts || [])
+    const acts = await fetchAllRows(
+      (from, to) => supa.from('lead_activities').select('lead_id, created_at').in('lead_id', leadIds).range(from, to)
+    )
+    avgResponseMs = avgResponseGapMs(acts)
   }
 
   return (

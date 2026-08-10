@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createServiceClient } from '@/lib/supabase/admin'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import { redirect } from 'next/navigation'
 import AdminClientsTable, { AddClientButton } from '@/components/admin/ClientsTable'
 import SuperAdminStats, { type TenantStat } from '@/components/admin/SuperAdminStats'
@@ -21,11 +22,15 @@ export default async function AdminDashboardPage() {
 
   if (profile?.role !== 'super_admin') redirect('/logininin')
 
-  // Use service client to bypass RLS (super_admin has no tenant_id)
-  const [{ data: tenants }, { data: campaignRows }, { data: leadRows }, { data: profileRows }] = await Promise.all([
+  // Use service client to bypass RLS (super_admin has no tenant_id).
+  // Leads are platform-wide here (every tenant combined) — paginated, since a
+  // plain .select() silently under-reported past Supabase's default
+  // 1000-row cap the moment total leads across all tenants crossed it (see
+  // fetchAllRows), which fed directly into every tenant's "leads" stat below.
+  const [{ data: tenants }, { data: campaignRows }, leadRows, { data: profileRows }] = await Promise.all([
     serviceClient.from('tenants').select('*').order('created_at', { ascending: false }),
     serviceClient.from('campaigns').select('tenant_id'),
-    serviceClient.from('leads').select('tenant_id, status, created_at'),
+    fetchAllRows((from, to) => serviceClient.from('leads').select('tenant_id, status, created_at').range(from, to)),
     serviceClient.from('profiles').select('tenant_id, role'),
   ])
 

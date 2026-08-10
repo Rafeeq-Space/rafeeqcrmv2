@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
 import type { UserRole } from '@/lib/types'
 
@@ -50,11 +51,12 @@ export default async function ClientAdminTeamsPage() {
   const emailById = new Map((authList?.users || []).map(u => [u.id, u.email || '']))
   const members = (membersRaw || []).map(m => ({ ...m, email: emailById.get(m.id) || '' }))
 
-  // Lead counters per team (open = new, pending = in-progress).
-  const { data: leads } = await adminSupabase
-    .from('leads')
-    .select('assigned_to, assigned_sales_id, status')
-    .eq('tenant_id', tenantId)
+  // Lead counters per team (open = new, pending = in-progress). Paginated —
+  // a plain .select() silently under-counted past Supabase's default
+  // 1000-row cap (see fetchAllRows).
+  const leads = await fetchAllRows(
+    (from, to) => adminSupabase.from('leads').select('assigned_to, assigned_sales_id, status').eq('tenant_id', tenantId).range(from, to)
+  )
 
   const memberTeam = new Map(members.map(m => [m.id, m.team_id]))
   // Team-card counters: new / contacted / unqualified (lost).

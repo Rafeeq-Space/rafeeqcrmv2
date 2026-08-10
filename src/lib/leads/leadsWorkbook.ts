@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { leadName, leadPhone, LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 const LEADS_SELECT = `
   id, data, source, status, sub_status, notes, created_at, updated_at,
@@ -18,15 +19,15 @@ function joinedName(v: unknown, field: 'name' | 'full_name'): string {
 }
 
 // Every lead the tenant owns, oldest first — shared by the export and
-// archive routes so both build the exact same spreadsheet shape.
+// archive routes so both build the exact same spreadsheet shape. Paginated —
+// a plain .select() silently truncated at Supabase's default 1000-row cap,
+// which would have made an export for any tenant past that size look
+// complete while quietly missing everything older than the cutoff (see
+// fetchAllRows).
 export async function fetchTenantLeadsForExport(supa: SupabaseClient, tenantId: string) {
-  const { data, error } = await supa
-    .from('leads')
-    .select(LEADS_SELECT)
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: true })
-  if (error) throw new Error(error.message)
-  return data || []
+  return fetchAllRows(
+    (from, to) => supa.from('leads').select(LEADS_SELECT).eq('tenant_id', tenantId).order('created_at', { ascending: true }).range(from, to)
+  )
 }
 
 type ExportLead = Awaited<ReturnType<typeof fetchTenantLeadsForExport>>[number]

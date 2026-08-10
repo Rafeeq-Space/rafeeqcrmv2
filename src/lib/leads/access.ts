@@ -1,5 +1,6 @@
 import type { Lead } from '@/lib/types'
 import { adminSupabase } from '@/lib/supabase/admin'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 export interface Viewer {
   id: string
@@ -52,12 +53,18 @@ async function hasLeadNotification(tenantId: string, profileId: string, leadId: 
 }
 
 // Returns the set of leads a viewer is allowed to see, respecting role.
+//
+// Role-scoping needs an `.or(...)` clause built from a few earlier lookups
+// (managed teams, shared leads) — those are computed once up front since
+// they don't depend on pagination; fetchAllRows then re-applies the same
+// filter fresh on every page (a query builder can't be re-ranged after
+// it's been awaited once).
 export async function fetchVisibleLeads(viewer: Viewer): Promise<Lead[]> {
   const supa = adminSupabase()
-  let query = supa.from('leads').select(LEAD_SELECT).eq('tenant_id', viewer.tenantId).order('updated_at', { ascending: false })
+  let orFilter: string | null = null
 
   if (viewer.role === 'client_admin') {
-    // sees everything
+    // sees everything — no extra filter
   } else if (viewer.role === 'client_sales_manager') {
     const teamIds = await managedTeamIds(viewer)
     const memberIds = await teamMemberIds(viewer.tenantId, teamIds)
@@ -66,17 +73,20 @@ export async function fetchVisibleLeads(viewer: Viewer): Promise<Lead[]> {
     if (teamIds.length) orParts.push(`assigned_team_id.in.(${teamIds.join(',')})`)
     if (memberIds.length) orParts.push(`assigned_sales_id.in.(${memberIds.join(',')})`)
     if (shared.length) orParts.push(`id.in.(${shared.join(',')})`)
-    query = query.or(orParts.join(','))
+    orFilter = orParts.join(',')
   } else {
     // client_user (sales): assigned to me, or shared with me
     const shared = await sharedLeadIds(viewer.tenantId, viewer.id)
     const orParts: string[] = [`assigned_sales_id.eq.${viewer.id}`]
     if (shared.length) orParts.push(`id.in.(${shared.join(',')})`)
-    query = query.or(orParts.join(','))
+    orFilter = orParts.join(',')
   }
 
-  const { data } = await query
-  return (data || []) as Lead[]
+  return fetchAllRows<Lead>((from, to) => {
+    let query = supa.from('leads').select(LEAD_SELECT).eq('tenant_id', viewer.tenantId).order('updated_at', { ascending: false })
+    if (orFilter) query = query.or(orFilter)
+    return query.range(from, to)
+  })
 }
 
 // Whether a viewer may access a single lead (for the profile page / actions).

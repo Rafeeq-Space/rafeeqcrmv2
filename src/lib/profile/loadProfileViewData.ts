@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { computeLeadStats } from '@/lib/leads/stats'
 import { computeMonthlyProgress } from '@/lib/leads/targets'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import type { ProfileViewProps } from '@/components/ProfileView'
 
 // Shared by /app/profile and /client-admin/profile — same data, same
@@ -31,12 +32,10 @@ export async function loadProfileViewData(userId: string): Promise<Omit<ProfileV
     }
   }
 
-  const { data: myLeads } = await supa
-    .from('leads')
-    .select('status, created_at')
-    .eq('tenant_id', profile.tenant_id)
-    .eq('assigned_sales_id', userId)
-  const leadStats = computeLeadStats(myLeads || [])
+  const myLeads = await fetchAllRows(
+    (from, to) => supa.from('leads').select('status, created_at').eq('tenant_id', profile.tenant_id).eq('assigned_sales_id', userId).range(from, to)
+  )
+  const leadStats = computeLeadStats(myLeads)
 
   const { bySales } = await computeMonthlyProgress(profile.tenant_id)
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import DashboardView from '@/components/app/DashboardView'
 
 export default async function ClientAdminCampaignsPage() {
@@ -10,7 +11,7 @@ export default async function ClientAdminCampaignsPage() {
 
   const [
     { data: campaigns },
-    { data: leads },
+    leads,
     { data: forms },
     { data: employees },
     { data: teamRows },
@@ -19,7 +20,12 @@ export default async function ClientAdminCampaignsPage() {
     { data: campaignAdConnectionRows },
   ] = await Promise.all([
     supabase.from('campaigns').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-    supabase.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+    // Paginated — a plain .select() silently under-reported past Supabase's
+    // default 1000-row cap once this tenant's lead count crossed it (see
+    // fetchAllRows).
+    fetchAllRows(
+      (from, to) => supabase.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).range(from, to)
+    ),
     supabase.from('forms').select('*, campaigns(name)').eq('tenant_id', tenantId),
     supabase.from('employees').select('*').eq('tenant_id', tenantId),
     supabase.from('teams').select('id, name').eq('tenant_id', tenantId).order('name'),
