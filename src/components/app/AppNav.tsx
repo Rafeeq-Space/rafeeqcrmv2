@@ -9,6 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import PwaTopBarControls from '@/components/PwaTopBarControls'
 import PushPrompt from '@/components/PushPrompt'
+import IdleGate from '@/components/IdleGate'
 import { useUnreadNotifications } from '@/lib/notifications/useUnread'
 import { reconcilePushSubscription } from '@/lib/notifications/reconcilePushSubscription'
 import { useEffect, useState } from 'react'
@@ -244,6 +245,7 @@ export default function AppNav({ profile }: Props) {
   return (
     <>
       <PushPrompt />
+      <IdleGate />
 
       {/* ── Mobile top bar ── */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 bg-surface/90 backdrop-blur-xl border-b border-border px-4 py-3 flex items-center justify-between">
