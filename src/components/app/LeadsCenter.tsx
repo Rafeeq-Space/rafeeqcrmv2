@@ -135,16 +135,14 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
   // lets the user paste straight into Bevatel's own search instead of typing
   // it, so a manual lookup is at least fast.
   //
-  // Copies the LOCAL number (no country code) rather than `d` above: Bevatel's
-  // own search box is what this gets pasted into, and a leading "+966" (or its
-  // spacing) is exactly what a rep had to manually strip out every time before
-  // the search would return anything. Nine digits is a substring of however
-  // Bevatel itself stores the number, so it still matches regardless of their
-  // stored format.
+  // Copies the number unspaced, keeping the country code: sources write it
+  // formatted differently ("+966 53 056 3856" from the sheet, "+966530563856"
+  // from Bevatel), and the spaces are what a rep had to strip by hand before
+  // Bevatel's own search box would return anything.
   const copyForChat = () => {
-    const local = phoneDigits(phone).slice(-9)
-    navigator.clipboard?.writeText(local).catch(() => {})
-    showToast('تم نسخ رقم العميل (بدون رمز الدولة) — دوّر عليه جوه بيفاتيل لو ما فتحش المحادثة تلقائي')
+    const compact = phone.replace(/[^\d+]/g, '')
+    navigator.clipboard?.writeText(compact).catch(() => {})
+    showToast('تم نسخ رقم العميل — دوّر عليه جوه بيفاتيل لو ما فتحش المحادثة تلقائي')
   }
 
   return (

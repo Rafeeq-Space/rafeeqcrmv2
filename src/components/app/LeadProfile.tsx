@@ -11,7 +11,7 @@ import {
   Radio, CheckCircle2, AlertTriangle,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent } from '@/lib/types'
-import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits } from '@/lib/utils'
+import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
 import { useToast } from '@/components/ToastProvider'
 
@@ -232,16 +232,15 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               // straight into Bevatel's own search instead of typing it, so a
               // manual lookup is at least fast.
               //
-              // Copies the LOCAL number (no country code) rather than the full
-              // digits openSoftphone uses: this gets pasted into Bevatel's own
-              // search box, and the leading "+966"/spacing is exactly what had
-              // to be stripped out by hand before the search returned anything.
-              // Nine digits is a substring of however Bevatel stores the
-              // number, so it still matches regardless of their format.
+              // Copies the number unspaced, keeping the country code: sources
+              // write it formatted differently ("+966 53 056 3856" from the
+              // sheet, "+966530563856" from Bevatel), and the spaces are what
+              // had to be stripped by hand before Bevatel's own search box
+              // would return anything.
               const copyForChat = () => {
-                const local = phoneDigits(phone).slice(-9)
-                navigator.clipboard?.writeText(local).catch(() => {})
-                showToast('تم نسخ رقم العميل (بدون رمز الدولة) — دوّر عليه جوه بيفاتيل لو ما فتحش المحادثة تلقائي')
+                const compact = phone.replace(/[^\d+]/g, '')
+                navigator.clipboard?.writeText(compact).catch(() => {})
+                showToast('تم نسخ رقم العميل — دوّر عليه جوه بيفاتيل لو ما فتحش المحادثة تلقائي')
               }
               return (
                 <div className="relative mb-4">
