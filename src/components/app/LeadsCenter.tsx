@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy } from 'lucide-react'
 import type { Lead } from '@/lib/types'
@@ -262,14 +262,43 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   }, [visibleMembers, member])
 
   // `leads` is server-fetched (fetchVisibleLeads) and handed down as a prop —
-  // there's no client-side fetch to poll here, so a periodic router.refresh()
-  // re-runs that same server query and hands back fresh props in place,
-  // without a full navigation or losing filter/scroll state. Same cadence as
-  // the notifications list, so a lead a colleague just touched (new message,
-  // status change, assignment) surfaces at the top without a manual reload.
-  // Paused while the tab is backgrounded (usePollWhenVisible) — this page is
-  // commonly left open all day.
-  const refresh = useCallback(() => router.refresh(), [router])
+  // there's no client-side fetch to poll here, so staying "live" means a
+  // periodic router.refresh() to re-run that same server query and hand back
+  // fresh props in place, without a full navigation or losing filter/scroll
+  // state. Same cadence as the notifications list, so a lead a colleague just
+  // touched (new message, status change, assignment) surfaces without a
+  // manual reload. Paused while the tab is backgrounded (usePollWhenVisible)
+  // — this page is commonly left open all day.
+  //
+  // router.refresh() itself is expensive here — it re-runs fetchVisibleLeads,
+  // a full tenant fetch with joins (1191+ rows for this tenant and growing).
+  // Calling it unconditionally every 12s was the single largest driver of
+  // this tenant's Supabase egress and Vercel compute once lead count passed
+  // 1000 (see fetchAllRows) — a tab left open all day means thousands of full
+  // refetches. Polling a cheap signal (row count + latest updated_at, no lead
+  // rows transferred) instead, and only refreshing when it actually differs
+  // from what's on screen, keeps the same "feels live within 12s" behavior at
+  // a fraction of the cost — most 12s windows in a real workday have no
+  // change at all.
+  const lastSignalRef = useRef<{ count: number; latest: string } | null>(null)
+  useEffect(() => {
+    const latest = leads.reduce((max, l) => (l.updated_at > max ? l.updated_at : max), '')
+    lastSignalRef.current = { count: leads.length, latest }
+  }, [leads])
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leads/signal')
+      if (!res.ok) return
+      const signal: { count: number; latest: string | null } = await res.json()
+      const prev = lastSignalRef.current
+      if (!prev || signal.count !== prev.count || signal.latest !== prev.latest) {
+        router.refresh()
+      }
+    } catch {
+      // Network hiccup — skip this tick, the next one retries.
+    }
+  }, [router])
   usePollWhenVisible(refresh, 12000)
 
   // Leads after every filter EXCEPT status (period, search, campaign, team,
