@@ -56,6 +56,20 @@ function hashValue(value: string): string {
   return crypto.createHash('sha256').update(value.toLowerCase().trim()).digest('hex')
 }
 
+// Every ad platform matches a hashed phone against its own hash of the same
+// number, computed from a normalized form (digits + country code, no spaces/
+// dashes). Stored numbers aren't consistently formatted — the Google Sheets
+// bridge writes "+966 55 004 4984" (TikTok's own export format), Bevatel
+// writes "+966550044984" — so hashing the raw value made every spaced number
+// hash to something the platform's own hash could never match, regardless of
+// how the two identical numbers looked to a human. Stripped down to digits
+// (plus a leading +) here, so the same number always hashes the same way no
+// matter which source it came from.
+function normalizedPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  return digits ? `+${digits}` : ''
+}
+
 /**
  * Builds the Meta `fbc` cookie value from a raw fbclid.
  * Meta expects the format: fb.1.<unix_ms>.<fbclid>  (not the bare fbclid).
@@ -155,7 +169,7 @@ export async function syncLeadEvent(params: {
                 ...(lead.external_lead_id && { lead: { lead_id: lead.external_lead_id } }),
                 user: {
                   ...(email && { email: hashValue(email) }),
-                  ...(phone && { phone: hashValue(phone) }),
+                  ...(phone && { phone: hashValue(normalizedPhone(phone)) }),
                 },
               },
             ],
@@ -172,7 +186,7 @@ export async function syncLeadEvent(params: {
                 user: {
                   ...(lead.ttclid && { ttclid: lead.ttclid }),
                   ...(email && { email: hashValue(email) }),
-                  ...(phone && { phone: hashValue(phone) }),
+                  ...(phone && { phone: hashValue(normalizedPhone(phone)) }),
                 },
                 properties: {
                   lead_id: lead.id,
@@ -233,7 +247,7 @@ export async function syncLeadEvent(params: {
             user_data: {
               fbc: buildFbc(lead.fbclid, createdAtMs),
               ...(email && { em: [hashValue(email)] }),
-              ...(phone && { ph: [hashValue(phone)] }),
+              ...(phone && { ph: [hashValue(normalizedPhone(phone))] }),
             },
             custom_data: {
               lead_id: lead.id,
@@ -283,7 +297,7 @@ export async function syncLeadEvent(params: {
             event_conversion_type: 'WEB',
             event_time: Math.floor(createdAtMs / 1000),
             hashed_email: email ? hashValue(email) : undefined,
-            hashed_phone_number: phone ? hashValue(phone) : undefined,
+            hashed_phone_number: phone ? hashValue(normalizedPhone(phone)) : undefined,
             click_id: lead.data?.sccid || undefined,
             pixel_id: conn.pixel_id,
           },

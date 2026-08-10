@@ -536,7 +536,18 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // object in Bevatel, so the decision is also pushed back there
   // (pushAssigneeToBevatel) — their own view reflects the same owner, not
   // just ours.
-  if (res.leadId) {
+  //
+  // Only runs for an actual message. Confirmed empirically (8/8 recent leads):
+  // Bevatel never has an assignee yet at bare contact_created/contact_updated
+  // time — an agent adding a contact then messaging it straight away, with no
+  // separate "assign to me" step in Bevatel, is the normal case, not an edge
+  // one. Round-robining on the contact event alone handed the lead to a
+  // random rep before that agent's own first message ever arrived — and once
+  // assigned, an *outgoing* message's sender is deliberately not trusted to
+  // reassign it (see AppendArgs — that rule exists so a colleague covering
+  // once can't steal a lead from its real owner), so the random pick stuck
+  // permanently. Waiting for a message closes that window.
+  if (res.leadId && hasMessage) {
     const { data: leadRow } = await adminSupabase()
       .from('leads')
       .select('assigned_sales_id, tenant_id, bevatel_conversation_id')
@@ -555,6 +566,12 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
         const live = await fetchConversationAssignee(tenantId, convId)
         if (live) rep = await matchAgent(tenantId, live)
       }
+      // Still nothing from Bevatel — but this very delivery's own sender is a
+      // real signal too when nobody owns the lead yet. Safe specifically
+      // because this whole block only runs on `!assigned_sales_id`: there is
+      // no existing owner here for an outgoing sender to "steal" from, which
+      // is the only reason that signal is distrusted elsewhere.
+      if (!rep && agent.email) rep = await matchAgent(tenantId, agent)
       // Genuinely unclaimed on their side too — now it's ours to distribute.
       if (!rep) rep = await assignChatRoundRobin(tenantId)
       if (rep) {
