@@ -16,7 +16,7 @@ export async function PATCH(request: Request) {
   const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user.id).single()
   if (!profile?.tenant_id) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
-  const { full_name, phone, job_title, password } = await request.json()
+  const { full_name, phone, job_title, password, avatar_url, mfa_disabled } = await request.json()
   const admin = adminSupabase()
 
   // Name and job title are set by client_admin when creating/editing the
@@ -25,10 +25,15 @@ export async function PATCH(request: Request) {
   // unless the caller actually is the admin.
   const canEditIdentity = profile.role === 'client_admin'
 
-  const updates: Record<string, string | null> = {}
+  const updates: Record<string, string | boolean | null> = {}
   if (canEditIdentity && typeof full_name === 'string' && full_name.trim()) updates.full_name = full_name.trim()
   if (typeof phone === 'string') updates.phone = phone || null
   if (canEditIdentity && typeof job_title === 'string') updates.job_title = job_title || null
+  if (typeof avatar_url === 'string') updates.avatar_url = avatar_url || null
+  // Self-service only — this is the one flag that can weaken a user's own
+  // account security, so it's intentionally never settable by an admin for
+  // someone else (see add_profile_self_service.sql).
+  if (typeof mfa_disabled === 'boolean') updates.mfa_disabled = mfa_disabled
 
   if (Object.keys(updates).length > 0) {
     const { error } = await admin.from('profiles').update(updates).eq('id', user.id)

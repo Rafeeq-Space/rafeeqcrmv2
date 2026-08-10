@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  User, Phone, Briefcase, Mail, ShieldCheck, Users2, Crown, Goal,
-  TrendingUp, CheckCircle2, XCircle, Clock, ChevronLeft,
+  User, Phone, Briefcase, Mail, ShieldCheck, ShieldOff, Users2, Crown, Goal,
+  TrendingUp, CheckCircle2, XCircle, Clock, ChevronLeft, Camera, Loader2, Hash, MessageCircle,
 } from 'lucide-react'
 import PasswordInput from '@/components/PasswordInput'
+import PushToggle from '@/components/PushToggle'
+import { createClient } from '@/lib/supabase/client'
 import type { LeadStats } from '@/lib/leads/stats'
 import type { UserRole } from '@/lib/types'
 
@@ -26,7 +28,7 @@ interface TeamInfo {
   memberCount: number
 }
 
-interface Props {
+export interface ProfileViewProps {
   profile: {
     id: string
     full_name: string
@@ -35,6 +37,13 @@ interface Props {
     job_title?: string
     role: UserRole
     monthly_target?: number | null
+    avatar_url?: string
+    // Bevatel/Rafeeq Social identifiers — set by client_admin (they drive
+    // real lead-routing logic), shown here read-only.
+    bevatel_agent_id?: string
+    bevatel_extension?: string
+    rafeeqsocial_team_member_id?: string
+    mfa_disabled?: boolean
   }
   team: TeamInfo | null
   leadStats: LeadStats
@@ -43,7 +52,7 @@ interface Props {
   leadsHref: string
 }
 
-export default function ProfileView({ profile, team, leadStats, monthlyConverted, targetsHref, leadsHref }: Props) {
+export default function ProfileView({ profile, team, leadStats, monthlyConverted, targetsHref, leadsHref }: ProfileViewProps) {
   const router = useRouter()
   // Name/job title are set by client_admin (at signup or via team-member
   // edit) — a sales rep/manager can see them but not change them themselves.
@@ -60,6 +69,65 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
   const [saved, setSaved] = useState(false)
   const [resetting2fa, setResetting2fa] = useState(false)
   const [reset2faDone, setReset2faDone] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url || '')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [mfaDisabled, setMfaDisabled] = useState(!!profile.mfa_disabled)
+  const [togglingMfa, setTogglingMfa] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('اختر ملف صورة صالح')
+      return
+    }
+    setUploadingAvatar(true)
+    setError('')
+    try {
+      const supabase = createClient()
+      const ext = file.name.split('.').pop()
+      const path = `${profile.id}/${Date.now()}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+      if (uploadErr) throw uploadErr
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatar_url: data.publicUrl }),
+      })
+      const resData = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(resData.error || 'تعذّر حفظ الصورة')
+      setAvatarUrl(data.publicUrl)
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'تعذّر رفع الصورة')
+    } finally {
+      setUploadingAvatar(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
+  async function toggleMfaDisabled(next: boolean) {
+    if (next && !confirm('تعطيل المصادقة الثنائية بالكامل؟ هتقدر تدخل بكلمة السر بس من غير رمز تحقق — ده بيقلل حماية حسابك.')) return
+    setTogglingMfa(true)
+    setError('')
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfa_disabled: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      setMfaDisabled(next)
+      router.refresh()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setTogglingMfa(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -122,8 +190,27 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
     <div className="space-y-6">
       {/* Header */}
       <div className="card p-6 flex flex-wrap items-center gap-4">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center font-extrabold text-2xl shrink-0" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
-          {profile.full_name[0]?.toUpperCase() || '؟'}
+        <div className="relative shrink-0">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center font-extrabold text-2xl overflow-hidden" style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}>
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt={profile.full_name} className="w-full h-full object-cover" />
+            ) : (
+              profile.full_name[0]?.toUpperCase() || '؟'
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={uploadingAvatar}
+            className="absolute -bottom-1 -end-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-surface"
+            style={{ background: 'var(--primary)', color: 'white' }}
+            title="تغيير الصورة الشخصية"
+            aria-label="تغيير الصورة الشخصية"
+          >
+            {uploadingAvatar ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+          </button>
+          <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
         </div>
         <div className="min-w-0">
           <h1 className="text-xl font-extrabold text-foreground">{profile.full_name}</h1>
@@ -191,10 +278,58 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
             )}
             <p className="text-xs text-muted2 mt-1.5">استخدمها لو هتغيّر تطبيق أو جهاز المصادقة.</p>
           </div>
+
+          <div className="mt-5 pt-4 border-t border-border">
+            <p className="text-sm font-semibold text-foreground mb-1">تعطيل المصادقة الثنائية بالكامل</p>
+            {mfaDisabled ? (
+              <>
+                <p className="text-sm flex items-center gap-1.5" style={{ color: 'var(--warning)' }}>
+                  <ShieldOff size={15} /> معطّلة — بتدخل بكلمة السر بس من غير رمز تحقق.
+                </p>
+                <button type="button" onClick={() => toggleMfaDisabled(false)} disabled={togglingMfa} className="btn btn-outline gap-2 mt-2">
+                  <ShieldCheck size={15} /> {togglingMfa ? 'جارٍ التفعيل...' : 'إعادة تفعيلها'}
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => toggleMfaDisabled(true)} disabled={togglingMfa} className="btn btn-outline gap-2" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                <ShieldOff size={15} /> {togglingMfa ? 'جارٍ التعطيل...' : 'تعطيل المصادقة الثنائية بالكامل'}
+              </button>
+            )}
+            <p className="text-xs text-muted2 mt-1.5">يقلل حماية حسابك — استخدمها فقط لو عندك سبب واضح.</p>
+          </div>
         </div>
 
         {/* Team + target */}
         <div className="space-y-6">
+          {(profile.bevatel_extension || profile.bevatel_agent_id || profile.rafeeqsocial_team_member_id) && (
+            <div className="card p-5">
+              <h2 className="font-bold text-foreground mb-3 flex items-center gap-2"><Hash size={16} /> بيانات الربط</h2>
+              <div className="space-y-2 text-sm">
+                {profile.bevatel_extension && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted2">رقم الإكستنشن</span>
+                    <span dir="ltr" className="font-mono font-semibold text-foreground">{profile.bevatel_extension}</span>
+                  </div>
+                )}
+                {profile.bevatel_agent_id && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted2 flex items-center gap-1"><MessageCircle size={13} /> تعريف بيفاتيل شات</span>
+                    <span dir="ltr" className="font-mono font-semibold text-foreground text-xs">{profile.bevatel_agent_id}</span>
+                  </div>
+                )}
+                {profile.rafeeqsocial_team_member_id && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted2">تعريف Rafeeq Social</span>
+                    <span dir="ltr" className="font-mono font-semibold text-foreground">{profile.rafeeqsocial_team_member_id}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted2 mt-3">بيانات ثابتة يحددها مدير الحساب.</p>
+            </div>
+          )}
+
+          <PushToggle />
+
           <div className="card p-5">
             <h2 className="font-bold text-foreground mb-3 flex items-center gap-2"><Users2 size={16} /> الفريق</h2>
             {team ? (

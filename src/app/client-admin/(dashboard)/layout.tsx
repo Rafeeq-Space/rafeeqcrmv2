@@ -17,8 +17,10 @@ export default async function ClientAdminLayout({ children }: { children: React.
 
   if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') redirect('/login')
 
-  // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or verify).
-  if ((await getCurrentAal(supabase)) !== 'aal2') {
+  // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or
+  // verify) — unless this user has explicitly disabled 2FA for themselves
+  // from their profile page (see add_profile_self_service.sql).
+  if (!profile?.mfa_disabled && (await getCurrentAal(supabase)) !== 'aal2') {
     redirect('/two-factor?next=%2Fclient-admin%2Fdashboard')
   }
 

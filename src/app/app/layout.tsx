@@ -15,8 +15,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('id', user.id)
     .single()
 
-  // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or verify).
-  if ((await getCurrentAal(supabase)) !== 'aal2') {
+  // Enforce two-factor: not yet aal2 → send to the 2FA gate (enrol or
+  // verify) — unless this user has explicitly disabled 2FA for themselves
+  // from their profile page (see add_profile_self_service.sql).
+  if (!profile?.mfa_disabled && (await getCurrentAal(supabase)) !== 'aal2') {
     redirect('/two-factor?next=%2Fapp%2Fdashboard')
   }
 
