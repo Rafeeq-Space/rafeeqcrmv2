@@ -1,5 +1,4 @@
 import { adminSupabase } from '@/lib/supabase/admin'
-import { leadPhone } from '@/lib/utils'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
@@ -197,16 +196,26 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const key = phoneKey(phone)
   if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false }
 
-  // Look for an existing lead in this tenant with the same phone. The
-  // assignee's role is pulled along so an admin-owned lead (created before
+  // Look for an existing lead in this tenant with the same phone. Filtered by
+  // the DB-maintained phone_key column rather than fetching every lead in the
+  // tenant and matching in JS — that used to scan the whole tenant with no
+  // limit, which silently missed matches once a tenant passed Supabase's
+  // default 1000-row cap (this one has 1276): a real duplicate went
+  // undetected because the older lead simply wasn't in the batch returned.
+  // Ties (pre-existing duplicates the phone_key unique index hasn't merged
+  // yet) resolve to the oldest, matching that migration's own convention.
+  //
+  // The assignee's role is pulled along so an admin-owned lead (created before
   // any rep touched it — e.g. the first chat message landed on the account
   // owner) can still be handed to whoever actually engages with it below.
-  const { data: leads } = await supa
+  const { data: existing } = await supa
     .from('leads')
     .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, assigned_sales:profiles!assigned_sales_id(role)')
     .eq('tenant_id', tenantId)
-
-  const existing = leads?.find(l => phoneKey(leadPhone(l.data as Record<string, string>)) === key) || null
+    .eq('phone_key', key)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
   let leadId = existing?.id || null
   let existingAssignedId: string | null = existing?.assigned_sales_id ?? null
   let existingAssignedIsAdmin = (existing?.assigned_sales as { role?: string } | null)?.role === 'client_admin'
