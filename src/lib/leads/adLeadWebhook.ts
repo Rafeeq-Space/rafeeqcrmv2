@@ -197,6 +197,14 @@ export async function recordAndImportLead(
     .single()
 
   if (error || !lead) {
+    // 23505 = the phone_key unique index rejected the row: this person is
+    // already a lead from another source. Record it as the duplicate it is
+    // rather than "unparsed", which would wrongly suggest the payload couldn't
+    // be read and send someone digging through raw_payload for a broken parser.
+    if (error?.code === '23505') {
+      await finish('skipped_duplicate')
+      return { imported: false, reason: 'duplicate' as const }
+    }
     await finish('skipped_unparsed')
     return { imported: false, reason: (error?.message || 'insert_failed') as string }
   }

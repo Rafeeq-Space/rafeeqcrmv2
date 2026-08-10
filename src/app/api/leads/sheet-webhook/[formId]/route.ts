@@ -99,7 +99,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // 23505 = the phone_key unique index rejected the row: this customer is
+      // already in the CRM from another source — in practice a Bevatel
+      // conversation, which is how 100 of the 102 existing duplicate pairs
+      // look. That's a duplicate, not a failure, so answer 2xx exactly like the
+      // dedupe check above does. Returning 500 here would park the Apps Script
+      // on this row: it stops at the first non-2xx and retries the same row
+      // every minute, so one repeat customer would block every lead behind them
+      // and email a failure notice each time.
+      if (error.code === '23505') {
+        return NextResponse.json({ success: true, skipped: true, reason: 'duplicate' })
+      }
+      throw error
+    }
 
     if (lead) {
       // Timeline entry — no authenticated actor, so it shows as created by the system.

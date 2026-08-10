@@ -61,7 +61,17 @@ export async function POST(request: Request) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // 23505 = the phone_key unique index rejected the row: this person is
+      // already a lead. A returning customer filling the form again did nothing
+      // wrong and must not be shown a failed submission, so accept it quietly.
+      // Nothing further is needed either — the existing lead was already logged,
+      // assigned and reported to the ad platform when it was first created.
+      if (error.code === '23505') {
+        return NextResponse.json({ success: true, duplicate: true }, { status: 200 })
+      }
+      throw error
+    }
 
     // Fire-and-forget: send initial Lead event to social platform.
     // Called directly (no HTTP self-fetch) so it works regardless of NEXT_PUBLIC_SITE_URL.
