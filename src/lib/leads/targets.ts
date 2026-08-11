@@ -49,17 +49,24 @@ export async function computeMonthlyProgress(tenantId: string): Promise<MonthlyP
       .range(from, to)
   )
 
-  const leadIds = [...new Set(acts.map(a => a.lead_id).filter(Boolean))]
-  if (!leadIds.length) return { bySales, byTeam, monthStart: start }
+  const leadIdSet = new Set(acts.map(a => a.lead_id).filter(Boolean))
+  if (!leadIdSet.size) return { bySales, byTeam, monthStart: start }
 
   // Attribute each converted lead to its current owner / team. Only leads still
   // marked converted count, so a later revert removes the credit.
+  //
+  // Filtered by tenant_id + status server-side, then narrowed to leadIdSet in
+  // JS — not `.in('id', leadIds)`. A Postgrest `.in()` filter embeds every id
+  // directly in the request URL; confirmed live against production that it
+  // fails outright ("Bad Request") past a few hundred ids (this tenant's
+  // dashboard hit exactly this with 1200+ leads — see dashboard/page.tsx). A
+  // busy month with a few hundred conversions would hit the same wall here.
   const leads = await fetchAllRows(
-    (from, to) => supa.from('leads').select('id, status, assigned_sales_id, assigned_team_id').in('id', leadIds).range(from, to)
+    (from, to) => supa.from('leads').select('id, status, assigned_sales_id, assigned_team_id').eq('tenant_id', tenantId).eq('status', 'converted').range(from, to)
   )
 
   for (const l of leads) {
-    if (l.status !== 'converted') continue
+    if (!leadIdSet.has(l.id)) continue
     if (l.assigned_sales_id) bySales.set(l.assigned_sales_id, (bySales.get(l.assigned_sales_id) || 0) + 1)
     if (l.assigned_team_id) byTeam.set(l.assigned_team_id, (byTeam.get(l.assigned_team_id) || 0) + 1)
   }

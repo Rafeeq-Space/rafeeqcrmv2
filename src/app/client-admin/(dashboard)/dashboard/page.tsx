@@ -57,13 +57,27 @@ export default async function ClientAdminDashboardPage() {
     .map(m => ({ id: m.id, name: m.full_name }))
 
   // Average gap between timeline updates across the visible leads.
+  //
+  // Filtered by tenant_id, not `.in('lead_id', leadIds)` — this tenant has
+  // 1200+ leads, and a Postgrest `.in()` filter embeds every id directly in
+  // the request URL: at ~400 ids the URL already exceeds a hard length limit
+  // upstream and the request fails outright ("Bad Request" / "fetch
+  // failed", confirmed live against production). The old code silently
+  // swallowed that (`const { data: acts } = ...; acts || []`, no error
+  // check) — fetchAllRows does NOT swallow errors, so wrapping the same
+  // `.in()` call in it turned a silent stat-card gap into a hard crash of
+  // the entire dashboard page for this tenant. Fetching by tenant_id and
+  // filtering to the visible lead ids in JS (correct for a manager's
+  // narrower scope too, not just admin) avoids the URL limit regardless of
+  // tenant size.
   let avgResponseMs: number | null = null
   const leadIds = leads.map(l => l.id)
   if (leadIds.length) {
+    const leadIdSet = new Set(leadIds)
     const acts = await fetchAllRows(
-      (from, to) => supa.from('lead_activities').select('lead_id, created_at').in('lead_id', leadIds).range(from, to)
+      (from, to) => supa.from('lead_activities').select('lead_id, created_at').eq('tenant_id', tenantId).range(from, to)
     )
-    avgResponseMs = avgResponseGapMs(acts)
+    avgResponseMs = avgResponseGapMs(acts.filter(a => leadIdSet.has(a.lead_id)))
   }
 
   return (
