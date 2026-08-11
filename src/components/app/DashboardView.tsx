@@ -155,7 +155,11 @@ export default function DashboardView({
       return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }
     }
     const s = new Date(now)
-    if (rangeKey === 'day') s.setDate(now.getDate() - 1)
+    // "اليوم" = since local midnight, matching the leads-center's own
+    // definition (LeadsCenter.tsx) — was "last 24 hours from now", which
+    // silently disagreed with the leads-center's count for the same label
+    // whenever any lead landed yesterday evening but within the last 24h.
+    if (rangeKey === 'day') s.setHours(0, 0, 0, 0)
     else if (rangeKey === 'week') s.setDate(now.getDate() - 7)
     else if (rangeKey === 'month') s.setDate(now.getDate() - 30)
     return { start: s, end: now }
