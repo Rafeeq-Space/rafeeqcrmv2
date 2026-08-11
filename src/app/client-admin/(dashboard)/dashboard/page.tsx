@@ -16,32 +16,55 @@ export default async function ClientAdminDashboardPage() {
   const supa = adminSupabase()
   const viewer: Viewer = { id: user!.id, role, tenantId, teamId: profile?.team_id || null }
 
+  // Every fetch below is independent of every other — none reads another's
+  // result — so they run concurrently in one Promise.all instead of the
+  // previous "campaigns/forms/employees/teams/members, THEN wait, THEN
+  // fetch leads, THEN wait, THEN fetch activities" chain. Same queries,
+  // same data, same final values below — only WHEN each request fires
+  // changes (all at once instead of one after another), so total wait time
+  // is roughly the slowest single fetch instead of the sum of all of them.
+  //
+  // The leads fetch is role-scoped (admins see all; managers see their
+  // team's leads) and paginated (fetchAllRows) — a single unbounded
+  // .select() silently under-counted past Supabase's default 1000-row cap
+  // otherwise (the "إجمالي عدد العملاء" stat card would stall at exactly
+  // 1000 forever).
+  //
+  // The activities fetch is filtered by tenant_id, not `.in('lead_id',
+  // leadIds)` — this tenant has 1200+ leads, and a Postgrest `.in()` filter
+  // embeds every id directly in the request URL: at ~400 ids the URL
+  // already exceeds a hard length limit upstream and the request fails
+  // outright ("Bad Request", confirmed live against production). Fetching
+  // by tenant_id alone means it doesn't need `leads` to already be resolved
+  // before it can start — which is exactly what makes running it alongside
+  // the leads fetch (rather than after) safe to do.
   const [
     { data: campaigns },
     { data: forms },
     { data: employees },
     { data: teamRows },
     { data: memberRows },
+    leads,
+    acts,
+    managerTeamIds,
   ] = await Promise.all([
     supa.from('campaigns').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supa.from('forms').select('*, campaigns(name)').eq('tenant_id', tenantId),
     supa.from('employees').select('*').eq('tenant_id', tenantId),
     supa.from('teams').select('id, name, manager_id').eq('tenant_id', tenantId).order('name'),
     supa.from('profiles').select('id, full_name, team_id, role').eq('tenant_id', tenantId),
+    isAdmin
+      ? fetchAllRows(
+          (from, to) => supa.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).range(from, to)
+        )
+      : fetchVisibleLeads(viewer),
+    fetchAllRows(
+      (from, to) => supa.from('lead_activities').select('lead_id, created_at').eq('tenant_id', tenantId).range(from, to)
+    ),
+    isManager ? managedTeamIds(viewer) : Promise.resolve([] as string[]),
   ])
 
-  // Leads are role-scoped: admins see all; managers see their team's leads.
-  // Paginated (not a single unbounded .select()) — this tenant-wide fetch
-  // silently under-counted past Supabase's default 1000-row cap otherwise
-  // (the "إجمالي عدد العملاء" stat card would stall at exactly 1000 forever).
-  const leads = isAdmin
-    ? await fetchAllRows(
-        (from, to) => supa.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).range(from, to)
-      )
-    : await fetchVisibleLeads(viewer)
-
   // Teams + members for selection and the performance table (scoped for managers).
-  const managerTeamIds = isManager ? await managedTeamIds(viewer) : []
   const visibleTeams = (teamRows || []).filter(t => isAdmin || managerTeamIds.includes(t.id))
   const teams = visibleTeams.map(t => ({
     id: t.id,
@@ -56,27 +79,14 @@ export default async function ClientAdminDashboardPage() {
     .filter(m => isAdmin || (m.team_id && managerTeamIds.includes(m.team_id)))
     .map(m => ({ id: m.id, name: m.full_name }))
 
-  // Average gap between timeline updates across the visible leads.
-  //
-  // Filtered by tenant_id, not `.in('lead_id', leadIds)` — this tenant has
-  // 1200+ leads, and a Postgrest `.in()` filter embeds every id directly in
-  // the request URL: at ~400 ids the URL already exceeds a hard length limit
-  // upstream and the request fails outright ("Bad Request" / "fetch
-  // failed", confirmed live against production). The old code silently
-  // swallowed that (`const { data: acts } = ...; acts || []`, no error
-  // check) — fetchAllRows does NOT swallow errors, so wrapping the same
-  // `.in()` call in it turned a silent stat-card gap into a hard crash of
-  // the entire dashboard page for this tenant. Fetching by tenant_id and
-  // filtering to the visible lead ids in JS (correct for a manager's
-  // narrower scope too, not just admin) avoids the URL limit regardless of
-  // tenant size.
+  // Average gap between timeline updates across the visible leads. `acts` was
+  // already fetched tenant-wide above; narrowed to the visible lead ids here
+  // — unchanged from before, just no longer gating whether the fetch itself
+  // happens (see the Promise.all comment).
   let avgResponseMs: number | null = null
   const leadIds = leads.map(l => l.id)
   if (leadIds.length) {
     const leadIdSet = new Set(leadIds)
-    const acts = await fetchAllRows(
-      (from, to) => supa.from('lead_activities').select('lead_id, created_at').eq('tenant_id', tenantId).range(from, to)
-    )
     avgResponseMs = avgResponseGapMs(acts.filter(a => leadIdSet.has(a.lead_id)))
   }
 

@@ -17,25 +17,22 @@ export default async function AppTeamPage() {
 
   const adminSupabase = createAdminSupabase()
 
-  const { data: teams } = await adminSupabase
-    .from('teams')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .order('created_at')
-
-  const { data: members } = await adminSupabase
-    .from('profiles')
-    .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, created_at')
-    .eq('tenant_id', tenantId)
-    .in('role', ['client_sales_manager', 'client_user'])
-    .order('full_name')
-
-  // Lead counters per team (open = new, pending = in-progress). Paginated —
-  // a plain .select() silently under-counted past Supabase's default
-  // 1000-row cap (see fetchAllRows).
-  const leads = await fetchAllRows(
-    (from, to) => adminSupabase.from('leads').select('assigned_to, status').eq('tenant_id', tenantId).range(from, to)
-  )
+  // None of these three depend on each other's results — run concurrently.
+  const [{ data: teams }, { data: members }, leads] = await Promise.all([
+    adminSupabase.from('teams').select('*').eq('tenant_id', tenantId).order('created_at'),
+    adminSupabase
+      .from('profiles')
+      .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, created_at')
+      .eq('tenant_id', tenantId)
+      .in('role', ['client_sales_manager', 'client_user'])
+      .order('full_name'),
+    // Lead counters per team (open = new, pending = in-progress). Paginated —
+    // a plain .select() silently under-counted past Supabase's default
+    // 1000-row cap (see fetchAllRows).
+    fetchAllRows(
+      (from, to) => adminSupabase.from('leads').select('assigned_to, status').eq('tenant_id', tenantId).range(from, to)
+    ),
+  ])
 
   const memberTeam = new Map((members || []).map(m => [m.id, m.team_id]))
   const leadStats: Record<string, { new: number; contacted: number; unqualified: number }> = {}

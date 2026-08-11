@@ -60,9 +60,14 @@ async function visibleLeadsOrFilter(viewer: Viewer): Promise<string | null> {
   if (viewer.role === 'client_admin') return null
 
   if (viewer.role === 'client_sales_manager') {
-    const teamIds = await managedTeamIds(viewer)
+    // sharedLeadIds doesn't depend on teamIds/memberIds — runs alongside the
+    // managedTeamIds→teamMemberIds chain (which genuinely is sequential:
+    // teamMemberIds needs teamIds as an input) instead of after it.
+    const [teamIds, shared] = await Promise.all([
+      managedTeamIds(viewer),
+      sharedLeadIds(viewer.tenantId, viewer.id),
+    ])
     const memberIds = await teamMemberIds(viewer.tenantId, teamIds)
-    const shared = await sharedLeadIds(viewer.tenantId, viewer.id)
     const orParts: string[] = [`assigned_sales_id.eq.${viewer.id}`]
     if (teamIds.length) orParts.push(`assigned_team_id.in.(${teamIds.join(',')})`)
     if (memberIds.length) orParts.push(`assigned_sales_id.in.(${memberIds.join(',')})`)

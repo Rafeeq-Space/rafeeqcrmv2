@@ -25,9 +25,9 @@ export default async function DashboardPage() {
     tenantId: profile.tenant_id,
     teamId: profile.team_id || null,
   }
-  const leads = await fetchVisibleLeads(viewer)
-
-  // Average gap between timeline updates across the visible leads.
+  // The activities fetch is filtered by tenant_id alone, so it doesn't need
+  // `leads` to already be resolved before it can start — runs alongside it
+  // instead of after, same as the client-admin dashboard's equivalent fetch.
   //
   // Filtered by tenant_id, not `.in('lead_id', leadIds)` — a Postgrest
   // `.in()` filter embeds every id directly in the request URL and fails
@@ -36,13 +36,18 @@ export default async function DashboardPage() {
   // leads there). A manager's visible-lead count could plausibly cross that
   // too. Fetching by tenant_id and filtering to the visible lead ids in JS
   // avoids the URL limit regardless of size.
+  const [leads, acts] = await Promise.all([
+    fetchVisibleLeads(viewer),
+    fetchAllRows(
+      (from, to) => adminSupabase().from('lead_activities').select('lead_id, created_at').eq('tenant_id', profile.tenant_id).range(from, to)
+    ),
+  ])
+
+  // Average gap between timeline updates across the visible leads.
   let avgResponseMs: number | null = null
   const leadIds = leads.map(l => l.id)
   if (leadIds.length) {
     const leadIdSet = new Set(leadIds)
-    const acts = await fetchAllRows(
-      (from, to) => adminSupabase().from('lead_activities').select('lead_id, created_at').eq('tenant_id', profile.tenant_id).range(from, to)
-    )
     avgResponseMs = avgResponseGapMs(acts.filter(a => leadIdSet.has(a.lead_id)))
   }
 

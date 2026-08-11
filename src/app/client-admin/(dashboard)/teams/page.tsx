@@ -24,39 +24,43 @@ export default async function ClientAdminTeamsPage() {
   // Service role to read all tenant members regardless of RLS.
   const adminSupabase = createAdminSupabase()
 
-  const { data: teams } = await adminSupabase
-    .from('teams')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .order('created_at')
-
-  // A manager's team = the team they manage (by manager_id), or their own team_id.
-  const managedTeam = (teams || []).find(t => t.manager_id === user!.id)
-  const currentTeamId = managedTeam?.id || profile?.team_id || null
-
   // Members = sales managers + sales users. When an admin opens the page we
   // also include their own row so they can view/edit their own profile.
   const memberRoles = isAdmin
     ? ['client_admin', 'client_sales_manager', 'client_user']
     : ['client_sales_manager', 'client_user']
-  const { data: membersRaw } = await adminSupabase
-    .from('profiles')
-    .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, monthly_target, excluded_from_distribution, created_at')
-    .eq('tenant_id', tenantId)
-    .in('role', memberRoles)
-    .order('full_name')
 
-  // Emails live in auth.users, not profiles — build an id → email map.
-  const { data: authList } = await adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  // None of these four depend on each other's results, so they run
+  // concurrently instead of one after another — same data, less total wait.
+  const [
+    { data: teams },
+    { data: membersRaw },
+    { data: authList },
+    leads,
+  ] = await Promise.all([
+    adminSupabase.from('teams').select('*').eq('tenant_id', tenantId).order('created_at'),
+    adminSupabase
+      .from('profiles')
+      .select('id, tenant_id, full_name, role, phone, job_title, team_id, suspended, avatar_url, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, monthly_target, excluded_from_distribution, created_at')
+      .eq('tenant_id', tenantId)
+      .in('role', memberRoles)
+      .order('full_name'),
+    // Emails live in auth.users, not profiles — build an id → email map.
+    adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    // Lead counters per team (open = new, pending = in-progress). Paginated —
+    // a plain .select() silently under-counted past Supabase's default
+    // 1000-row cap (see fetchAllRows).
+    fetchAllRows(
+      (from, to) => adminSupabase.from('leads').select('assigned_to, assigned_sales_id, status').eq('tenant_id', tenantId).range(from, to)
+    ),
+  ])
+
+  // A manager's team = the team they manage (by manager_id), or their own team_id.
+  const managedTeam = (teams || []).find(t => t.manager_id === user!.id)
+  const currentTeamId = managedTeam?.id || profile?.team_id || null
+
   const emailById = new Map((authList?.users || []).map(u => [u.id, u.email || '']))
   const members = (membersRaw || []).map(m => ({ ...m, email: emailById.get(m.id) || '' }))
-
-  // Lead counters per team (open = new, pending = in-progress). Paginated —
-  // a plain .select() silently under-counted past Supabase's default
-  // 1000-row cap (see fetchAllRows).
-  const leads = await fetchAllRows(
-    (from, to) => adminSupabase.from('leads').select('assigned_to, assigned_sales_id, status').eq('tenant_id', tenantId).range(from, to)
-  )
 
   const memberTeam = new Map(members.map(m => [m.id, m.team_id]))
   // Team-card counters: new / contacted / unqualified (lost).
