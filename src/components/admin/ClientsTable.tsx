@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Pencil, Trash2, PauseCircle, PlayCircle } from 'lucide-react'
+import { X, Pencil, Trash2, PauseCircle, PlayCircle, Users } from 'lucide-react'
 import type { Tenant } from '@/lib/types'
 import ResetPasswordButton from '@/components/ResetPasswordButton'
 import { SUSPEND_REASONS, type SuspendReasonKey } from '@/lib/suspendReasons'
@@ -173,6 +173,155 @@ function EditButton({ tenant }: { tenant: Tenant }) {
   )
 }
 
+interface TenantAdmin {
+  id: string
+  full_name: string
+  email: string
+  created_at: string
+}
+
+// Lets the super_admin invite up to 2 client_admin accounts for an existing
+// tenant (not just the one created alongside the tenant itself), and remove
+// one — otherwise inviting the wrong email would permanently use up a slot
+// with no way back.
+function ManageAdminsButton({ tenant }: { tenant: Tenant }) {
+  const [open, setOpen] = useState(false)
+  const [admins, setAdmins] = useState<TenantAdmin[] | null>(null)
+  const [max, setMax] = useState(2)
+  const [loading, setLoading] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '' })
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/clients/${tenant.id}/admins`)
+      const data = await res.json()
+      setAdmins(data.admins || [])
+      setMax(data.max || 2)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function openModal() {
+    setOpen(true)
+    setShowAddForm(false)
+    setSent(false)
+    setError('')
+    setForm({ name: '', email: '' })
+    load()
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/clients/${tenant.id}/admins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSent(true)
+      setShowAddForm(false)
+      setForm({ name: '', email: '' })
+      await load()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleRemove(adminId: string, name: string) {
+    if (!confirm(`حذف «${name}»؟ لن يقدر على تسجيل الدخول بعد كده.`)) return
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/clients/${tenant.id}/admins/${adminId}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      await load()
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <button onClick={openModal} className="p-1.5 rounded-lg text-muted2 hover:text-primary transition" title="إدارة المديرين" aria-label="إدارة المديرين">
+        <Users size={15} />
+      </button>
+      {open && (
+        <div className="overlay items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="modal p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-foreground">مديرو «{tenant.name}»</h3>
+              <button onClick={() => setOpen(false)} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+            </div>
+
+            {admins === null ? (
+              <p className="text-sm text-muted2 text-center py-4">جارٍ التحميل...</p>
+            ) : (
+              <div className="space-y-2">
+                {admins.map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-2 p-3 rounded-xl bg-surface2 border border-border">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{a.full_name}</p>
+                      <p className="text-xs text-muted2 truncate" dir="ltr">{a.email}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRemove(a.id, a.full_name)}
+                      disabled={loading}
+                      className="p-1.5 rounded-lg text-muted2 hover:text-danger transition shrink-0"
+                      title="حذف"
+                      aria-label="حذف"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sent && <p className="text-sm mt-3" style={{ color: 'var(--success)' }}>تم إرسال دعوة للمدير الجديد ✓</p>}
+
+            <div className="pt-4 mt-3 border-t border-border">
+              {admins !== null && admins.length >= max ? (
+                <p className="text-xs text-muted2 text-center">وصلت هذه الشركة للحد الأقصى ({max} مديرين).</p>
+              ) : showAddForm ? (
+                <form onSubmit={handleAdd} className="space-y-3">
+                  <div>
+                    <label className="label">اسم المدير</label>
+                    <input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="label">البريد الإلكتروني</label>
+                    <input type="email" dir="ltr" className="input text-start" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+                  </div>
+                  {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setShowAddForm(false)} className="btn btn-outline flex-1">إلغاء</button>
+                    <button type="submit" disabled={loading} className="btn btn-primary flex-1">{loading ? 'جارٍ الإرسال...' : 'إرسال الدعوة'}</button>
+                  </div>
+                </form>
+              ) : (
+                <button onClick={() => setShowAddForm(true)} disabled={admins === null} className="btn btn-outline w-full">+ إضافة مدير</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function SuspendButton({ tenant }: { tenant: Tenant }) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState<SuspendReasonKey | ''>('')
@@ -310,6 +459,7 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
               <td className="px-6 py-3 whitespace-nowrap">
                 <div className="flex items-center justify-center gap-1">
                   <EditButton tenant={tenant} />
+                  <ManageAdminsButton tenant={tenant} />
                   <ResetPasswordButton endpoint={`/api/admin/clients/${tenant.id}`} name={tenant.name} trigger="icon" />
                   <SuspendButton tenant={tenant} />
                   <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">

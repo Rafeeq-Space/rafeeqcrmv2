@@ -87,14 +87,19 @@ export async function PATCH(
       }
     }
 
-    // Sync the linked auth user (email / password) and profile name
+    // Sync the linked auth user (email / password) and profile name — the
+    // OLDEST client_admin, now that a tenant can have up to 2 (see
+    // .../admins). Was `.single()`, which would start throwing the moment a
+    // second admin exists instead of picking one predictably.
     if (name || email || password) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('id')
         .eq('tenant_id', id)
         .eq('role', 'client_admin')
-        .single()
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
 
       if (profile) {
         if (email || password) {
