@@ -1,0 +1,28 @@
+-- Makes campaign team selection the actual, live source of truth for lead
+-- distribution — not just a one-time snapshot.
+--
+-- Until now, "كل الأعضاء" ("all members") in a form's distribution setting
+-- (LeadDistribution.tsx) resolved the campaign's teams down to a flat list
+-- of profile ids ONCE, at the moment the form was created, and saved that
+-- list into forms.assignee_ids permanently. Editing the campaign's teams
+-- afterward (adding/removing a team) never touched that saved list — a real
+-- gap the team selector's own UI text ("تُستخدم هذه الفِرَق لاحقًا لتوزيع
+-- العملاء على أعضائها") doesn't make obvious. Confirmed live: a real
+-- tenant's campaign has both "رفيق سبيس" and "فرع جدة" selected, but every
+-- one of its 5 forms' assignee_ids only ever contained رفيق سبيس's members
+-- — جدة never received a single lead from any of them.
+--
+-- use_team_members = true switches a form to computing its distribution
+-- pool LIVE at the moment each lead is assigned — every currently-active
+-- (not suspended/excluded_from_distribution) member of the campaign's
+-- CURRENT team_ids, re-read fresh every time (src/lib/leads/roundRobin.ts).
+-- Editing the campaign's teams later takes effect immediately, with no
+-- separate step needed on the form itself. false (the default, applied to
+-- every existing form) keeps assignee_ids as the fixed, hand-picked list —
+-- exactly today's behavior, unchanged for every campaign/form that already
+-- exists.
+--
+-- This only changes how a FUTURE lead's assignee is decided — it never
+-- reads or writes the leads table, so no existing lead's assignment is
+-- touched by running this.
+alter table forms add column if not exists use_team_members boolean not null default false;

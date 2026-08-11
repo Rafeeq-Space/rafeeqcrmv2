@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Users, UserCheck } from 'lucide-react'
 import type { TeamWithMembers } from '@/lib/types'
 
-// Lets the admin choose who receives leads from a form: all members of the
-// campaign's teams, or a hand-picked subset. Reports the ordered pool of
-// profile ids (used for round-robin distribution) via onChange.
+// Lets the admin choose who receives leads from a form: all CURRENT members
+// of the campaign's teams (kept live — see roundRobin.ts, editing the
+// campaign's teams later takes effect with no extra step here), or a
+// hand-picked, fixed subset. Reports both the mode and the resolved pool
+// (the latter used only when mode is 'select', and as a snapshot fallback
+// otherwise) via onChange.
 export default function LeadDistribution({
   campaignTeams, onChange,
 }: {
   campaignTeams: TeamWithMembers[]
-  onChange: (assigneeIds: string[]) => void
+  onChange: (useTeamMembers: boolean, assigneeIds: string[]) => void
 }) {
   const allMembers = useMemo(
     () => campaignTeams.flatMap(t => t.members),
@@ -20,9 +23,9 @@ export default function LeadDistribution({
   const [mode, setMode] = useState<'all' | 'select'>('all')
   const [selected, setSelected] = useState<string[]>([])
 
-  // Report the resolved pool whenever the choice changes.
+  // Report the resolved choice whenever it changes.
   useEffect(() => {
-    onChange(mode === 'all' ? allMembers.map(m => m.id) : selected)
+    onChange(mode === 'all', mode === 'all' ? allMembers.map(m => m.id) : selected)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, selected, allMembers])
 

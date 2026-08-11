@@ -281,6 +281,12 @@ export interface Form {
   design?: FormDesign
   html?: string // when set, form is rendered from raw HTML (sandboxed) instead of `fields`
   assignee_ids?: string[] // ordered pool of profile ids for round-robin lead distribution
+  // When true, the pool above is ignored — the campaign's team_ids' current
+  // members are looked up live at assignment time instead (see
+  // roundRobin.ts), so editing the campaign's teams later takes effect on
+  // the next lead with no separate save on the form itself. false (default)
+  // keeps assignee_ids as the fixed, hand-picked list.
+  use_team_members?: boolean
   rr_index?: number // rotating counter — index of the next assignee
   source_type?: 'builder' | 'html' | 'google_sheet' // how leads reach this "form"
   sheet_url?: string // reference link to the connected Google Sheet (google_sheet only)

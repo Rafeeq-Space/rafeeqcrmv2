@@ -31,6 +31,7 @@ export default function HtmlFormBuilder({ campaignId, tenantId, campaignTeams, o
   const [name, setName] = useState('')
   const [html, setHtml] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+  const [useTeamMembers, setUseTeamMembers] = useState(true)
   const [tab, setTab] = useState<'paste' | 'upload'>('paste')
   const [showPreview, setShowPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -53,7 +54,7 @@ export default function HtmlFormBuilder({ campaignId, tenantId, campaignTeams, o
     const supabase = createClient()
     const { data, error: err } = await supabase
       .from('forms')
-      .insert({ name, campaign_id: campaignId, tenant_id: tenantId, fields: [], html, assignee_ids: assigneeIds, rr_index: 0, published_at: new Date().toISOString() })
+      .insert({ name, campaign_id: campaignId, tenant_id: tenantId, fields: [], html, assignee_ids: assigneeIds, use_team_members: useTeamMembers, rr_index: 0, published_at: new Date().toISOString() })
       .select()
       .single()
     setSaving(false)
@@ -80,7 +81,7 @@ export default function HtmlFormBuilder({ campaignId, tenantId, campaignTeams, o
 
           <div>
             <label className="label">توزيع العملاء</label>
-            <LeadDistribution campaignTeams={campaignTeams} onChange={setAssigneeIds} />
+            <LeadDistribution campaignTeams={campaignTeams} onChange={(useTeam, ids) => { setUseTeamMembers(useTeam); setAssigneeIds(ids) }} />
           </div>
 
           {/* Source tabs */}

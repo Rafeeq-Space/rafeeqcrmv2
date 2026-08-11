@@ -427,6 +427,7 @@ export default function GoogleSheetForm({
   const [name, setName] = useState('')
   const [sheetUrl, setSheetUrl] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+  const [useTeamMembers, setUseTeamMembers] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -443,6 +444,7 @@ export default function GoogleSheetForm({
         tenant_id: tenantId,
         fields: [],
         assignee_ids: assigneeIds,
+        use_team_members: useTeamMembers,
         rr_index: 0,
         source_type: 'google_sheet',
         sheet_url: sheetUrl.trim() || null,
@@ -483,7 +485,7 @@ export default function GoogleSheetForm({
 
           <div>
             <label className="label">توزيع العملاء</label>
-            <LeadDistribution campaignTeams={campaignTeams} onChange={setAssigneeIds} />
+            <LeadDistribution campaignTeams={campaignTeams} onChange={(useTeam, ids) => { setUseTeamMembers(useTeam); setAssigneeIds(ids) }} />
           </div>
 
           <div className="rounded-xl bg-surface2 border border-border p-3 text-xs text-muted leading-relaxed">
