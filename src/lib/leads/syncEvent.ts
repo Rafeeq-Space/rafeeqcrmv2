@@ -65,7 +65,7 @@ function hashValue(value: string): string {
 // how the two identical numbers looked to a human. Stripped down to digits
 // (plus a leading +) here, so the same number always hashes the same way no
 // matter which source it came from.
-function normalizedPhone(raw: string): string {
+export function normalizedPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
   return digits ? `+${digits}` : ''
 }
