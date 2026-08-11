@@ -35,7 +35,7 @@ interface Props {
 const STAT_CARDS: { key: string; label: string; color: string }[] = [
   { key: 'all', label: 'إجمالي العملاء', color: 'var(--foreground)' },
   { key: 'new', label: 'جديد', color: 'var(--primary)' },
-  { key: 'contacted', label: 'تم التواصل', color: 'var(--warning)' },
+  { key: 'contacted', label: 'جاري التواصل', color: 'var(--warning)' },
   { key: 'qualified', label: 'مؤهل', color: 'var(--purple)' },
   { key: 'converted', label: 'تم التحويل', color: 'var(--success)' },
   { key: 'lost', label: 'غير مؤهل', color: 'var(--danger)' },
