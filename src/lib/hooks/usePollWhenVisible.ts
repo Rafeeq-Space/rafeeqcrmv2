@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { getIdleMs, IDLE_THRESHOLD_MS } from '@/lib/hooks/idleTracker'
+import { checkIdleGate } from '@/lib/hooks/idleTracker'
 
 // Runs `fn` every `intervalMs`, skipping ticks while the tab is in the
 // background — an open-all-day tab left on another window/app otherwise
@@ -13,15 +13,17 @@ import { getIdleMs, IDLE_THRESHOLD_MS } from '@/lib/hooks/idleTracker'
 // starting from empty state should call `fn` once themselves before/alongside
 // this.
 //
-// Also skips ticks once the tab has been idle (no mouse/keyboard/scroll
-// input — see idleTracker.ts) for IDLE_THRESHOLD_MS, even while it stays the
+// Also skips ticks once the idle gate has opened (no mouse/keyboard/scroll
+// input for IDLE_THRESHOLD_MS — see idleTracker.ts), even while it stays the
 // visible foreground tab: a tab left open and visible but with nobody at the
 // keyboard was still polling at full cadence, which visibility alone doesn't
-// catch. IdleGate.tsx surfaces this same idle state to the user.
+// catch. IdleGate.tsx surfaces this same gate to the user, and — since the
+// gate is sticky — polling stays paused for as long as that prompt is up,
+// not just until the next mouse twitch.
 export function usePollWhenVisible(fn: () => void, intervalMs: number) {
   useEffect(() => {
     function tick() {
-      if (document.visibilityState === 'visible' && getIdleMs() < IDLE_THRESHOLD_MS) fn()
+      if (document.visibilityState === 'visible' && !checkIdleGate()) fn()
     }
     const id = setInterval(tick, intervalMs)
     document.addEventListener('visibilitychange', tick)

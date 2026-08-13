@@ -4,14 +4,15 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw, LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getIdleMs, onActivity, IDLE_THRESHOLD_MS } from '@/lib/hooks/idleTracker'
+import { checkIdleGate } from '@/lib/hooks/idleTracker'
 
 // Shown when the tab has been open with zero mouse/keyboard/scroll input for
 // IDLE_THRESHOLD_MS — a tab left open and visible, but with nobody actually
 // at the keyboard, was still running every background poll at full cadence
 // (notifications badge, Bevatel call sync, the leads-center signal check;
-// see usePollWhenVisible.ts). Those pauses themselves the moment this
-// appears — this is the user-facing side of that, not a separate mechanism.
+// see usePollWhenVisible.ts). Those pause themselves the moment this
+// appears, via the same shared idleGate — not a separate mechanism, and not
+// something a stray mouse move while this is on screen can quietly undo.
 //
 // "تحديث" reloads (resumes everything cleanly); "تسجيل الخروج" ends the
 // session outright, since if nobody's actually using it there's no reason to
@@ -22,17 +23,17 @@ export default function IdleGate() {
   const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
+    // checkIdleGate() is sticky (see idleTracker.ts) — once it flips to true
+    // this stays open regardless of any later mouse/keyboard activity. Only
+    // "تحديث" (full reload, a fresh module load) or "تسجيل الخروج" ever
+    // closes it, and both usePollWhenVisible callers pause on the same flag,
+    // so background polling can't quietly resume behind this prompt.
     function check() {
-      setIdle(getIdleMs() >= IDLE_THRESHOLD_MS)
+      if (checkIdleGate()) setIdle(true)
     }
     check()
     const interval = setInterval(check, 15000)
-    // Clears instantly on real input, rather than waiting up to 15s.
-    const unsubscribe = onActivity(() => setIdle(false))
-    return () => {
-      clearInterval(interval)
-      unsubscribe()
-    }
+    return () => clearInterval(interval)
   }, [])
 
   if (!idle) return null
