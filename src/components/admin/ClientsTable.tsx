@@ -14,7 +14,9 @@ interface Props {
 export function AddClientButton() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: '', subdomain: '', email: '' })
+  const [sendInvite, setSendInvite] = useState(true)
   const [sent, setSent] = useState(false)
+  const [inviteWasSent, setInviteWasSent] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -26,10 +28,11 @@ export function AddClientButton() {
       const res = await fetch('/api/admin/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, sendInvite }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      setInviteWasSent(!!data.inviteSent)
       setSent(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'خطأ')
@@ -45,6 +48,7 @@ export function AddClientButton() {
       return
     }
     setForm({ name: '', subdomain: '', email: '' })
+    setSendInvite(true)
     setError('')
   }
 
@@ -61,11 +65,17 @@ export function AddClientButton() {
             </div>
             {sent ? (
               <div className="space-y-4 text-center py-2">
-                <p className="text-sm text-foreground leading-relaxed">
-                  تم إنشاء الحساب وإرسال رابط الدخول إلى
-                  <span className="font-semibold block mt-1" dir="ltr">{form.email}</span>
-                </p>
-                <p className="text-xs text-muted2">سيقوم العميل بتعيين كلمة المرور الخاصة به من الرابط المُرسَل.</p>
+                {inviteWasSent ? (
+                  <p className="text-sm text-foreground leading-relaxed">
+                    تم إنشاء الحساب وإرسال رابط الدخول إلى
+                    <span className="font-semibold block mt-1" dir="ltr">{form.email}</span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-foreground leading-relaxed">
+                    تم تسجيل الشركة من غير إرسال دعوة — استخدم زر «إدارة المديرين» بجانبها في الجدول وقت ما تكون جاهز.
+                  </p>
+                )}
+                {inviteWasSent && <p className="text-xs text-muted2">سيقوم العميل بتعيين كلمة المرور الخاصة به من الرابط المُرسَل.</p>}
                 <button type="button" onClick={closeModal} className="btn btn-primary w-full">تم</button>
               </div>
             ) : (
@@ -90,11 +100,21 @@ export function AddClientButton() {
                   <label className="label">البريد الإلكتروني</label>
                   <input type="email" dir="ltr" className="input text-start" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
                 </div>
-                <p className="text-xs text-muted2">سيصل العميل رابط لتسجيل الدخول وتعيين كلمة المرور على بريده.</p>
+                <label className="flex items-center gap-2 text-sm cursor-pointer py-1">
+                  <input type="checkbox" className="rounded" checked={sendInvite} onChange={e => setSendInvite(e.target.checked)} />
+                  <span className="text-foreground">إرسال دعوة الدخول الآن</span>
+                </label>
+                <p className="text-xs text-muted2">
+                  {sendInvite
+                    ? 'سيصل العميل رابط لتسجيل الدخول وتعيين كلمة المرور على بريده.'
+                    : 'الشركة تُسجَّل بدون حساب مدير بعد — أضِفه لاحقًا من زر «إدارة المديرين» في الجدول.'}
+                </p>
                 {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
                 <div className="flex gap-3 pt-1">
                   <button type="button" onClick={closeModal} className="btn btn-outline flex-1">إلغاء</button>
-                  <button type="submit" disabled={loading} className="btn btn-primary flex-1">{loading ? 'جارٍ الإرسال...' : 'إرسال الدعوة'}</button>
+                  <button type="submit" disabled={loading} className="btn btn-primary flex-1">
+                    {loading ? 'جارٍ الحفظ...' : sendInvite ? 'إرسال الدعوة' : 'تسجيل الشركة'}
+                  </button>
                 </div>
               </form>
             )}
@@ -500,7 +520,8 @@ export default function AdminClientsTable({ tenants, pending = [] }: Props) {
                   <td className="px-6 py-3 text-muted text-center" dir="ltr">{tenant.email}</td>
                   <td className="px-6 py-3 text-muted2 text-center">{new Date(tenant.created_at).toLocaleDateString('ar-EG')}</td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <ManageAdminsButton tenant={tenant} />
                       <button onClick={() => handleDelete(tenant.id)} className="p-1.5 rounded-lg text-muted2 hover:text-danger transition" title="حذف" aria-label="حذف">
                         <Trash2 size={15} />
                       </button>

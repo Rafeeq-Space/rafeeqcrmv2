@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, subdomain, email } = await request.json()
+    const { name, subdomain, email, sendInvite = true } = await request.json()
 
     if (!name || !subdomain || !email) {
       return NextResponse.json({ error: 'All fields required' }, { status: 400 })
@@ -37,40 +37,47 @@ export async function POST(request: Request) {
 
     if (tenantError) throw tenantError
 
-    // Invite the admin by email instead of setting a password here.
-    // They receive a login link and choose their own password on /set-password.
-    // On localhost dev there are no subdomains, so point back to localhost.
-    const host = request.headers.get('host') || ''
-    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
-    const redirectTo = host.includes('localhost')
-      ? `http://${host}/set-password`
-      : `https://${subdomain}.${rootDomain}/set-password`
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-    })
+    // The admin account + invite email are optional at this step — a
+    // super_admin registering a business ahead of time (before they're ready
+    // to actually notify the client) can skip this and add the first admin
+    // later from the tenant's own "إدارة المديرين" button
+    // (.../admins — same invite-by-email flow, just deferred).
+    if (sendInvite) {
+      // Invite the admin by email instead of setting a password here.
+      // They receive a login link and choose their own password on /set-password.
+      // On localhost dev there are no subdomains, so point back to localhost.
+      const host = request.headers.get('host') || ''
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
+      const redirectTo = host.includes('localhost')
+        ? `http://${host}/set-password`
+        : `https://${subdomain}.${rootDomain}/set-password`
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        redirectTo,
+      })
 
-    if (authError) {
-      // Rollback tenant
-      await supabaseAdmin.from('tenants').delete().eq('id', tenant.id)
-      throw authError
+      if (authError) {
+        // Rollback tenant
+        await supabaseAdmin.from('tenants').delete().eq('id', tenant.id)
+        throw authError
+      }
+
+      // Create profile
+      const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+        id: authUser.user.id,
+        tenant_id: tenant.id,
+        full_name: name,
+        role: 'client_admin',
+      })
+
+      if (profileError) {
+        // Rollback auth user + tenant so we don't leave orphans
+        await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+        await supabaseAdmin.from('tenants').delete().eq('id', tenant.id)
+        throw profileError
+      }
     }
 
-    // Create profile
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-      id: authUser.user.id,
-      tenant_id: tenant.id,
-      full_name: name,
-      role: 'client_admin',
-    })
-
-    if (profileError) {
-      // Rollback auth user + tenant so we don't leave orphans
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
-      await supabaseAdmin.from('tenants').delete().eq('id', tenant.id)
-      throw profileError
-    }
-
-    return NextResponse.json({ tenant }, { status: 201 })
+    return NextResponse.json({ tenant, inviteSent: !!sendInvite }, { status: 201 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Server error'
     return NextResponse.json({ error: message }, { status: 500 })
