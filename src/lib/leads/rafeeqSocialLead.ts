@@ -1,5 +1,5 @@
 import { adminSupabase } from '@/lib/supabase/admin'
-import { appendToLead, recordEvent, phoneKey } from '@/lib/leads/bevatelLead'
+import { appendToLead, recordEvent, phoneKey, mediaTypeLabel } from '@/lib/leads/bevatelLead'
 import { syncRafeeqSocialAssignment } from '@/lib/leads/rafeeqSocialAssign'
 import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 
@@ -28,6 +28,11 @@ import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 // There is no agent/rep identity in the outgoing payload (only the customer's
 // name/chat), so an outgoing message is logged on the timeline but can't be
 // attributed to a specific rep — leads stay unassigned for a rep to pick up.
+//
+// A media message (photo/document/video/voice note) is shaped differently:
+// `user_message` is not a string but an object — confirmed live:
+//   "user_message": { "url": "https://.../116774-278102-....jpeg", "type": "image", "caption": "" }
+// handled inline below via mediaTypeLabel (shared with Bevatel's own media shape).
 
 function str(v: unknown): string {
   if (typeof v === 'string') return v.trim()
@@ -71,10 +76,18 @@ export async function handleRafeeqSocialEvent(
   }
 
   const name = str(payload.first_name)
-  const text = str(payload.user_message)
+  // A text message has `user_message` as a plain string; a media message has
+  // it as an object ({url, type, caption}) instead — see the comment above.
+  const rawMessage = payload.user_message
+  const media = rawMessage && typeof rawMessage === 'object' && !Array.isArray(rawMessage)
+    ? (rawMessage as Record<string, unknown>)
+    : null
+  const text = media ? str(media.caption) : str(rawMessage)
+  const mediaNote = media ? mediaTypeLabel(str(media.type)) : ''
   const label = direction === 'out' ? 'رد صادر عبر واتساب' : 'رسالة واردة عبر واتساب'
   const icon = direction === 'out' ? '↩️' : '💬'
-  const body = text ? `${icon} ${label} (رفيق سوشيال): «${text}»` : `${icon} ${label} (رفيق سوشيال)`
+  const contentPart = [mediaNote, text ? `«${text}»` : ''].filter(Boolean).join(' ')
+  const body = contentPart ? `${icon} ${label} (رفيق سوشيال): ${contentPart}` : `${icon} ${label} (رفيق سوشيال)`
 
   // wa_message_id is stable per WhatsApp message, so a retried webhook logs the
   // same message only once.

@@ -42,6 +42,23 @@ export function phoneKey(raw?: string | null): string {
   return digits.length >= 9 ? digits.slice(-9) : digits
 }
 
+// Arabic label (with emoji) for a WhatsApp media attachment's type — shared by
+// Bevatel's `attachments[].file_type` (confirmed live: "image") and Rafeeq
+// Social's `user_message.type` (confirmed live: "image"; other WhatsApp media
+// categories use the same names on both platforms). Falls back to a generic
+// "ملف" for any value neither has actually sent us yet (e.g. document/video).
+export function mediaTypeLabel(type: string): string {
+  switch (type) {
+    case 'image': return '📷 صورة'
+    case 'video': return '🎥 فيديو'
+    case 'audio': return '🎤 رسالة صوتية'
+    case 'file':
+    case 'document': return '📄 مستند'
+    case 'sticker': return '🌟 ملصق'
+    default: return '📎 ملف'
+  }
+}
+
 // Find the CRM profile behind a Bevatel agent. profiles has no email column
 // (email lives in auth.users), so email matching goes through the auth admin
 // list; phone matching hits profiles.phone directly.
@@ -448,6 +465,17 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
+  // A media message (photo/document/video/voice note) arrives with
+  // `content: null` and the file described in `attachments` instead — confirmed
+  // live via a real Bevatel image message (see mediaTypeLabel). Without this,
+  // the timeline showed a bare "رد صادر عبر واتساب" with no hint media was sent.
+  const attachments = Array.isArray(payload.attachments) ? (payload.attachments as Record<string, unknown>[]) : []
+  const mediaNote = attachments.length === 1
+    ? mediaTypeLabel((attachments[0].file_type as string) || '')
+    : attachments.length > 1
+      ? `📎 ${attachments.length} مرفقات`
+      : ''
+
   // Chatwoot fires several events for one message — message_created (the new
   // message) then message_updated repeatedly as its delivery status changes
   // (sent → delivered → read). Only the create is a real new message; logging
@@ -457,11 +485,12 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // with private:true — log them as a note, not a customer message.
   const isPrivate = payload.private === true
   const label = incoming ? `رسالة واردة عبر ${channel}` : `رد صادر عبر ${channel}`
+  const contentPart = [mediaNote, text ? `«${text}»` : ''].filter(Boolean).join(' ')
   const body = !isNewMessage
     ? ''
     : isPrivate
-      ? (text ? `📝 ملاحظة: «${text}»` : '')
-      : (text ? `💬 ${label}: «${text}»` : `💬 ${label}`)
+      ? (contentPart ? `📝 ملاحظة: ${contentPart}` : '')
+      : (contentPart ? `💬 ${label}: ${contentPart}` : `💬 ${label}`)
 
   // On conversation events (conversation_updated etc.) payload.id IS the
   // conversation id; on message events payload.id is the message id.
