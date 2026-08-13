@@ -357,7 +357,19 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
         status === 'all' ? true :
         status === 'in_progress' ? (l.status === 'contacted' || l.status === 'qualified') :
         l.status === status
-      return statusMatches && (subStatus === 'all' || l.sub_status === subStatus)
+      // "جديد" (new_lead) is one of three sub-statuses under the 'new' bucket
+      // (new_lead / first_inbound_call / first_inbound_message) — only leads
+      // created directly (ads/manual/sheets) ever get stamped 'new_lead'
+      // itself, so for a Bevatel/Rafeeq-Social-heavy tenant this option would
+      // otherwise always show 0 despite "جديد" leads clearly existing (they're
+      // just stamped one of the other two). Matching on the canonical status
+      // instead makes this option mean the whole "new" bucket, same as the
+      // "جديد" stat card above — and naturally covers a null sub_status too.
+      const subStatusMatches =
+        subStatus === 'all' ? true :
+        subStatus === 'new_lead' ? l.status === 'new' :
+        l.sub_status === subStatus
+      return statusMatches && subStatusMatches
     }),
     [scoped, status, subStatus],
   )
