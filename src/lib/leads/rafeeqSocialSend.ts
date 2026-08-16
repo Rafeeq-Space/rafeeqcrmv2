@@ -37,6 +37,40 @@ export async function tenantRafeeqSocialCreds(tenantId: string): Promise<RafeeqS
   }
 }
 
+const CHAT_URL = 'https://rafeeq.social/all/livechat'
+
+// Deep link straight into this customer's live conversation in the Rafeeq
+// Social dashboard — the "رفيق سوشيال" option on the lead page, mirroring
+// the existing "شات بيفاتيل" link. Confirmed live format:
+//   https://rafeeq.social/all/livechat?subscriber_id=966551875199-278102&from_media=whatsapp
+// subscriber_id is "<phone digits>-<bot id>". The bot id isn't stored
+// anywhere on `tenants` — rafeeqsocial_phone_number_id is a different id,
+// confirmed by direct API checks — but every past webhook payload carries
+// it, so it's read off whichever message arrived most recently for this
+// tenant instead of asking for yet another value to store. Returns null
+// (hiding the option) until this tenant's very first Rafeeq Social message
+// has arrived — there's nothing to derive it from before that.
+export async function rafeeqSocialChatUrl(tenantId: string, phone: string): Promise<string | null> {
+  const creds = await tenantRafeeqSocialCreds(tenantId)
+  if (!creds) return null
+
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+
+  const { data } = await adminSupabase()
+    .from('bevatel_webhook_logs')
+    .select('raw')
+    .eq('tenant_id', tenantId)
+    .order('id', { ascending: false })
+    .limit(20)
+  const botId = data
+    ?.map(r => (r.raw as { whatsapp_bot_id?: string | number } | null)?.whatsapp_bot_id)
+    .find(id => id != null)
+  if (botId == null) return null
+
+  return `${CHAT_URL}?subscriber_id=${digits}-${botId}&from_media=whatsapp`
+}
+
 export interface SendResult {
   ok: boolean
   waMessageId?: string

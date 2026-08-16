@@ -27,6 +27,7 @@ interface Props {
   members?: Option[]
   teams?: Option[]
   bevatel?: { host: string; accountId: string } | null
+  rafeeqSocialChatUrl?: string | null
   conversionEvents?: LeadEvent[]
 }
 
@@ -34,7 +35,7 @@ function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
-export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null, conversionEvents = [] }: Props) {
+export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null, rafeeqSocialChatUrl = null, conversionEvents = [] }: Props) {
   const [lead, setLead] = useState(initialLead)
   const [activities, setActivities] = useState<LeadActivity[]>(initialActivities)
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
@@ -274,6 +275,12 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                               <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={() => { close(); copyForChat() }}
                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                                 <ExternalLink size={15} /> شات بيفاتيل
+                              </a>
+                            )}
+                            {rafeeqSocialChatUrl && (
+                              <a href={rafeeqSocialChatUrl} target="_blank" rel="noopener noreferrer" onClick={close}
+                                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                                <ExternalLink size={15} /> رفيق سوشيال
                               </a>
                             )}
                           </>

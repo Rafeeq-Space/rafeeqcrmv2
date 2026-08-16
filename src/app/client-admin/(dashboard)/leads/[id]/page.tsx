@@ -2,6 +2,8 @@ import { redirect, notFound } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase, canAccessLead, managedTeamIds } from '@/lib/leads/access'
 import LeadProfile from '@/components/app/LeadProfile'
+import { rafeeqSocialChatUrl } from '@/lib/leads/rafeeqSocialSend'
+import { leadPhone } from '@/lib/utils'
 import type { Lead, LeadEvent } from '@/lib/types'
 
 const LEAD_DETAIL_SELECT =
@@ -55,6 +57,9 @@ export default async function ClientAdminLeadProfilePage({ params }: { params: P
     ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
     : null
 
+  const phone = leadPhone((lead as Lead).data)
+  const rsChatUrl = phone ? await rafeeqSocialChatUrl(viewer.tenantId, phone) : null
+
   return (
     <LeadProfile
       lead={lead as Lead}
@@ -66,6 +71,7 @@ export default async function ClientAdminLeadProfilePage({ params }: { params: P
       members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
       teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
       bevatel={bevatel}
+      rafeeqSocialChatUrl={rsChatUrl}
       conversionEvents={(conversionEvents || []) as LeadEvent[]}
     />
   )
