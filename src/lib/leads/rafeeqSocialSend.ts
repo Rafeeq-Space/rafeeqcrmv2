@@ -39,23 +39,21 @@ export async function tenantRafeeqSocialCreds(tenantId: string): Promise<RafeeqS
 
 const CHAT_URL = 'https://rafeeq.social/all/livechat'
 
-// Deep link straight into this customer's live conversation in the Rafeeq
-// Social dashboard — the "رفيق سوشيال" option on the lead page, mirroring
-// the existing "شات بيفاتيل" link. Confirmed live format:
-//   https://rafeeq.social/all/livechat?subscriber_id=966551875199-278102&from_media=whatsapp
-// subscriber_id is "<phone digits>-<bot id>". The bot id isn't stored
+// The tenant-wide part of the "رفيق سوشيال" chat link — confirmed live
+// format: https://rafeeq.social/all/livechat?subscriber_id=966551875199-278102&from_media=whatsapp
+// (subscriber_id is "<phone digits>-<bot id>"). The bot id isn't stored
 // anywhere on `tenants` — rafeeqsocial_phone_number_id is a different id,
 // confirmed by direct API checks — but every past webhook payload carries
 // it, so it's read off whichever message arrived most recently for this
-// tenant instead of asking for yet another value to store. Returns null
-// (hiding the option) until this tenant's very first Rafeeq Social message
-// has arrived — there's nothing to derive it from before that.
-export async function rafeeqSocialChatUrl(tenantId: string, phone: string): Promise<string | null> {
+// tenant instead of asking for yet another value to store.
+//
+// Split out from the URL-building itself because the bot id is the SAME for
+// every lead in a tenant — resolving it once per page load (a single-lead
+// profile page, or once for a whole leads-list page) and reusing it for
+// every row is what avoids N redundant lookups; see buildRafeeqSocialChatUrl.
+export async function rafeeqSocialBotId(tenantId: string): Promise<string | number | null> {
   const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return null
-
-  const digits = phone.replace(/\D/g, '')
-  if (!digits) return null
 
   const { data } = await adminSupabase()
     .from('bevatel_webhook_logs')
@@ -63,12 +61,27 @@ export async function rafeeqSocialChatUrl(tenantId: string, phone: string): Prom
     .eq('tenant_id', tenantId)
     .order('id', { ascending: false })
     .limit(20)
-  const botId = data
+  return data
     ?.map(r => (r.raw as { whatsapp_bot_id?: string | number } | null)?.whatsapp_bot_id)
-    .find(id => id != null)
-  if (botId == null) return null
+    .find(id => id != null) ?? null
+}
 
+// Pure — no I/O — so it's safe to call once per row in a list. Returns null
+// (hiding the option) until botId has actually resolved to something, or the
+// phone has no digits at all.
+export function buildRafeeqSocialChatUrl(botId: string | number | null | undefined, phone: string): string | null {
+  if (botId == null) return null
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
   return `${CHAT_URL}?subscriber_id=${digits}-${botId}&from_media=whatsapp`
+}
+
+// Convenience wrapper for a single lead-detail page (one lookup, one lead) —
+// list pages should call rafeeqSocialBotId() once and buildRafeeqSocialChatUrl()
+// per row instead, to avoid resolving the same tenant-wide bot id repeatedly.
+export async function rafeeqSocialChatUrl(tenantId: string, phone: string): Promise<string | null> {
+  const botId = await rafeeqSocialBotId(tenantId)
+  return buildRafeeqSocialChatUrl(botId, phone)
 }
 
 export interface SendResult {

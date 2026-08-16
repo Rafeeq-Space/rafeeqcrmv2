@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { fetchVisibleLeads, adminSupabase, sharedLeadIds } from '@/lib/leads/access'
+import { rafeeqSocialBotId } from '@/lib/leads/rafeeqSocialSend'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
 
@@ -27,6 +28,9 @@ export default async function MyLeadsPage() {
   const bevatel = tenant?.bevatel_account_id
     ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
     : null
+  // Resolved once for the whole list — see rafeeqSocialSend.ts: it's the
+  // same bot id for every lead, so this must not be looked up per row.
+  const botId = await rafeeqSocialBotId(viewer.tenantId)
 
   return (
     <div>
@@ -44,6 +48,7 @@ export default async function MyLeadsPage() {
         tenantId={viewer.tenantId}
         campaigns={(campaigns || []).map(c => ({ id: c.id, name: c.name }))}
         bevatel={bevatel}
+        rafeeqSocialBotId={botId}
         currentUserId={viewer.id}
         sharedWithMeIds={sharedWithMe}
       />

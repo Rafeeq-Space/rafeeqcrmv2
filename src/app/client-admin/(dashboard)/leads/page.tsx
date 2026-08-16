@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { fetchVisibleLeads, adminSupabase, managedTeamIds, sharedLeadIds } from '@/lib/leads/access'
+import { rafeeqSocialBotId } from '@/lib/leads/rafeeqSocialSend'
 import LeadsCenter from '@/components/app/LeadsCenter'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import LeadsAdminActions from '@/components/client-admin/LeadsAdminActions'
@@ -41,6 +42,9 @@ export default async function ClientAdminLeadsPage() {
   const bevatel = tenant?.bevatel_account_id
     ? { host: (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com', accountId: String(tenant.bevatel_account_id) }
     : null
+  // Resolved once for the whole list — see rafeeqSocialSend.ts: it's the
+  // same bot id for every lead, so this must not be looked up per row.
+  const botId = await rafeeqSocialBotId(viewer.tenantId)
 
   return (
     <LeadSelectionProvider totalCount={leads.length}>
@@ -67,6 +71,7 @@ export default async function ClientAdminLeadsPage() {
           teams={(teams || []).map(t => ({ id: t.id, name: t.name }))}
           members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
           bevatel={bevatel}
+          rafeeqSocialBotId={botId}
           currentUserId={viewer.id}
           sharedWithMeIds={sharedWithMe}
         />

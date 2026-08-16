@@ -26,6 +26,10 @@ interface Props {
   teams?: FilterOption[]
   members?: FilterOption[]
   bevatel?: { host: string; accountId: string } | null
+  // Tenant-wide Rafeeq Social bot id (see rafeeqSocialSend.ts's
+  // rafeeqSocialBotId) — resolved ONCE per page load, not per lead, since
+  // it's identical for every row; only the phone digits differ per lead.
+  rafeeqSocialBotId?: string | number | null
   currentUserId?: string
   sharedWithMeIds?: string[]
 }
@@ -98,7 +102,11 @@ function sourceLabel(lead: Lead) {
 // best-effort). WhatsApp → plain wa.me or Bevatel chat, which opens the
 // existing conversation if there is one, else the contact's own page (still
 // specific to this customer) if we at least have a synced contact id.
-function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; bevatel?: { host: string; accountId: string } | null }) {
+function ContactButtons({ lead, phone, bevatel, rafeeqSocialBotId }: {
+  lead: Lead; phone: string
+  bevatel?: { host: string; accountId: string } | null
+  rafeeqSocialBotId?: string | number | null
+}) {
   const [menu, setMenu] = useState<'call' | 'wa' | null>(null)
   const { showToast } = useToast()
   if (!phone) return null
@@ -114,6 +122,13 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
     ? `${bevatel.host.replace(/\/+$/, '')}/app/accounts/${bevatel.accountId}/contacts/${lead.bevatel_contact_id}`
     : bevatel
     ? bevatel.host.replace(/\/+$/, '')
+    : null
+  // Pure string formatting only — the expensive part (resolving the tenant's
+  // bot id) already happened once at the page level, not per row. See
+  // rafeeqSocialSend.ts's rafeeqSocialBotId/buildRafeeqSocialChatUrl for the
+  // server-side counterpart this mirrors (confirmed live URL format there).
+  const rafeeqSocialUrl = rafeeqSocialBotId != null
+    ? `https://rafeeq.social/all/livechat?subscriber_id=${d}-${rafeeqSocialBotId}&from_media=whatsapp`
     : null
 
   const close = (e: React.MouseEvent) => { e.stopPropagation(); setMenu(null) }
@@ -173,6 +188,11 @@ function ContactButtons({ lead, phone, bevatel }: { lead: Lead; phone: string; b
                     <ExternalLink size={15} /> شات بيفاتيل
                   </a>
                 )}
+                {rafeeqSocialUrl && (
+                  <a href={rafeeqSocialUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                    <ExternalLink size={15} /> رفيق سوشيال
+                  </a>
+                )}
               </>
             )}
           </div>
@@ -200,7 +220,7 @@ export default function LeadsCenter(props: Props) {
   )
 }
 
-function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, currentUserId, sharedWithMeIds = [] }: Props) {
+function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, rafeeqSocialBotId = null, currentUserId, sharedWithMeIds = [] }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [view, setView] = useState<'cards' | 'table'>('table')
@@ -561,7 +581,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
                   <p className="flex items-center gap-2"><Clock size={13} /> <span className="text-muted2">آخر تحديث:</span> {fmtDateTime(lead.updated_at)}</p>
                   {(isAdmin || isManager) && <p className="flex items-center gap-2"><User size={13} /> <span className="text-muted2">المسؤول:</span> {lead.assigned_sales?.full_name || 'غير مُسنَد'}</p>}
                 </div>
-                {phone && <div className="flex items-center gap-2"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div>}
+                {phone && <div className="flex items-center gap-2"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} rafeeqSocialBotId={rafeeqSocialBotId} /></div>}
               </div>
             )
           })}
@@ -603,7 +623,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
                         {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}
                       </td>
                       <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
-                      <td className="md:hidden px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
+                      <td className="md:hidden px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} rafeeqSocialBotId={rafeeqSocialBotId} /></div></td>
                       <td className="hidden md:table-cell px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       {(isAdmin || isManager) && (
                         <td className="hidden md:table-cell px-4 py-3 text-muted whitespace-nowrap">
@@ -614,7 +634,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
                       )}
                       <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDate(lead.created_at)}</td>
                       <td className="hidden md:table-cell px-4 py-3 text-muted2 whitespace-nowrap">{fmtDateTime(lead.updated_at)}</td>
-                      <td className="hidden md:table-cell px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} /></div></td>
+                      <td className="hidden md:table-cell px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} rafeeqSocialBotId={rafeeqSocialBotId} /></div></td>
                     </tr>
                   )
                 })}
