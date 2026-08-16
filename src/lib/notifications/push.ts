@@ -37,6 +37,8 @@ function describe(type: NotificationType): { title: string; body: string } {
       return { title: 'تم ذكرك في تعليق', body: 'ذكرك أحد الزملاء في تعليق على عميل محتمل.' }
     case 'lead_reengaged':
       return { title: 'عميل غير مؤهل عاد للتواصل', body: 'عميل كان مصنّفًا "غير مؤهل" تواصل معك مرة أخرى — اضغط للمتابعة.' }
+    case 'customer_available_now':
+      return { title: 'عميل متاح للاتصال الآن', body: 'عميل رد إنه متاح دلوقتي — اتصل بيه فورًا.' }
     default:
       return { title: 'رفيق CRM', body: 'لديك إشعار جديد.' }
   }
