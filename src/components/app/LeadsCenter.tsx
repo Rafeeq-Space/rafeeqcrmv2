@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy } from 'lucide-react'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy, FilterX } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits, phoneMatches } from '@/lib/utils'
@@ -423,6 +423,29 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
     return counts
   }, [scoped])
 
+  // Whether any filter differs from "show everything" — drives whether the
+  // reset button appears at all, rather than cluttering the toolbar with a
+  // no-op control when nothing is actually filtered.
+  const hasActiveFilters =
+    search !== '' || period !== 'all' || status !== 'all' || subStatus !== 'all' ||
+    campaign !== 'all' || team !== 'all' || member !== 'all' || source !== 'all' ||
+    assignedToMe || sharedWithMeOnly
+
+  function resetFilters() {
+    setSearch('')
+    setPeriod('all')
+    setCustomFrom('')
+    setCustomTo('')
+    setStatus('all')
+    setSubStatus('all')
+    setCampaign('all')
+    setTeam('all')
+    setMember('all')
+    setSource('all')
+    setAssignedToMe(false)
+    setSharedWithMeOnly(false)
+  }
+
   return (
     <div className="space-y-6">
       {/* Page-level search + period quick-filter — controls everything below,
@@ -537,6 +560,11 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
               <Share2 size={14} /> مشارك معي
             </button>
           </div>
+        )}
+        {hasActiveFilters && (
+          <button type="button" onClick={resetFilters} className="btn btn-outline !py-1.5 !px-3 text-sm flex items-center gap-1.5">
+            <FilterX size={14} /> إعادة تعيين الفلاتر
+          </button>
         )}
         <span className="text-sm text-muted2">{filtered.length} عميل محتمل</span>
 
