@@ -49,19 +49,29 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { apiToken?: string; phoneNumberId?: string }
+  let body: { apiToken?: string; phoneNumberId?: string; missedCallWorkflowUrl?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const phoneNumberId = (body.phoneNumberId || '').trim()
-  const updates: Record<string, unknown> = {
-    rafeeqsocial_phone_number_id: phoneNumberId || null,
+  // The missed-call-workflow field is saved on its own (via a separate form),
+  // so it must not require phoneNumberId/apiToken to also be present in the
+  // same request, and vice versa — only touch the fields this call actually
+  // included.
+  const updates: Record<string, unknown> = {}
+  if (typeof body.phoneNumberId === 'string') {
+    updates.rafeeqsocial_phone_number_id = body.phoneNumberId.trim() || null
   }
   if (typeof body.apiToken === 'string' && body.apiToken.trim()) {
     updates.rafeeqsocial_api_token = body.apiToken.trim()
+  }
+  if (typeof body.missedCallWorkflowUrl === 'string') {
+    updates.rafeeqsocial_missed_call_workflow_url = body.missedCallWorkflowUrl.trim() || null
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ success: true })
   }
 
   const { error } = await adminSupabase()

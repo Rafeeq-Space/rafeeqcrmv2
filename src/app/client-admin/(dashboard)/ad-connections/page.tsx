@@ -19,7 +19,7 @@ export default async function AdConnectionsPage() {
   const [{ data: connections }, { data: campaigns }, { data: tenant }] = await Promise.all([
     supa.from('ad_connections').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
     supa.from('campaigns').select('id, name').eq('tenant_id', tenantId).order('name'),
-    supa.from('tenants').select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id, bevatel_callcenter_host, rafeeqsocial_webhook_secret, rafeeqsocial_api_token, rafeeqsocial_phone_number_id').eq('id', tenantId).single(),
+    supa.from('tenants').select('bevatel_webhook_secret, bevatel_api_token, bevatel_api_host, bevatel_account_id, bevatel_callcenter_api_key, bevatel_callcenter_workspace_id, bevatel_callcenter_host, rafeeqsocial_webhook_secret, rafeeqsocial_api_token, rafeeqsocial_phone_number_id, rafeeqsocial_missed_call_workflow_url').eq('id', tenantId).single(),
   ])
 
   // Generate the Bevatel webhook secret on first visit so the URLs are ready.
@@ -62,6 +62,7 @@ export default async function AdConnectionsPage() {
           hasToken: !!tenant?.rafeeqsocial_api_token,
           phoneNumberId: (tenant?.rafeeqsocial_phone_number_id as string) || '',
         },
+        missedCallWorkflowUrl: (tenant?.rafeeqsocial_missed_call_workflow_url as string) || '',
       }}
     />
   )

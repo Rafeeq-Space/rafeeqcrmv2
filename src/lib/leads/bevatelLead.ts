@@ -2,7 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
-import { LEAD_STATUS_LABELS } from '@/lib/utils'
+import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
@@ -817,9 +817,36 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   if (abandoned && res.leadId) {
     const { data: leadRow } = await adminSupabase()
       .from('leads')
-      .select('assigned_sales_id')
+      .select('assigned_sales_id, data')
       .eq('id', res.leadId)
       .single()
+
+    // Missed-call WhatsApp follow-up via Rafeeq Social (e.g. the "motabaa"
+    // template) — independent of the assignment logic below, so it fires
+    // whether or not the lead already has an owner. Configured per tenant
+    // (rafeeqsocial_missed_call_workflow_url); simply skipped if unset, since
+    // most tenants won't have this set up.
+    const { data: tenantRow } = await adminSupabase()
+      .from('tenants')
+      .select('rafeeqsocial_missed_call_workflow_url')
+      .eq('id', tenantId)
+      .single()
+    const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
+    if (workflowUrl) {
+      try {
+        await fetch(workflowUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: phone.replace(/\D/g, ''),
+            name: leadName((leadRow?.data as Record<string, string>) || undefined) || '',
+          }),
+        })
+      } catch (err) {
+        console.error('rafeeqsocial missed-call workflow trigger failed', err)
+      }
+    }
+
     if (leadRow && !leadRow.assigned_sales_id) {
       const rep = await assignMissedCallRoundRobin(tenantId)
       if (rep) {

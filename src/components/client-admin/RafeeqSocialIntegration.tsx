@@ -8,6 +8,7 @@ interface Props {
   tenantId: string
   secret: string
   api?: { hasToken: boolean; phoneNumberId: string }
+  missedCallWorkflowUrl?: string
 }
 
 // Copyable read-only URL field — same visual as the Bevatel one.
@@ -33,7 +34,7 @@ function CopyField({ label, url }: { label: string; url: string }) {
   )
 }
 
-export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props) {
+export default function RafeeqSocialIntegration({ tenantId, secret, api, missedCallWorkflowUrl }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -43,6 +44,11 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
   const [apiSaved, setApiSaved] = useState(false)
   const [apiError, setApiError] = useState('')
   const hasToken = api?.hasToken || false
+
+  const [workflowUrl, setWorkflowUrl] = useState(missedCallWorkflowUrl || '')
+  const [savingWorkflow, setSavingWorkflow] = useState(false)
+  const [workflowSaved, setWorkflowSaved] = useState(false)
+  const [workflowError, setWorkflowError] = useState('')
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const incomingUrl = `${origin}/api/integrations/rafeeqsocial/${tenantId}/${currentSecret}`
@@ -78,6 +84,28 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
       setApiError('تعذّر الاتصال')
     } finally {
       setSavingApi(false)
+    }
+  }
+
+  // Saved separately from the send-API credentials above — this one alone
+  // controls whether a Bevatel missed call triggers the follow-up template.
+  async function saveWorkflowUrl() {
+    setSavingWorkflow(true)
+    setWorkflowSaved(false)
+    setWorkflowError('')
+    try {
+      const res = await fetch('/api/client-admin/rafeeqsocial', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ missedCallWorkflowUrl: workflowUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setWorkflowError(data.error || 'تعذّر الحفظ'); return }
+      setWorkflowSaved(true)
+    } catch {
+      setWorkflowError('تعذّر الاتصال')
+    } finally {
+      setSavingWorkflow(false)
     }
   }
 
@@ -189,6 +217,22 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api }: Props
           </button>
           {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
           {apiError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{apiError}</span>}
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">متابعة المكالمة الفايتة تلقائيًا (اختياري)</p>
+          <p className="text-xs text-muted2 mb-2">
+            الصق هنا رابط &quot;Webhook Callback URL&quot; الخاص بـ Workflow القالب المُعتمَد (Template) اللي عايز يتبعت للعميل تلقائيًا لما مكالمة تفوت من بيفاتيل كول سنتر. سيبه فاضي لو مش عايز الميزة دي.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input dir="ltr" value={workflowUrl} onChange={e => setWorkflowUrl(e.target.value)}
+              placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[16rem]" />
+            <button onClick={saveWorkflowUrl} disabled={savingWorkflow} className="btn btn-primary text-xs !py-1.5">
+              {savingWorkflow ? 'جارٍ الحفظ...' : 'حفظ'}
+            </button>
+            {workflowSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+            {workflowError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{workflowError}</span>}
+          </div>
         </div>
 
         <div className="border-t border-border pt-3">
