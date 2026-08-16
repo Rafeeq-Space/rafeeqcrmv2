@@ -618,7 +618,12 @@ function TimelineItem({ activity: a }: { activity: LeadActivity }) {
   const when = new Date(a.created_at).toLocaleString('ar-EG')
   let text = ''
   if (a.type === 'created') text = 'تم إنشاء العميل المحتمل'
-  else if (a.type === 'status_change') text = `غيّر الحالة من "${LEAD_STATUS_LABELS[a.from_status || ''] || a.from_status || '—'}" إلى "${LEAD_STATUS_LABELS[a.to_status || ''] || a.to_status}"`
+  // Newer rows carry the precise sub-status wording in body (see the API
+  // route) — a same-bucket sub-status change resolves to identical
+  // from/to_status labels otherwise, which reads as a no-op change. Older
+  // rows have no body for this type, so they fall back to the canonical
+  // status labels exactly as before.
+  else if (a.type === 'status_change') text = a.body || `غيّر الحالة من "${LEAD_STATUS_LABELS[a.from_status || ''] || a.from_status || '—'}" إلى "${LEAD_STATUS_LABELS[a.to_status || ''] || a.to_status}"`
   else if (a.type === 'call') text = a.call_result === 'answered' ? 'أجرى مكالمة — تم الرد' : 'أجرى مكالمة — لم يتم الرد'
   else if (a.type === 'assignment') text = a.mentioned?.full_name ? `أسند العميل إلى ${a.mentioned.full_name}` : 'حدّث الإسناد'
   else if (a.type === 'share') text = a.mentioned?.full_name ? `شارك العميل مع ${a.mentioned.full_name}` : 'شارك العميل'

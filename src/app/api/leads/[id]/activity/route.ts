@@ -5,8 +5,8 @@ import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { pushSubStatusToBevatel, pushNoteToBevatel } from '@/lib/leads/bevatelSync'
 import { pushSubStatusToRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
-import { statusForSubStatus } from '@/lib/leads/subStatus'
-import { SHEET_STATUS_LABELS } from '@/lib/utils'
+import { statusForSubStatus, subStatusByKey } from '@/lib/leads/subStatus'
+import { SHEET_STATUS_LABELS, LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // If this lead came from a connected Google Sheet, push the new status into
@@ -87,6 +87,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!to) return NextResponse.json({ error: 'Missing/invalid status' }, { status: 400 })
     record.from_status = (lead as Lead).status
     record.to_status = to
+    // The timeline display (LeadProfile.tsx) falls back to from_status/
+    // to_status via LEAD_STATUS_LABELS when body is empty — fine for an old
+    // row, but useless for a same-bucket sub-status change (e.g. "تم الاتصال"
+    // → "جارى المتابعة"), where both resolve to the same canonical "تم
+    // التواصل" and the line reads as a no-op. Storing the precise sub-status
+    // wording here (there's no sub_status column on lead_activities, so this
+    // is the one place that detail survives) fixes that for every case —
+    // same-bucket or cross-bucket — uniformly, no schema change needed.
+    if (subStatus) {
+      const fromLabel = subStatusByKey((lead as Lead).sub_status)?.label
+        || LEAD_STATUS_LABELS[(lead as Lead).status] || (lead as Lead).status
+      const toLabel = subStatusByKey(subStatus)?.label || LEAD_STATUS_LABELS[to] || to
+      record.body = `غيّر الحالة الفرعية من «${fromLabel}» إلى «${toLabel}»`
+    }
     const update: Record<string, unknown> = { status: to, updated_at: new Date().toISOString() }
     if (subStatus) update.sub_status = subStatus
     await supa.from('leads').update(update).eq('id', leadId)
