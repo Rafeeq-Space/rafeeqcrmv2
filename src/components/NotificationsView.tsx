@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { AtSign, UserPlus, Share2, Bell, CheckCheck, type LucideIcon } from 'lucide-react'
+import { AtSign, UserPlus, Share2, RotateCcw, Bell, CheckCheck, type LucideIcon } from 'lucide-react'
 import { leadName } from '@/lib/utils'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 
-type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared'
+type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared' | 'lead_reengaged'
 
 interface NotificationRow {
   id: string
@@ -24,6 +24,7 @@ const TYPE_META: Record<NotificationType, { icon: LucideIcon; color: string; sof
   mention: { icon: AtSign, color: 'var(--primary)', soft: 'var(--primary-soft)' },
   lead_assigned: { icon: UserPlus, color: 'var(--info, #3b82f6)', soft: 'var(--info-soft, rgba(59,130,246,0.12))' },
   lead_shared: { icon: Share2, color: 'var(--warning)', soft: 'var(--warning-soft)' },
+  lead_reengaged: { icon: RotateCcw, color: 'var(--danger, #dc2626)', soft: 'var(--danger-soft, rgba(220,38,38,0.12))' },
 }
 
 function buildMessage(n: NotificationRow): string {
@@ -36,6 +37,8 @@ function buildMessage(n: NotificationRow): string {
       return `تم إسناد عميل جديد إليك: ${lead}`
     case 'lead_shared':
       return `${actor} شارك معك العميل ${lead}`
+    case 'lead_reengaged':
+      return `العميل ${lead} كان غير مؤهل وعاد للتواصل مرة أخرى`
     default:
       return 'إشعار جديد'
   }

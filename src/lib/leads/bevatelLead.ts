@@ -1,7 +1,8 @@
 import { adminSupabase } from '@/lib/supabase/admin'
-import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel } from '@/lib/leads/subStatus'
+import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
+import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
@@ -227,7 +228,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // owner) can still be handed to whoever actually engages with it below.
   const { data: existing } = await supa
     .from('leads')
-    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, assigned_sales:profiles!assigned_sales_id(role)')
+    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, status, sub_status, assigned_sales:profiles!assigned_sales_id(role)')
     .eq('tenant_id', tenantId)
     .eq('phone_key', key)
     .order('created_at', { ascending: true })
@@ -365,7 +366,47 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     // Deliberately skipped for a 23505 duplicate: a re-sent webhook for a
     // message we already logged must not resurface the lead.
     if (logged) {
-      await supa.from('leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId)
+      const leadUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+      // A "lost" customer sending a new message/call is a real re-engagement
+      // signal — previously handled in total silence (status stayed "غير
+      // مؤهل" forever, nobody was told). Move it to "جارى المتابعة" and alert
+      // whoever owns it. Gated on `existing` (never true for a lead just
+      // created above, or one adopted via the 23505 race — neither can
+      // already be "lost").
+      const reengaged = existing?.status === 'lost'
+      if (reengaged) {
+        leadUpdate.status = 'contacted'
+        leadUpdate.sub_status = 'following_up'
+      }
+      await supa.from('leads').update(leadUpdate).eq('id', leadId)
+
+      if (reengaged) {
+        const fromLabel = subStatusByKey(existing?.sub_status)?.label || LEAD_STATUS_LABELS.lost
+        const toLabel = subStatusByKey('following_up')?.label || LEAD_STATUS_LABELS.contacted
+        await supa.from('lead_activities').insert({
+          tenant_id: tenantId,
+          lead_id: leadId,
+          actor_id: null,
+          type: 'status_change',
+          from_status: 'lost',
+          to_status: 'contacted',
+          body: `عاد العميل للتواصل بعد أن كان "${fromLabel}" — تم تحويل الحالة تلقائيًا إلى "${toLabel}"`,
+        })
+        // Use the FINAL owner, not the pre-reassignment one — this same call
+        // can reassign the lead above (e.g. it was sitting on the account
+        // owner as a fallback) before reaching here.
+        const currentAssigneeId = assigned && agent ? agent.id : existingAssignedId
+        if (currentAssigneeId) {
+          await createNotification(supa, {
+            tenantId,
+            recipientId: currentAssigneeId,
+            actorId: null,
+            type: 'lead_reengaged',
+            leadId,
+          })
+        }
+      }
     }
   }
 

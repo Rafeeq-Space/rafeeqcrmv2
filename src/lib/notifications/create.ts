@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared'
+export type NotificationType = 'mention' | 'lead_assigned' | 'lead_shared' | 'lead_reengaged'
 
 // Inserts a notification row. Skips self-notifications (actor === recipient) and
 // missing recipients. Failures are logged, never thrown — a notification must

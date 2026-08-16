@@ -35,6 +35,8 @@ function describe(type: NotificationType): { title: string; body: string } {
       return { title: 'تم مشاركة عميل معك', body: 'شارك أحد الزملاء عميلاً محتملاً معك.' }
     case 'mention':
       return { title: 'تم ذكرك في تعليق', body: 'ذكرك أحد الزملاء في تعليق على عميل محتمل.' }
+    case 'lead_reengaged':
+      return { title: 'عميل غير مؤهل عاد للتواصل', body: 'عميل كان مصنّفًا "غير مؤهل" تواصل معك مرة أخرى — اضغط للمتابعة.' }
     default:
       return { title: 'رفيق CRM', body: 'لديك إشعار جديد.' }
   }
