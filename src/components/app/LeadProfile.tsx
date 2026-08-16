@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -15,7 +15,7 @@ import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPh
 import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
 import { useToast } from '@/components/ToastProvider'
 
-interface Option { id: string; name: string }
+interface Option { id: string; name: string; team_id?: string | null }
 
 interface Props {
   lead: Lead
@@ -536,6 +536,24 @@ function AssignForm({ members, teams, lead, busy, onSubmit, canPickTeam = true }
 }) {
   const [sales, setSales] = useState(canPickTeam ? (lead.assigned_sales_id || '') : '')
   const [team, setTeam] = useState(lead.assigned_team_id || '')
+
+  // Narrows the employee list to the selected team — same rule as the leads
+  // center's own team/member filter (LeadsCenter.tsx): falls back to the full
+  // list if no member actually carries that team_id (e.g. legacy data with no
+  // team_id set), rather than silently showing an empty dropdown.
+  const visibleMembers = !canPickTeam || !team
+    ? members
+    : (() => {
+        const scopedToTeam = members.filter(m => m.team_id === team)
+        return scopedToTeam.length ? scopedToTeam : members
+      })()
+
+  // A team switch can leave the previously-picked employee outside the new
+  // team — clear it instead of silently submitting a mismatched pair.
+  useEffect(() => {
+    if (sales && !visibleMembers.some(m => m.id === sales)) setSales('')
+  }, [visibleMembers, sales])
+
   return (
     <div className="mt-3 p-3 rounded-xl bg-surface2 border border-border space-y-3">
       {canPickTeam && (
@@ -551,7 +569,7 @@ function AssignForm({ members, teams, lead, busy, onSubmit, canPickTeam = true }
         <span className="block text-muted2 mb-1">{canPickTeam ? 'موظف المبيعات' : 'تحويل إلى'}</span>
         <select className="input" value={sales} onChange={e => setSales(e.target.value)}>
           <option value="">{canPickTeam ? 'غير مُسنَد' : 'اختر زميلاً'}</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {visibleMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
       </label>
       <button

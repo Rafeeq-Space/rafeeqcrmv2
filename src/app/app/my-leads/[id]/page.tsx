@@ -36,7 +36,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
   // Sales can mention teammates in comments (task hand-off) but can't reassign.
   const { data: members } = await supa
     .from('profiles')
-    .select('id, full_name')
+    .select('id, full_name, team_id')
     .eq('tenant_id', viewer.tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
 
@@ -60,7 +60,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
       backPath="/app/my-leads"
       tenantId={viewer.tenantId}
       viewerId={viewer.id}
-      members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
+      members={(members || []).map(m => ({ id: m.id, name: m.full_name, team_id: m.team_id }))}
       bevatel={bevatel}
       rafeeqSocialChatUrl={rsChatUrl}
       conversionEvents={(conversionEvents || []) as LeadEvent[]}
