@@ -869,6 +869,22 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       .single()
     const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
     if (workflowUrl) {
+      // Push the CRM's own assignment decision to Rafeeq Social FIRST, and
+      // wait for it — before the workflow below ever creates/touches a
+      // subscriber for this phone number over there. Confirmed live this
+      // order matters: triggering the template first let Rafeeq Social's own
+      // logic assign the fresh subscriber to someone else entirely, since
+      // nothing had told it who the CRM already decided on. Doing the push
+      // first means Rafeeq Social already has the right answer the moment
+      // that subscriber is created.
+      if (finalAssigneeId) {
+        try {
+          await pushAssignmentCore(tenantId, phone, finalAssigneeId)
+        } catch (err) {
+          console.error('pushAssignmentCore (missed-call follow-up) failed', err)
+        }
+      }
+
       try {
         await fetch(workflowUrl, {
           method: 'POST',
@@ -880,19 +896,6 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
         })
       } catch (err) {
         console.error('rafeeqsocial missed-call workflow trigger failed', err)
-      }
-
-      // Triggering the workflow creates/touches a Rafeeq Social subscriber
-      // for this phone number, which Rafeeq Social's own logic can then
-      // assign to someone on its own (confirmed live: a lead the CRM had
-      // just assigned to one rep via round-robin above showed a completely
-      // different assignee in Rafeeq Social minutes later). Push our own
-      // decision immediately so Rafeeq Social starts from the same answer
-      // instead of racing its own assignment against ours.
-      if (finalAssigneeId) {
-        pushAssignmentCore(tenantId, phone, finalAssigneeId).catch(err =>
-          console.error('pushAssignmentCore (missed-call follow-up) failed', err)
-        )
       }
     }
   }
