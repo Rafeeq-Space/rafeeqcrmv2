@@ -6,7 +6,7 @@ import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Tab
 import type { Lead, LeadStatus } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits, phoneMatches } from '@/lib/utils'
-import { SUB_STATUS_GROUPS, SUB_STATUSES, subStatusByKey, STATUS_DOT } from '@/lib/leads/subStatus'
+import { SUB_STATUS_GROUPS, SUB_STATUSES, subStatusByKey, STATUS_DOT, displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
 import { useToast } from '@/components/ToastProvider'
 import AddLeadModal from './AddLeadModal'
@@ -35,14 +35,18 @@ interface Props {
 }
 
 // Overview stat cards (also act as quick status filters) shown at the top of
-// the leads center. Colors mirror the status badge palette.
+// the leads center. Colors mirror the status badge palette. 'contacted' and
+// 'pending' both draw from the canonical 'contacted' status — split display-
+// only via displayBucketForLead (see subStatus.ts), never touching the real
+// `status` column.
 const STAT_CARDS: { key: string; label: string; color: string }[] = [
   { key: 'all', label: 'إجمالي العملاء', color: 'var(--foreground)' },
-  { key: 'new', label: 'جديد', color: 'var(--primary)' },
-  { key: 'contacted', label: 'جاري التواصل', color: 'var(--warning)' },
-  { key: 'qualified', label: 'مؤهل', color: 'var(--purple)' },
-  { key: 'converted', label: 'تم التحويل', color: 'var(--success)' },
-  { key: 'lost', label: 'غير مؤهل', color: 'var(--danger)' },
+  { key: 'new', label: 'جديد', color: DISPLAY_BUCKET_COLORS.new },
+  { key: 'contacted', label: DISPLAY_BUCKET_LABELS.in_progress, color: DISPLAY_BUCKET_COLORS.in_progress },
+  { key: 'pending', label: DISPLAY_BUCKET_LABELS.pending, color: DISPLAY_BUCKET_COLORS.pending },
+  { key: 'qualified', label: 'مؤهل', color: DISPLAY_BUCKET_COLORS.qualified },
+  { key: 'converted', label: 'تم التحويل', color: DISPLAY_BUCKET_COLORS.converted },
+  { key: 'lost', label: 'غير مؤهل', color: DISPLAY_BUCKET_COLORS.lost },
 ]
 
 // Period quick-filter over the lead creation date.
@@ -251,7 +255,7 @@ function StatusCell({ currentKey, currentStatus, saving, onPick }: {
 // per-status keys — 'in_progress' mirrors LeadStats.inProgress (contacted +
 // qualified combined), matching the "قيد المتابعة" stat card on the profile
 // page, which has no single matching `leads.status` value of its own.
-const VALID_STATUS_PARAMS = new Set(['all', 'new', 'contacted', 'qualified', 'converted', 'lost', 'in_progress'])
+const VALID_STATUS_PARAMS = new Set(['all', 'new', 'contacted', 'pending', 'qualified', 'converted', 'lost', 'in_progress'])
 const VALID_PERIOD_PARAMS = new Set(['all', 'day', 'week', 'month', 'thisMonth'])
 
 // useSearchParams() (for the profile-page deep-link support below) requires
@@ -447,9 +451,15 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
 
   const filtered = useMemo(
     () => scoped.filter(l => {
+      // 'contacted' and 'pending' are both display-only splits of the same
+      // canonical 'contacted' status (see displayBucketForLead) — never a
+      // second `l.status === status` match, since that column only ever
+      // holds 'contacted'.
       const statusMatches =
         status === 'all' ? true :
         status === 'in_progress' ? (l.status === 'contacted' || l.status === 'qualified') :
+        status === 'contacted' ? displayBucketForLead(l.status, l.sub_status) === 'in_progress' :
+        status === 'pending' ? displayBucketForLead(l.status, l.sub_status) === 'pending' :
         l.status === status
       // "جديد" (new_lead) is one of three sub-statuses under the 'new' bucket
       // (new_lead / first_inbound_call / first_inbound_message) — only leads
@@ -490,9 +500,14 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   // Lead counts per status — shown as overview cards that double as quick
   // filters. Computed from the scoped set so they respect the active filters.
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: scoped.length, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 }
+    const counts: Record<string, number> = { all: scoped.length, new: 0, contacted: 0, pending: 0, qualified: 0, converted: 0, lost: 0 }
     for (const l of scoped) {
-      if (l.status && counts[l.status] !== undefined) counts[l.status]++
+      if (l.status === 'contacted') {
+        const bucket = displayBucketForLead(l.status, l.sub_status)
+        counts[bucket === 'pending' ? 'pending' : 'contacted']++
+      } else if (l.status && counts[l.status] !== undefined) {
+        counts[l.status]++
+      }
     }
     return counts
   }, [scoped])

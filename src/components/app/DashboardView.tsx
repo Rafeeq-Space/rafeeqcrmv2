@@ -8,8 +8,9 @@ import {
   CheckCircle2, Clock, XCircle, Megaphone, Plus,
 } from 'lucide-react'
 import type { AdConnection, Campaign, Form, Lead, Employee, TeamWithMembers } from '@/lib/types'
-import { LEAD_STATUS_LABELS, SOURCE_LABELS } from '@/lib/utils'
+import { SOURCE_LABELS } from '@/lib/utils'
 import { computeLeadStats } from '@/lib/leads/stats'
+import { displayBucketForLead, DISPLAY_BUCKET_LABELS } from '@/lib/leads/subStatus'
 import CampaignsList from './CampaignsList'
 import LeadsTable from './LeadsTable'
 import LeadStatCards from './LeadStatCards'
@@ -37,7 +38,7 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  new: '#fb8a74', contacted: '#fbbf24', qualified: '#a78bfa', converted: '#65d38c', lost: '#ef6363',
+  new: '#fb8a74', in_progress: '#fbbf24', pending: '#94a3b8', qualified: '#a78bfa', converted: '#65d38c', lost: '#ef6363',
 }
 const STAT_COLORS: Record<string, string> = {
   blue: 'var(--primary)', purple: 'var(--purple)', warning: 'var(--warning)', green: 'var(--success)', danger: 'var(--danger)', sky: '#ff9b83',
@@ -204,9 +205,16 @@ export default function DashboardView({
     color: isManager ? 'purple' : 'danger', href: '/client-admin/leads',
   }
 
+  // Bucketed the same way as the leads-center overview cards (see
+  // displayBucketForLead) — 'contacted' splits display-only into "جاري
+  // التواصل" vs "معلق", never touching the real `status` column.
   const statusData = Object.entries(
-    filteredLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name: LEAD_STATUS_LABELS[name] || name, value, status: name }))
+    filteredLeads.reduce((acc, l) => {
+      const bucket = displayBucketForLead(l.status, l.sub_status)
+      acc[bucket] = (acc[bucket] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  ).map(([name, value]) => ({ name: DISPLAY_BUCKET_LABELS[name as keyof typeof DISPLAY_BUCKET_LABELS] || name, value, status: name }))
 
   const sourceData = Object.entries(
     filteredLeads.reduce((acc, l) => { const src = l.source || 'direct'; acc[src] = (acc[src] || 0) + 1; return acc }, {} as Record<string, number>)

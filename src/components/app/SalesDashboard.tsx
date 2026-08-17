@@ -2,7 +2,7 @@
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import type { Lead } from '@/lib/types'
-import { LEAD_STATUS_LABELS } from '@/lib/utils'
+import { displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS, type DisplayBucket } from '@/lib/leads/subStatus'
 import DateTimePrayer from '@/components/DateTimePrayer'
 import LeadStatCards from '@/components/app/LeadStatCards'
 
@@ -39,11 +39,14 @@ export default function SalesDashboard({ leads, fullName, avgResponseMs = null }
     }
   })
 
-  // Status breakdown for all leads
-  const statusBreakdown = ['new', 'contacted', 'qualified', 'converted', 'lost'].map(status => ({
-    status,
-    label: LEAD_STATUS_LABELS[status] || status,
-    count: monthLeads.filter(l => l.status === status).length,
+  // Status breakdown for all leads — bucketed the same way as the leads-
+  // center overview cards (see displayBucketForLead): 'contacted' splits
+  // display-only into "جاري التواصل" vs "معلق", never touching `status`.
+  const bucketKeys: DisplayBucket[] = ['new', 'in_progress', 'pending', 'qualified', 'converted', 'lost']
+  const statusBreakdown = bucketKeys.map(bucket => ({
+    status: bucket,
+    label: DISPLAY_BUCKET_LABELS[bucket],
+    count: monthLeads.filter(l => displayBucketForLead(l.status, l.sub_status) === bucket).length,
   })).filter(s => s.count > 0)
 
   const tooltipStyle = {
@@ -90,10 +93,6 @@ export default function SalesDashboard({ leads, fullName, avgResponseMs = null }
             <div className="space-y-3">
               {statusBreakdown.map(({ status, label, count }) => {
                 const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0
-                const colors: Record<string, string> = {
-                  new: 'var(--primary)', contacted: 'var(--warning)',
-                  qualified: 'var(--purple)', converted: 'var(--success)', lost: 'var(--danger)',
-                }
                 return (
                   <div key={status}>
                     <div className="flex justify-between text-sm mb-1">
@@ -101,7 +100,7 @@ export default function SalesDashboard({ leads, fullName, avgResponseMs = null }
                       <span className="text-foreground font-bold">{count} <span className="text-muted font-normal">({pct}%)</span></span>
                     </div>
                     <div className="bg-surface2 rounded-full h-2 border border-border overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: colors[status] || 'var(--muted)' }} />
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: DISPLAY_BUCKET_COLORS[status] || 'var(--muted)' }} />
                     </div>
                   </div>
                 )

@@ -1,10 +1,11 @@
 'use client'
 
-import { Users, UserPlus, MessageCircle, UserCheck, CheckCircle2, UserX, TrendingUp, Timer } from 'lucide-react'
+import { Users, UserPlus, MessageCircle, Hourglass, UserCheck, CheckCircle2, UserX, TrendingUp, Timer } from 'lucide-react'
 import type { Lead } from '@/lib/types'
+import { displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS } from '@/lib/leads/subStatus'
 
 interface Props {
-  leads: Pick<Lead, 'status' | 'created_at'>[]
+  leads: Pick<Lead, 'status' | 'sub_status' | 'created_at'>[]
   avgResponseMs: number | null
   // Optional link the count cards navigate to (e.g. the leads center).
   href?: string
@@ -23,6 +24,11 @@ function fmtDuration(ms: number | null): string {
 
 export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
   const count = (s: string) => leads.filter(l => l.status === s).length
+  // 'contacted' split display-only into "جاري التواصل" (actively worked) vs
+  // "معلق" (stalled) — see displayBucketForLead in subStatus.ts. The real
+  // `status` column stays a single 'contacted' value either way.
+  const countBucket = (bucket: 'in_progress' | 'pending') =>
+    leads.filter(l => l.status === 'contacted' && displayBucketForLead(l.status, l.sub_status) === bucket).length
 
   // Completion rate this (calendar) month: sold ÷ total, for leads created this month.
   const now = new Date()
@@ -33,11 +39,12 @@ export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
 
   const cards = [
     { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)' },
-    { label: 'عملاء جدد', value: count('new'), icon: UserPlus, color: 'var(--primary)', soft: 'var(--primary-soft)' },
-    { label: 'جاري التواصل', value: count('contacted'), icon: MessageCircle, color: 'var(--warning)', soft: 'var(--warning-soft)' },
-    { label: 'عميل مؤهل', value: count('qualified'), icon: UserCheck, color: 'var(--purple)', soft: 'var(--purple-soft)' },
-    { label: 'تم البيع', value: count('converted'), icon: CheckCircle2, color: 'var(--success)', soft: 'var(--success-soft)' },
-    { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: 'var(--danger)', soft: 'var(--danger-soft)' },
+    { label: 'عملاء جدد', value: count('new'), icon: UserPlus, color: DISPLAY_BUCKET_COLORS.new, soft: 'var(--primary-soft)' },
+    { label: DISPLAY_BUCKET_LABELS.in_progress, value: countBucket('in_progress'), icon: MessageCircle, color: DISPLAY_BUCKET_COLORS.in_progress, soft: 'var(--warning-soft)' },
+    { label: DISPLAY_BUCKET_LABELS.pending, value: countBucket('pending'), icon: Hourglass, color: DISPLAY_BUCKET_COLORS.pending, soft: 'var(--surface2)' },
+    { label: 'عميل مؤهل', value: count('qualified'), icon: UserCheck, color: DISPLAY_BUCKET_COLORS.qualified, soft: 'var(--purple-soft)' },
+    { label: 'تم البيع', value: count('converted'), icon: CheckCircle2, color: DISPLAY_BUCKET_COLORS.converted, soft: 'var(--success-soft)' },
+    { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: DISPLAY_BUCKET_COLORS.lost, soft: 'var(--danger-soft)' },
     { label: 'نسبة الإكمال هذا الشهر', value: `${completionRate}%`, icon: TrendingUp, color: 'var(--success)', soft: 'var(--success-soft)' },
     { label: 'معدل سرعة الرد', value: fmtDuration(avgResponseMs), icon: Timer, color: 'var(--primary)', soft: 'var(--primary-soft)' },
   ]
