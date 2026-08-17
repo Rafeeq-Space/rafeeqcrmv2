@@ -258,6 +258,46 @@ function StatusCell({ currentKey, currentStatus, saving, onPick }: {
 const VALID_STATUS_PARAMS = new Set(['all', 'new', 'contacted', 'pending', 'qualified', 'converted', 'lost', 'in_progress'])
 const VALID_PERIOD_PARAMS = new Set(['all', 'day', 'week', 'month', 'thisMonth'])
 
+// Remembers every filter across a "leave the page and come back" round trip
+// (e.g. opening a lead then hitting back) — sessionStorage rather than the
+// URL, since a plain `router.push` back to this page carries no query string
+// of its own. Keyed by basePath since /app/my-leads and /client-admin/leads
+// are separate instances of this same component.
+//
+// A `?status=` deep link (from a home-page stat card — see LeadStatCards.tsx/
+// ProfileView.tsx) means the opposite: a deliberate "show me exactly this"
+// intent, so it's treated as overriding every remembered filter rather than
+// merging with them — reading storage is skipped entirely in that case.
+interface StoredLeadFilters {
+  status?: string
+  subStatus?: string
+  campaign?: string
+  team?: string
+  member?: string
+  source?: string
+  assignedToMe?: boolean
+  sharedWithMeOnly?: boolean
+  period?: string
+  customFrom?: string
+  customTo?: string
+  search?: string
+  view?: 'cards' | 'table'
+}
+
+function storedFiltersKey(basePath: string): string {
+  return `leadsCenterFilters:${basePath}`
+}
+
+function readStoredFilters(basePath: string): StoredLeadFilters {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = sessionStorage.getItem(storedFiltersKey(basePath))
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
 // useSearchParams() (for the profile-page deep-link support below) requires
 // a Suspense boundary — wrapped here so every existing call site doesn't
 // need to add one itself.
@@ -272,28 +312,56 @@ export default function LeadsCenter(props: Props) {
 function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], teams = [], members = [], bevatel = null, rafeeqSocialBotId = null, currentUserId, sharedWithMeIds = [] }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [view, setView] = useState<'cards' | 'table'>('table')
-  // Deep-link support (e.g. from the profile page's personal stat cards):
-  // ?status=new&mine=1&period=all pre-applies those filters on first render.
+
+  // Deep-link support (e.g. from a home-page stat card):
+  // ?status=new&mine=1&period=all pre-applies those filters on first render
+  // and takes over from any remembered filters entirely (see the comment on
+  // readStoredFilters above) — otherwise, returning to this page (e.g. back
+  // from a lead profile) restores whatever was last selected.
+  const hasDeepLink = searchParams.get('status') != null
+  const stored = hasDeepLink ? {} : readStoredFilters(basePath)
+
+  const [view, setView] = useState<'cards' | 'table'>(() => stored.view || 'table')
   const [status, setStatus] = useState(() => {
     const s = searchParams.get('status')
-    return s && VALID_STATUS_PARAMS.has(s) ? s : 'all'
+    if (s && VALID_STATUS_PARAMS.has(s)) return s
+    if (stored.status && VALID_STATUS_PARAMS.has(stored.status)) return stored.status
+    return 'all'
   })
-  const [subStatus, setSubStatus] = useState('all')
-  const [campaign, setCampaign] = useState('all')
-  const [team, setTeam] = useState('all')
-  const [member, setMember] = useState('all')
-  const [source, setSource] = useState('all')
-  const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get('mine') === '1')
-  const [sharedWithMeOnly, setSharedWithMeOnly] = useState(false)
+  const [subStatus, setSubStatus] = useState(() => stored.subStatus || 'all')
+  const [campaign, setCampaign] = useState(() => stored.campaign || 'all')
+  const [team, setTeam] = useState(() => stored.team || 'all')
+  const [member, setMember] = useState(() => stored.member || 'all')
+  const [source, setSource] = useState(() => stored.source || 'all')
+  const [assignedToMe, setAssignedToMe] = useState(() => {
+    const m = searchParams.get('mine')
+    return m != null ? m === '1' : (stored.assignedToMe ?? false)
+  })
+  const [sharedWithMeOnly, setSharedWithMeOnly] = useState(() => stored.sharedWithMeOnly ?? false)
   const [period, setPeriod] = useState<PeriodKey>(() => {
     const p = searchParams.get('period')
-    return p && VALID_PERIOD_PARAMS.has(p) ? (p as PeriodKey) : 'day'
+    if (p && VALID_PERIOD_PARAMS.has(p)) return p as PeriodKey
+    if (stored.period && VALID_PERIOD_PARAMS.has(stored.period)) return stored.period as PeriodKey
+    return 'day'
   })
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
-  const [search, setSearch] = useState('')
+  const [customFrom, setCustomFrom] = useState(() => stored.customFrom || '')
+  const [customTo, setCustomTo] = useState(() => stored.customTo || '')
+  const [search, setSearch] = useState(() => stored.search || '')
   const [showAddLead, setShowAddLead] = useState(false)
+
+  // Persist every filter (including the cards/table toggle) whenever any of
+  // them changes, so the initializers above can restore them on return.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      sessionStorage.setItem(storedFiltersKey(basePath), JSON.stringify({
+        status, subStatus, campaign, team, member, source,
+        assignedToMe, sharedWithMeOnly, period, customFrom, customTo, search, view,
+      } satisfies StoredLeadFilters))
+    } catch {
+      // sessionStorage unavailable (private mode, quota) — filters just won't persist.
+    }
+  }, [basePath, status, subStatus, campaign, team, member, source, assignedToMe, sharedWithMeOnly, period, customFrom, customTo, search, view])
 
   // Optimistic status overrides, keyed by lead id — `leads` is server-fetched
   // and handed down as a prop (see the comment near fetchVisibleLeads below),

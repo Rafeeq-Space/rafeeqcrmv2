@@ -186,9 +186,9 @@ export default function DashboardView({
   // business seeing headcount or team structure.
   const cards = isManager
     ? [
-        { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green', href: '/client-admin/leads' },
-        { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning', href: '/client-admin/leads' },
-        { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger', href: '/client-admin/leads' },
+        { label: 'مكتملة', value: stats.converted, icon: CheckCircle2, color: 'green', href: '/client-admin/leads?status=converted&period=all' },
+        { label: 'قيد المتابعة', value: stats.inProgress, icon: Clock, color: 'warning', href: '/client-admin/leads?status=in_progress&period=all' },
+        { label: 'مرفوضة', value: stats.lost, icon: XCircle, color: 'danger', href: '/client-admin/leads?status=lost&period=all' },
         { label: 'أعضاء الفريق', value: employeesCount ?? members.length, icon: UserCheck, color: 'sky', href: '/client-admin/teams' },
       ]
     : [

@@ -37,21 +37,24 @@ export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
   const monthConverted = monthLeads.filter(l => l.status === 'converted').length
   const completionRate = monthLeads.length > 0 ? Math.round((monthConverted / monthLeads.length) * 100) : 0
 
+  // statusParam feeds the leads center's own `?status=` deep-link support
+  // (see LeadsCenter.tsx) — omitted on the two cards that aren't a single
+  // filterable status (a ratio, and a duration).
   const cards = [
-    { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)' },
-    { label: 'عملاء جدد', value: count('new'), icon: UserPlus, color: DISPLAY_BUCKET_COLORS.new, soft: 'var(--primary-soft)' },
-    { label: DISPLAY_BUCKET_LABELS.in_progress, value: countBucket('in_progress'), icon: MessageCircle, color: DISPLAY_BUCKET_COLORS.in_progress, soft: 'var(--warning-soft)' },
-    { label: DISPLAY_BUCKET_LABELS.pending, value: countBucket('pending'), icon: Hourglass, color: DISPLAY_BUCKET_COLORS.pending, soft: 'var(--surface2)' },
-    { label: 'عميل مؤهل', value: count('qualified'), icon: UserCheck, color: DISPLAY_BUCKET_COLORS.qualified, soft: 'var(--purple-soft)' },
-    { label: 'تم البيع', value: count('converted'), icon: CheckCircle2, color: DISPLAY_BUCKET_COLORS.converted, soft: 'var(--success-soft)' },
-    { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: DISPLAY_BUCKET_COLORS.lost, soft: 'var(--danger-soft)' },
-    { label: 'نسبة الإكمال هذا الشهر', value: `${completionRate}%`, icon: TrendingUp, color: 'var(--success)', soft: 'var(--success-soft)' },
-    { label: 'معدل سرعة الرد', value: fmtDuration(avgResponseMs), icon: Timer, color: 'var(--primary)', soft: 'var(--primary-soft)' },
+    { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: 'all' },
+    { label: 'عملاء جدد', value: count('new'), icon: UserPlus, color: DISPLAY_BUCKET_COLORS.new, soft: 'var(--primary-soft)', statusParam: 'new' },
+    { label: DISPLAY_BUCKET_LABELS.in_progress, value: countBucket('in_progress'), icon: MessageCircle, color: DISPLAY_BUCKET_COLORS.in_progress, soft: 'var(--warning-soft)', statusParam: 'contacted' },
+    { label: DISPLAY_BUCKET_LABELS.pending, value: countBucket('pending'), icon: Hourglass, color: DISPLAY_BUCKET_COLORS.pending, soft: 'var(--surface2)', statusParam: 'pending' },
+    { label: 'عميل مؤهل', value: count('qualified'), icon: UserCheck, color: DISPLAY_BUCKET_COLORS.qualified, soft: 'var(--purple-soft)', statusParam: 'qualified' },
+    { label: 'تم البيع', value: count('converted'), icon: CheckCircle2, color: DISPLAY_BUCKET_COLORS.converted, soft: 'var(--success-soft)', statusParam: 'converted' },
+    { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: DISPLAY_BUCKET_COLORS.lost, soft: 'var(--danger-soft)', statusParam: 'lost' },
+    { label: 'نسبة الإكمال هذا الشهر', value: `${completionRate}%`, icon: TrendingUp, color: 'var(--success)', soft: 'var(--success-soft)', statusParam: null },
+    { label: 'معدل سرعة الرد', value: fmtDuration(avgResponseMs), icon: Timer, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: null },
   ]
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map(({ label, value, icon: Icon, color, soft }) => {
+      {cards.map(({ label, value, icon: Icon, color, soft, statusParam }) => {
         const body = (
           <>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: soft }}>
@@ -61,8 +64,9 @@ export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
             <p className="text-sm text-muted mt-0.5">{label}</p>
           </>
         )
-        return href ? (
-          <a key={label} href={href} className="card card-hover p-5 transition hover:border-primary">{body}</a>
+        const cardHref = href && statusParam ? `${href}?status=${statusParam}&period=all` : href
+        return cardHref ? (
+          <a key={label} href={cardHref} className="card card-hover p-5 transition hover:border-primary">{body}</a>
         ) : (
           <div key={label} className="card p-5">{body}</div>
         )
