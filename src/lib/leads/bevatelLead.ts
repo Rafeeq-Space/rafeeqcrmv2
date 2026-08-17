@@ -2,6 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
+import { pushAssignmentCore } from '@/lib/leads/rafeeqSocialSend'
 import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
@@ -821,31 +822,10 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       .eq('id', res.leadId)
       .single()
 
-    // Missed-call WhatsApp follow-up via Rafeeq Social (e.g. the "motabaa"
-    // template) — independent of the assignment logic below, so it fires
-    // whether or not the lead already has an owner. Configured per tenant
-    // (rafeeqsocial_missed_call_workflow_url); simply skipped if unset, since
-    // most tenants won't have this set up.
-    const { data: tenantRow } = await adminSupabase()
-      .from('tenants')
-      .select('rafeeqsocial_missed_call_workflow_url')
-      .eq('id', tenantId)
-      .single()
-    const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
-    if (workflowUrl) {
-      try {
-        await fetch(workflowUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: phone.replace(/\D/g, ''),
-            name: leadName((leadRow?.data as Record<string, string>) || undefined) || '',
-          }),
-        })
-      } catch (err) {
-        console.error('rafeeqsocial missed-call workflow trigger failed', err)
-      }
-    }
+    // Tracks who actually owns the lead by the end of this block — starts as
+    // whatever it already was, and gets updated below if round-robin claims
+    // it. Used to push the *final* decision to Rafeeq Social afterward.
+    let finalAssigneeId: string | null = leadRow?.assigned_sales_id ?? null
 
     if (leadRow && !leadRow.assigned_sales_id) {
       const rep = await assignMissedCallRoundRobin(tenantId)
@@ -872,7 +852,47 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
             type: 'lead_assigned',
             leadId: res.leadId,
           })
+          finalAssigneeId = rep.id
         }
+      }
+    }
+
+    // Missed-call WhatsApp follow-up via Rafeeq Social (e.g. the "motabaa"
+    // template) — fires regardless of whether the lead already had an owner
+    // or was just claimed above. Configured per tenant
+    // (rafeeqsocial_missed_call_workflow_url); simply skipped if unset, since
+    // most tenants won't have this set up.
+    const { data: tenantRow } = await adminSupabase()
+      .from('tenants')
+      .select('rafeeqsocial_missed_call_workflow_url')
+      .eq('id', tenantId)
+      .single()
+    const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
+    if (workflowUrl) {
+      try {
+        await fetch(workflowUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: phone.replace(/\D/g, ''),
+            name: leadName((leadRow?.data as Record<string, string>) || undefined) || '',
+          }),
+        })
+      } catch (err) {
+        console.error('rafeeqsocial missed-call workflow trigger failed', err)
+      }
+
+      // Triggering the workflow creates/touches a Rafeeq Social subscriber
+      // for this phone number, which Rafeeq Social's own logic can then
+      // assign to someone on its own (confirmed live: a lead the CRM had
+      // just assigned to one rep via round-robin above showed a completely
+      // different assignee in Rafeeq Social minutes later). Push our own
+      // decision immediately so Rafeeq Social starts from the same answer
+      // instead of racing its own assignment against ours.
+      if (finalAssigneeId) {
+        pushAssignmentCore(tenantId, phone, finalAssigneeId).catch(err =>
+          console.error('pushAssignmentCore (missed-call follow-up) failed', err)
+        )
       }
     }
   }

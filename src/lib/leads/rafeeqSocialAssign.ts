@@ -1,7 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { normName } from '@/lib/leads/bevatelLead'
-import { tenantRafeeqSocialCreds, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
+import { tenantRafeeqSocialCreds, pushAssignmentCore, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
 import { fetchRafeeqSocialSubscriberAnyVariant, phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 import type { Lead } from '@/lib/types'
 
@@ -47,7 +47,6 @@ import type { Lead } from '@/lib/types'
 // wait indefinitely for someone to notice and reply first.
 
 const CONVERSATION_URL = 'https://rafeeq.social/api/v1/whatsapp/get/conversation'
-const ASSIGN_URL = 'https://rafeeq.social/api/v1/whatsapp/subscriber/chat/assign-to-team-member'
 
 interface ConversationMessage {
   sender?: string
@@ -288,42 +287,6 @@ export async function syncRafeeqSocialAssignment(tenantId: string, leadId: strin
   await applyAssignment(tenantId, leadId, rr)
   await pushAssignmentCore(tenantId, phone, rr.id)
   return 'round_robin'
-}
-
-// Core write step: tell Rafeeq Social who's responsible for this phone
-// number — pushed to every plausible variant (see phoneVariants) so that if
-// Rafeeq Social is actually holding two subscriber records for the same real
-// person, both end up showing the same assignee instead of just whichever
-// one happens to be stored on the lead.
-async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<void> {
-  const creds = await tenantRafeeqSocialCreds(tenantId)
-  if (!creds) return
-
-  const { data: profile } = await adminSupabase()
-    .from('profiles')
-    .select('rafeeqsocial_team_member_id')
-    .eq('id', salesId)
-    .single()
-  const teamMemberId = (profile?.rafeeqsocial_team_member_id || '').trim()
-  if (!teamMemberId) return
-
-  for (const variant of phoneVariants(phone)) {
-    const body = new URLSearchParams({
-      apiToken: creds.apiToken,
-      phone_number_id: creds.phoneNumberId,
-      phone_number: variant,
-      team_member_id: teamMemberId,
-    })
-    try {
-      await fetch(ASSIGN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      })
-    } catch (err) {
-      console.error('pushAssigneeToRafeeqSocial failed', err)
-    }
-  }
 }
 
 // Write direction — mirrors bevatelSync's pushAssigneeToBevatel. Called

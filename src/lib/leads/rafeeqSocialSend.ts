@@ -1,4 +1,5 @@
 import { adminSupabase } from '@/lib/supabase/admin'
+import { phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 
 // ── Rafeeq Social (BotSailor) WhatsApp send API ───────────────────────────────
 //
@@ -82,6 +83,50 @@ export function buildRafeeqSocialChatUrl(botId: string | number | null | undefin
 export async function rafeeqSocialChatUrl(tenantId: string, phone: string): Promise<string | null> {
   const botId = await rafeeqSocialBotId(tenantId)
   return buildRafeeqSocialChatUrl(botId, phone)
+}
+
+const ASSIGN_URL = 'https://rafeeq.social/api/v1/whatsapp/subscriber/chat/assign-to-team-member'
+
+// Core write step: tell Rafeeq Social who's responsible for this phone
+// number — pushed to every plausible variant (see phoneVariants) so that if
+// Rafeeq Social is actually holding two subscriber records for the same real
+// person, both end up showing the same assignee instead of just whichever
+// one happens to be stored on the lead.
+//
+// Lives here (not rafeeqSocialAssign.ts, its only other caller) specifically
+// so bevatelLead.ts can call it too, for a missed call: rafeeqSocialAssign.ts
+// itself imports normName from bevatelLead.ts, and importing back from there
+// into bevatelLead.ts would create a circular module dependency. This file
+// has no dependency on bevatelLead.ts at all, so it's the safe common home.
+export async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<void> {
+  const creds = await tenantRafeeqSocialCreds(tenantId)
+  if (!creds) return
+
+  const { data: profile } = await adminSupabase()
+    .from('profiles')
+    .select('rafeeqsocial_team_member_id')
+    .eq('id', salesId)
+    .single()
+  const teamMemberId = (profile?.rafeeqsocial_team_member_id || '').trim()
+  if (!teamMemberId) return
+
+  for (const variant of phoneVariants(phone)) {
+    const body = new URLSearchParams({
+      apiToken: creds.apiToken,
+      phone_number_id: creds.phoneNumberId,
+      phone_number: variant,
+      team_member_id: teamMemberId,
+    })
+    try {
+      await fetch(ASSIGN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      })
+    } catch (err) {
+      console.error('pushAssigneeToRafeeqSocial failed', err)
+    }
+  }
 }
 
 export interface SendResult {
