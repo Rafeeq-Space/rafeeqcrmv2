@@ -126,12 +126,24 @@ export async function handleRafeeqSocialEvent(
   })
 
   if (res.leadId) {
-    syncRafeeqSocialAssignment(tenantId, res.leadId, phone).catch(err =>
-      console.error('syncRafeeqSocialAssignment failed', err)
-    )
-    syncSubStatusFromRafeeqSocial(tenantId, res.leadId, phone).catch(err =>
-      console.error('syncSubStatusFromRafeeqSocial failed', err)
-    )
+    // Awaited (not fire-and-forget) — this whole function only runs at all
+    // because the webhook route wraps it in Next's after(), which keeps the
+    // execution alive only until the promise IT was given settles. An
+    // un-awaited call here resolves that outer promise immediately (at the
+    // `return` below) while these two are still mid-flight, and the runtime
+    // is then free to freeze the instance before their API calls/DB writes
+    // land — intermittently, depending on scheduling. That silently left
+    // leads unassigned in both the CRM and Rafeeq Social (confirmed against
+    // production data), not because no assignee could be resolved, but
+    // because the resolution never got to run to completion.
+    await Promise.all([
+      syncRafeeqSocialAssignment(tenantId, res.leadId, phone).catch(err =>
+        console.error('syncRafeeqSocialAssignment failed', err)
+      ),
+      syncSubStatusFromRafeeqSocial(tenantId, res.leadId, phone).catch(err =>
+        console.error('syncSubStatusFromRafeeqSocial failed', err)
+      ),
+    ])
   }
 
   return { ok: !!res.leadId, leadId: res.leadId }
