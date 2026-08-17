@@ -603,7 +603,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
         <select className="input !w-auto" value={subStatus} onChange={e => setSubStatus(e.target.value)}>
           <option value="all">اختر الحالة</option>
           {SUB_STATUS_GROUPS.map(g => (
-            <optgroup key={g.status} label={LEAD_STATUS_LABELS[g.status]}>
+            <optgroup key={g.bucket} label={DISPLAY_BUCKET_LABELS[g.bucket]}>
               {g.items.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </optgroup>
           ))}

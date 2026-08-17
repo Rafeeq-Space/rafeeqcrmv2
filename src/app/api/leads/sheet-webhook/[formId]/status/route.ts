@@ -1,74 +1,22 @@
-import { NextResponse, after } from 'next/server'
-import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { statusFromLabel } from '@/lib/utils'
-import { adminSupabase } from '@/lib/supabase/admin'
+import { NextResponse } from 'next/server'
 
-// Receives a status change made *inside the Google Sheet* (the admin picks a
-// new value from the "الحالة" dropdown column) and applies it to the matching
-// lead — mirroring exactly what happens when a status is changed from the CRM
-// UI (updates leads.status, logs a timeline activity, fires the pixel event).
-export async function POST(request: Request, { params }: { params: Promise<{ formId: string }> }) {
-  const supabase = adminSupabase()
-
-  try {
-    const { formId } = await params
-    const secret = request.headers.get('x-webhook-secret') || ''
-
-    const { data: form } = await supabase
-      .from('forms')
-      .select('id, tenant_id, source_type, sheet_webhook_secret')
-      .eq('id', formId)
-      .single()
-
-    if (!form || form.source_type !== 'google_sheet') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-    if (!form.sheet_webhook_secret || form.sheet_webhook_secret !== secret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await request.json().catch(() => null)
-    const rowIndex: number | null = Number.isFinite(body?.rowIndex) ? Number(body.rowIndex) : null
-    const label: string = String(body?.status || '')
-    if (rowIndex == null || !label) {
-      return NextResponse.json({ error: 'Missing rowIndex/status' }, { status: 400 })
-    }
-
-    const to = statusFromLabel(label)
-    if (!to) {
-      return NextResponse.json({ success: true, skipped: true, reason: 'unrecognized_status' })
-    }
-
-    const { data: lead } = await supabase
-      .from('leads')
-      .select('id, status, tenant_id')
-      .eq('form_id', formId)
-      .eq('sheet_row', rowIndex)
-      .single()
-
-    if (!lead) {
-      return NextResponse.json({ success: true, skipped: true, reason: 'lead_not_found' })
-    }
-    if (lead.status === to) {
-      return NextResponse.json({ success: true, skipped: true, reason: 'unchanged' })
-    }
-
-    await supabase.from('leads').update({ status: to, updated_at: new Date().toISOString() }).eq('id', lead.id)
-
-    await supabase.from('lead_activities').insert({
-      tenant_id: lead.tenant_id,
-      lead_id: lead.id,
-      type: 'status_change',
-      from_status: lead.status,
-      to_status: to,
-      // No actor_id — this change came from the Google Sheet, not a CRM user.
-    })
-
-    after(() => syncLeadEvent({ leadId: lead.id, status: to }).catch(console.error))
-
-    return NextResponse.json({ success: true, status: to })
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error'
-    return NextResponse.json({ error: message }, { status: 500 })
-  }
+// Used to receive a status change made *inside the Google Sheet* (the admin
+// picks a new value from the "الحالة" dropdown column) and apply it to the
+// matching lead.
+//
+// Disabled 2026-08-17: this direction is what caused a real production bug —
+// pushStatusToSheet (in leads/[id]/activity/route.ts) writes a CRM-side
+// status change into this same sheet column, and something on the sheet's
+// own side (its bound Apps Script) then calls back in here with a stale
+// value, silently reverting the employee's change seconds later (confirmed
+// against a real lead's lead_activities: a real employee's status_change was
+// immediately followed by an unattributed one flipping it right back). The
+// user confirmed nobody actually edits status from inside the sheet, so this
+// endpoint is now a permanent no-op rather than deleted outright — an
+// existing Apps Script trigger still gets its normal 200 response, no error
+// emails from Google, it just does nothing. The CRM → sheet direction
+// (pushStatusToSheet) is untouched and still keeps the sheet's own column
+// current for reference.
+export async function POST() {
+  return NextResponse.json({ success: true, skipped: true, reason: 'sheet_to_crm_status_sync_disabled' })
 }

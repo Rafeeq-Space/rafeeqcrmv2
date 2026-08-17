@@ -88,22 +88,6 @@ export const subStatusByLabel = (label?: string | null): SubStatus | undefined =
 export const statusForSubStatus = (key?: string | null): LeadStatus | null =>
   subStatusByKey(key)?.status ?? null
 
-// Grouped for the UI dropdown: one group per canonical status, in lifecycle order.
-export const SUB_STATUS_GROUPS: { status: LeadStatus; items: SubStatus[] }[] = (
-  ['new', 'contacted', 'qualified', 'converted', 'lost'] as LeadStatus[]
-).map(status => ({ status, items: SUB_STATUSES.filter(s => s.status === status) }))
-
-// Accent color per canonical status, for the status-picker dot — shared by
-// LeadProfile.tsx's StatusPicker and LeadsCenter.tsx's inline StatusCell so
-// both status-change dropdowns look identical.
-export const STATUS_DOT: Record<string, string> = {
-  new: 'var(--primary)', contacted: 'var(--warning)', qualified: 'var(--purple)',
-  converted: 'var(--success)', lost: 'var(--danger)',
-}
-
-// The Bevatel contact attribute key these labels are stored under.
-export const BEVATEL_STATUS_ATTRIBUTE = 'crm_status'
-
 // ── Display-only bucket for stat cards / quick filters / analytics ───────────
 //
 // The canonical `status` column, sub-status keys, and everything that reports
@@ -113,6 +97,13 @@ export const BEVATEL_STATUS_ATTRIBUTE = 'crm_status'
 // 'contacted' into two: actively being worked ("جاري التواصل") vs stalled
 // ("معلق" — no answer twice, pushed to later, waiting on employment period).
 // Every other canonical status maps straight through, 1:1.
+//
+// Declared before SUB_STATUS_GROUPS below (which calls displayBucketForLead
+// at module-evaluation time) — moving this section after it once threw
+// "Cannot access before initialization" at runtime (a real build failure,
+// not just a lint nit): a plain `function` declaration is hoisted, but the
+// `const PENDING_SUB_STATUS_KEYS` it closes over is not, so the order here
+// matters even though `tsc --noEmit` has no way to catch it.
 export type DisplayBucket = 'new' | 'in_progress' | 'pending' | 'qualified' | 'converted' | 'lost'
 
 const PENDING_SUB_STATUS_KEYS = new Set(['no_answer_1', 'no_answer_2', 'contact_later', 'employment_period', 'car_unavailable'])
@@ -142,3 +133,23 @@ export const DISPLAY_BUCKET_COLORS: Record<DisplayBucket, string> = {
   converted: 'var(--success)',
   lost: 'var(--danger)',
 }
+
+// Grouped for the UI dropdown: one group per canonical status, in lifecycle
+// order. Kept keyed by DisplayBucket rather than the 5 canonical statuses, so
+// the detailed sub-status filter shows the same "جاري التواصل"/"معلق" split
+// as the overview cards — a 'contacted' lead's sub-status decides which of
+// the two groups it lands in.
+export const SUB_STATUS_GROUPS: { bucket: DisplayBucket; items: SubStatus[] }[] = (
+  ['new', 'in_progress', 'pending', 'qualified', 'converted', 'lost'] as DisplayBucket[]
+).map(bucket => ({ bucket, items: SUB_STATUSES.filter(s => displayBucketForLead(s.status, s.key) === bucket) }))
+
+// Accent color per canonical status, for the status-picker dot — shared by
+// LeadProfile.tsx's StatusPicker and LeadsCenter.tsx's inline StatusCell so
+// both status-change dropdowns look identical.
+export const STATUS_DOT: Record<string, string> = {
+  new: 'var(--primary)', contacted: 'var(--warning)', qualified: 'var(--purple)',
+  converted: 'var(--success)', lost: 'var(--danger)',
+}
+
+// The Bevatel contact attribute key these labels are stored under.
+export const BEVATEL_STATUS_ATTRIBUTE = 'crm_status'
