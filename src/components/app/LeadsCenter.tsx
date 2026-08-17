@@ -2,11 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy, FilterX } from 'lucide-react'
-import type { Lead } from '@/lib/types'
+import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy, FilterX, ChevronDown, Check } from 'lucide-react'
+import type { Lead, LeadStatus } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits, phoneMatches } from '@/lib/utils'
-import { SUB_STATUS_GROUPS } from '@/lib/leads/subStatus'
+import { SUB_STATUS_GROUPS, SUB_STATUSES, subStatusByKey, STATUS_DOT } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
 import { useToast } from '@/components/ToastProvider'
 import AddLeadModal from './AddLeadModal'
@@ -202,6 +202,51 @@ function ContactButtons({ lead, phone, bevatel, rafeeqSocialBotId }: {
   )
 }
 
+// Inline status dropdown for the leads list — same option set as
+// LeadProfile.tsx's StatusPicker (all SUB_STATUSES, flat, colored dot per
+// canonical status), just triggered from the existing status badge instead
+// of a full-width button so it drops into the card/table layout unchanged.
+// Clicking it must not trigger the row/card navigation, same reasoning as
+// ContactButtons above.
+function StatusCell({ currentKey, currentStatus, saving, onPick }: {
+  currentKey: string | null
+  currentStatus: LeadStatus
+  saving: boolean
+  onPick: (key: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const current = subStatusByKey(currentKey || undefined)
+  const label = current ? current.label : LEAD_STATUS_LABELS[currentStatus]
+
+  return (
+    <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button type="button" disabled={saving} onClick={() => setOpen(v => !v)}
+        className={`badge ${LEAD_STATUS_COLORS[currentStatus]} flex items-center gap-1 disabled:opacity-60`}>
+        {label}
+        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute z-30 mt-1 w-56 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg p-1 text-start">
+            {SUB_STATUSES.map(s => {
+              const active = s.key === currentKey
+              return (
+                <button key={s.key} type="button" onClick={() => { setOpen(false); onPick(s.key) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-start transition ${active ? 'bg-primary-soft text-foreground font-semibold' : 'text-muted hover:bg-surface2 hover:text-foreground'}`}>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_DOT[s.status] }} />
+                  <span className="truncate">{s.label}</span>
+                  {active && <Check size={13} className="ms-auto shrink-0" style={{ color: 'var(--primary)' }} />}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Status values a caller may deep-link to via `?status=`, beyond the plain
 // per-status keys — 'in_progress' mirrors LeadStats.inProgress (contacted +
 // qualified combined), matching the "قيد المتابعة" stat card on the profile
@@ -245,6 +290,35 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   const [customTo, setCustomTo] = useState('')
   const [search, setSearch] = useState('')
   const [showAddLead, setShowAddLead] = useState(false)
+
+  // Optimistic status overrides, keyed by lead id — `leads` is server-fetched
+  // and handed down as a prop (see the comment near fetchVisibleLeads below),
+  // so a status change made from this list has nowhere else to live until
+  // the next router.refresh() re-fetches it for real.
+  const [statusOverride, setStatusOverride] = useState<Record<string, { status: LeadStatus; sub_status: string }>>({})
+  const [savingStatusId, setSavingStatusId] = useState<string | null>(null)
+  const { showToast } = useToast()
+
+  async function changeLeadStatus(leadId: string, currentKey: string | null, key: string) {
+    if (!key || key === currentKey) return
+    const sub = subStatusByKey(key)
+    if (!sub) return
+    if (!confirm('هل أنت متأكد أنك تريد تغيير الحالة؟')) return
+    setSavingStatusId(leadId)
+    try {
+      const res = await fetch(`/api/leads/${leadId}/activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'status_change', sub_status: key }),
+      })
+      if (!res.ok) throw new Error()
+      setStatusOverride(prev => ({ ...prev, [leadId]: { status: sub.status, sub_status: key } }))
+    } catch {
+      showToast('تعذّر تغيير الحالة', 'error')
+    } finally {
+      setSavingStatusId(null)
+    }
+  }
 
   const sharedWithMeSet = useMemo(() => new Set(sharedWithMeIds), [sharedWithMeIds])
 
@@ -587,6 +661,9 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {paged.map(lead => {
             const phone = leadPhone(lead.data)
+            const override = statusOverride[lead.id]
+            const effStatus = override?.status ?? lead.status
+            const effSubStatus = override?.sub_status ?? lead.sub_status ?? null
             return (
               <div key={lead.id} onClick={() => open(lead.id)} className="card p-4 text-start transition hover:border-primary cursor-pointer">
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -601,7 +678,10 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
                     </div>
                     <span className="text-sm font-bold text-foreground truncate">{leadName(lead.data)}</span>
                   </div>
-                  <span className={`badge ${LEAD_STATUS_COLORS[lead.status]} shrink-0`}>{LEAD_STATUS_LABELS[lead.status]}</span>
+                  <span className="shrink-0">
+                    <StatusCell currentKey={effSubStatus} currentStatus={effStatus} saving={savingStatusId === lead.id}
+                      onPick={key => changeLeadStatus(lead.id, effSubStatus, key)} />
+                  </span>
                 </div>
                 <div className="space-y-1.5 text-xs text-muted mb-3">
                   <p className="flex items-center gap-2 flex-wrap"><Megaphone size={13} /> {campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</p>
@@ -639,6 +719,9 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
               <tbody>
                 {paged.map(lead => {
                   const phone = leadPhone(lead.data)
+                  const override = statusOverride[lead.id]
+                  const effStatus = override?.status ?? lead.status
+                  const effSubStatus = override?.sub_status ?? lead.sub_status ?? null
                   return (
                     <tr key={lead.id} onClick={() => open(lead.id)} className="border-b border-border last:border-0 hover:bg-surface2 cursor-pointer transition">
                       {bulkSelect && (
@@ -650,7 +733,10 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
                         <span className="font-semibold text-foreground block">{leadName(lead.data)}</span>
                         {phone && <span className="text-xs text-muted2" dir="ltr">{phone}</span>}
                       </td>
-                      <td className="px-4 py-3"><span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span></td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <StatusCell currentKey={effSubStatus} currentStatus={effStatus} saving={savingStatusId === lead.id}
+                          onPick={key => changeLeadStatus(lead.id, effSubStatus, key)} />
+                      </td>
                       <td className="md:hidden px-4 py-3"><div className="flex items-center gap-1.5"><ContactButtons lead={lead} phone={phone} bevatel={bevatel} rafeeqSocialBotId={rafeeqSocialBotId} /></div></td>
                       <td className="hidden md:table-cell px-4 py-3 text-muted"><span className="flex items-center gap-2 flex-wrap">{campaignLabel(lead)}{sourceLabel(lead) && <span className="badge bg-surface2 text-muted2">{sourceLabel(lead)}</span>}</span></td>
                       {(isAdmin || isManager) && (

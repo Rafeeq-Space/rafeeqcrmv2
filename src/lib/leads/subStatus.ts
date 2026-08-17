@@ -87,5 +87,13 @@ export const SUB_STATUS_GROUPS: { status: LeadStatus; items: SubStatus[] }[] = (
   ['new', 'contacted', 'qualified', 'converted', 'lost'] as LeadStatus[]
 ).map(status => ({ status, items: SUB_STATUSES.filter(s => s.status === status) }))
 
+// Accent color per canonical status, for the status-picker dot — shared by
+// LeadProfile.tsx's StatusPicker and LeadsCenter.tsx's inline StatusCell so
+// both status-change dropdowns look identical.
+export const STATUS_DOT: Record<string, string> = {
+  new: 'var(--primary)', contacted: 'var(--warning)', qualified: 'var(--purple)',
+  converted: 'var(--success)', lost: 'var(--danger)',
+}
+
 // The Bevatel contact attribute key these labels are stored under.
 export const BEVATEL_STATUS_ATTRIBUTE = 'crm_status'

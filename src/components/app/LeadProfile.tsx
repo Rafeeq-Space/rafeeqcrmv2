@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
-import { SUB_STATUSES, subStatusByKey } from '@/lib/leads/subStatus'
+import { SUB_STATUSES, subStatusByKey, STATUS_DOT } from '@/lib/leads/subStatus'
 import { useToast } from '@/components/ToastProvider'
 
 interface Option { id: string; name: string; team_id?: string | null }
@@ -581,12 +581,6 @@ function AssignForm({ members, teams, lead, busy, onSubmit, canPickTeam = true }
       </button>
     </div>
   )
-}
-
-// Status accent color per canonical status, for the picker dot.
-const STATUS_DOT: Record<string, string> = {
-  new: 'var(--primary)', contacted: 'var(--warning)', qualified: 'var(--purple)',
-  converted: 'var(--success)', lost: 'var(--danger)',
 }
 
 // A button-styled status picker: shows the current status like the call/WhatsApp
