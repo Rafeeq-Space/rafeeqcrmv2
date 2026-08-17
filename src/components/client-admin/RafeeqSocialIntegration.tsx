@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageCircle, Copy, Check, RefreshCw } from 'lucide-react'
+import { MessageCircle, Copy, Check, RefreshCw, ListChecks } from 'lucide-react'
 import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface Props {
@@ -189,6 +189,26 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
         <p className="text-xs text-muted2 pt-1 border-t border-border">
           مهم: الرابطان متطابقان عدا <span dir="ltr">?direction=out</span> في نهاية رابط الصادر — هذا ما يميّز الرسالة الصادرة عن الواردة، فلا تعكسهما. الحماية عبر الرابط نفسه (يحوي مُعرّفًا سريًا)؛ لا تُشاركه، وولّد رابطًا جديدًا فورًا إن تسرّب.
         </p>
+      </div>
+
+      <div className="card p-5 mt-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
+            <ListChecks size={20} style={{ color: 'var(--primary)' }} />
+          </div>
+          <div>
+            <h3 className="font-bold text-foreground text-sm">دليل: إزاي تضيف أتمتة رسالة جديدة (زي متابعة المكالمة الفايتة تحت)</h3>
+            <p className="text-xs text-muted2">الخطوات العامة لأي أتمتة تبعت رسالة واتساب تلقائية عبر رفيق سوشيال — نفس الخطوات دايمًا، بس الشرط اللي بيشغّلها بيتغيّر</p>
+          </div>
+        </div>
+        <ol className="text-sm text-muted space-y-2 leading-relaxed list-decimal ps-5">
+          <li>من لوحة رفيق سوشيال: <span className="text-foreground font-semibold">Automation ← Message Templates</span> — اعمل قالب جديد (Template) بنص الرسالة اللي عايزها، وحدد أزرار رد سريع لو محتاجة (زي «متاح الآن» / «تحديد وقت لاحق»).</li>
+          <li>ابعت الـTemplate لاعتماد ميتا واستنى الموافقة (بتاخد من كذا ساعة لكذا يوم).</li>
+          <li>من <span className="text-foreground font-semibold">Automation ← Webhook Workflows</span>: اعمل Workflow جديدة، واربطها بالـTemplate اللي عملته في خطوة 1.</li>
+          <li>في خطوة «Configure Webhook Data»، فعّل صيغة JSON، واكتب <code dir="ltr" className="text-xs bg-surface2 px-1 rounded">{'{"phone": "#LEAD_USER_CHAT_ID#"}'}</code>، واربط حقل الهاتف بخانة <span dir="ltr" className="font-semibold text-foreground">PHONE NUMBER</span> المطلوبة.</li>
+          <li>لو الرسالة فيها أزرار رد سريع وعايز تسجيل تلقائي في الـCRM لرد العميل — كلّمني الأول، كل زرار محتاج <span dir="ltr">Callback API</span> مبني خصيصًا للسيناريو ده.</li>
+          <li>انسخ رابط <span dir="ltr" className="font-semibold text-foreground">Webhook Callback URL</span> بتاع الـWorkflow (من نفس قسم «Configure Webhook Data»)، وابعتهولي عشان أربطه بالكود المناسب — أو حطه بنفسك في الحقل المخصص لو الأتمتة دي جاهزة بالفعل (زي حقل «متابعة المكالمة الفايتة» تحت).</li>
+        </ol>
       </div>
 
       <div className="card p-5 mt-4 space-y-4">
