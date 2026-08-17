@@ -405,38 +405,6 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
         </div>
 
         <div className="border-t border-border pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">متابعة المكالمة الفايتة تلقائيًا (اختياري)</p>
-          <p className="text-xs text-muted2 mb-2">
-            الصق هنا رابط &quot;Webhook Callback URL&quot; الخاص بـ Workflow القالب المُعتمَد (Template) اللي عايز يتبعت للعميل تلقائيًا لما مكالمة تفوت من بيفاتيل كول سنتر. سيبه فاضي لو مش عايز الميزة دي.
-          </p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <input dir="ltr" value={workflowUrl} onChange={e => setWorkflowUrl(e.target.value)}
-              placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[16rem]" />
-            <button onClick={saveWorkflowUrl} disabled={savingWorkflow} className="btn btn-primary text-xs !py-1.5">
-              {savingWorkflow ? 'جارٍ الحفظ...' : 'حفظ'}
-            </button>
-            {workflowSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
-            {workflowError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{workflowError}</span>}
-          </div>
-        </div>
-
-        <div className="border-t border-border pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">ترحيب الليد الجديد تلقائيًا (اختياري)</p>
-          <p className="text-xs text-muted2 mb-2">
-            الصق هنا رابط &quot;Webhook Callback URL&quot; الخاص بـ Workflow القالب المُعتمَد (Template) اللي عايز يتبعت للعميل تلقائيًا لما ليد جديدة توصل بحالة فرعية &quot;جديد&quot; تحديدًا (مش أول استقبال اتصال أو رسالة). سيبه فاضي لو مش عايز الميزة دي.
-          </p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <input dir="ltr" value={newLeadUrl} onChange={e => setNewLeadUrl(e.target.value)}
-              placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[16rem]" />
-            <button onClick={saveNewLeadUrl} disabled={savingNewLead} className="btn btn-primary text-xs !py-1.5">
-              {savingNewLead ? 'جارٍ الحفظ...' : 'حفظ'}
-            </button>
-            {newLeadSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
-            {newLeadError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{newLeadError}</span>}
-          </div>
-        </div>
-
-        <div className="border-t border-border pt-3">
           <p className="text-xs font-semibold text-foreground mb-1">مزامنة إسناد الليدز</p>
           <p className="text-xs text-muted2 mb-2">
             المزامنة اللحظية تعمل فقط عند وصول رسالة جديدة — فلو الإسناد اتغيّر في رفيق سوشيال ولم تصل رسالة بعدها بعد، شغّل هذا الزر يدويًا ليطابق كل ليد آخر إسناد رسمي هناك. الليدز التي لم يتسند لها أحد لا في الـ CRM ولا في رفيق سوشيال (محادثة جديدة لم يردّ عليها أحد بعد) تُوزَّع بالتناوب على الموظفين تلقائيًا. آمن لتكراره أكثر من مرة.
