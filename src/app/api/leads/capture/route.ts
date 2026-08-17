@@ -3,6 +3,8 @@ import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
 import { adminSupabase } from '@/lib/supabase/admin'
+import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
+import { leadName, leadPhone } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const supabase = adminSupabase()
@@ -84,6 +86,10 @@ export async function POST(request: Request) {
         type: 'created',
       })
       after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
+      const phone = leadPhone(data)
+      if (phone) {
+        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, phone, leadName(data)).catch(console.error))
+      }
       if (assigned_sales_id) {
         await createNotification(supabase, {
           tenantId: form.tenant_id,

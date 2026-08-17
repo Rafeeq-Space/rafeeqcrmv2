@@ -2,8 +2,9 @@ import { NextResponse, after } from 'next/server'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { leadPhone, leadEmail, normalizeRowPhone } from '@/lib/utils'
+import { leadPhone, leadEmail, leadName, normalizeRowPhone } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
+import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 
 // Digits-only comparison so "05xxxxxxxx", "+9665xxxxxxxx" and "5xxxxxxxx"
 // (with spaces/dashes) are recognized as the same number.
@@ -129,6 +130,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         type: 'created',
       })
       after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
+      const rawPhone = leadPhone(normalizedRow)
+      if (rawPhone) {
+        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow)).catch(console.error))
+      }
       if (assigned_sales_id) {
         await createNotification(supabase, {
           tenantId: form.tenant_id,

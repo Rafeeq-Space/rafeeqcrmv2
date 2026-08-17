@@ -129,6 +129,40 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
   }
 }
 
+// Fires the tenant's configured "new lead" Workflow trigger (a WhatsApp
+// welcome/follow-up template) whenever a lead is created directly at
+// canonical sub_status 'new_lead' — ads, manual entry, Google Sheets, forms
+// (see the four call sites: leads/capture, leads/manual, leads/sheet-webhook,
+// adLeadWebhook.ts). Deliberately NOT fired for first_inbound_call/
+// first_inbound_message, which already start a live conversation of their
+// own. Configured per tenant (rafeeqsocial_new_lead_workflow_url); simply
+// skipped if unset, since most tenants won't have this configured — the
+// template itself is built by hand in Rafeeq Social, same as the missed-call
+// one (see rafeeqsocial_missed_call_workflow_url in bevatelLead.ts).
+export async function triggerRafeeqSocialNewLeadWorkflow(tenantId: string, phone: string, name: string): Promise<void> {
+  if (!phone) return
+  const { data } = await adminSupabase()
+    .from('tenants')
+    .select('rafeeqsocial_new_lead_workflow_url')
+    .eq('id', tenantId)
+    .single()
+  const workflowUrl = data?.rafeeqsocial_new_lead_workflow_url as string | null
+  if (!workflowUrl) return
+
+  try {
+    await fetch(workflowUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: phone.replace(/\D/g, ''),
+        name: name || '',
+      }),
+    })
+  } catch (err) {
+    console.error('rafeeqsocial new-lead workflow trigger failed', err)
+  }
+}
+
 export interface SendResult {
   ok: boolean
   waMessageId?: string

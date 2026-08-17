@@ -49,17 +49,17 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { apiToken?: string; phoneNumberId?: string; missedCallWorkflowUrl?: string }
+  let body: { apiToken?: string; phoneNumberId?: string; missedCallWorkflowUrl?: string; newLeadWorkflowUrl?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  // The missed-call-workflow field is saved on its own (via a separate form),
-  // so it must not require phoneNumberId/apiToken to also be present in the
-  // same request, and vice versa — only touch the fields this call actually
-  // included.
+  // Each workflow-url field is saved on its own (via a separate form), so it
+  // must not require phoneNumberId/apiToken or the other workflow url to
+  // also be present in the same request — only touch the fields this call
+  // actually included.
   const updates: Record<string, unknown> = {}
   if (typeof body.phoneNumberId === 'string') {
     updates.rafeeqsocial_phone_number_id = body.phoneNumberId.trim() || null
@@ -69,6 +69,9 @@ export async function PUT(request: Request) {
   }
   if (typeof body.missedCallWorkflowUrl === 'string') {
     updates.rafeeqsocial_missed_call_workflow_url = body.missedCallWorkflowUrl.trim() || null
+  }
+  if (typeof body.newLeadWorkflowUrl === 'string') {
+    updates.rafeeqsocial_new_lead_workflow_url = body.newLeadWorkflowUrl.trim() || null
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ success: true })

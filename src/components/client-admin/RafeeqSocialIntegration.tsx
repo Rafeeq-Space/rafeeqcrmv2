@@ -9,27 +9,34 @@ interface Props {
   secret: string
   api?: { hasToken: boolean; phoneNumberId: string }
   missedCallWorkflowUrl?: string
+  newLeadWorkflowUrl?: string
 }
 
-// One granular, single-action step per screen — walks through creating a
-// new Rafeeq Social automation (Template + Webhook Workflow) end to end.
-// Purely a guide: nothing here talks to Rafeeq Social's API, the user does
-// every step by hand in their own dashboard. The last step is the only one
-// that saves anything on our side (the resulting Workflow URL).
+// The automations wired up on the CRM side so far — each maps to its own
+// saved Workflow URL and its own trigger condition in the code. Add a new
+// entry here (and its matching save field/handler + backend trigger) when a
+// new automation type is built; the wizard steps themselves don't change,
+// since the manual Rafeeq Social steps are identical regardless of type.
+type AutomationTypeKey = 'missed_call' | 'new_lead'
+const AUTOMATION_TYPES: { key: AutomationTypeKey; label: string; description: string }[] = [
+  { key: 'missed_call', label: 'متابعة مكالمة فايتة', description: 'يتبعت للعميل لما مكالمة تفوت من بيفاتيل كول سنتر' },
+  { key: 'new_lead', label: 'ليد جديد', description: 'يتبعت لما ليد يتخلق بحالة فرعية "جديد" تحديدًا — مش أول استقبال اتصال أو رسالة' },
+]
+
+// One granular, single-action step per screen — creating the Webhook
+// Workflow itself, assuming the Message Template already exists (the user
+// makes that part by hand, separately, every time — not part of this
+// wizard). Purely a guide: nothing here talks to Rafeeq Social's API. The
+// last step is the only one that saves anything on our side.
 const WIZARD_STEPS: { title: string; body: string }[] = [
-  { title: 'افتح تبويب Automation', body: 'من الشريط العلوي في لوحة تحكم رفيق سوشيال، دوس على "Automation".' },
-  { title: 'افتح Message Templates', body: 'جوه تبويب Automation، دوس على "Message Templates" من الشريط الفرعي.' },
-  { title: 'اعمل قالب جديد', body: 'دوس على زرار إنشاء قالب جديد (زي "+ Create").' },
-  { title: 'اختار اللغة والتصنيف', body: 'اختار اللغة "Arabic"، والتصنيف: "Utility" لرسالة متابعة عادية، أو "Marketing" لو عرض/تسويق.' },
-  { title: 'اكتب نص الرسالة', body: 'املأ Header وBody وFooter بالنص اللي عايزه، وأضف أزرار رد سريع (Quick Reply) لو محتاج — زي "متاح الآن" / "تحديد وقت لاحق".' },
-  { title: 'ابعت القالب لاعتماد ميتا', body: 'احفظ وابعت (Submit) القالب. الموافقة بتاخد من كذا ساعة لكذا يوم — استنى لحد ما تشوف حالته "Approved".' },
-  { title: 'روح لـ Webhook Workflows', body: 'بعد ما يتوافق القالب، من نفس تبويب Automation، دوس على "Webhook Workflows".' },
-  { title: 'اعمل Workflow جديدة', body: 'دوس على "+ Create"، واكتب اسم واضح للأتمتة دي (زي "متابعة مكالمة فايتة").' },
-  { title: 'اربطها بالقالب', body: 'في خطوة "Set name & template"، اختار نفس القالب اللي عملته وخد موافقة عليه.' },
-  { title: 'اضبط بيانات الـ Webhook', body: 'في "Configure Webhook Data"، اختار "Custom JSON Body"، والصق بالظبط: {"phone": "#LEAD_USER_CHAT_ID#"}' },
-  { title: 'اربط رقم الهاتف', body: 'في "Webhook Response Mapping"، اربط الحقل المطلوب "PHONE NUMBER" بالمتغير اللي ظهرلك.' },
-  { title: 'الأزرار (لو القالب فيها أزرار رد سريع)', body: 'هتلاقي لكل زرار خانة "Callback API" — سيبها فاضية دلوقتي. ابعتلي رسالة بعد ما تخلص الخطوات دي، وأنا هبنيلك الجزء ده عشان رد العميل يتسجل في الـCRM أوتوماتيك.' },
-  { title: 'انسخ الرابط النهائي', body: 'ارجع لقسم "Configure Webhook Data" فوق، وانسخ رابط "Webhook Callback URL" — وهتلاقيه جاهز تلزقه في الخانة تحت.' },
+  { title: 'ادخل رفيق سوشيال', body: 'افتح حساب رفيق سوشيال بتاعك.' },
+  { title: 'Bot Manager', body: 'اختار رقم التليفون (البوت) الصح — الحساب ممكن يكون فيه أكتر من رقم، فتأكد إنك واقف على الرقم اللي الشركة شغالة بيه فعليًا.' },
+  { title: 'Automation ← Webhook Workflows', body: 'من تبويب Automation، دوس على "Webhook Workflows".' },
+  { title: 'Create Workflow', body: 'دوس على زرار إنشاء Workflow جديدة.' },
+  { title: 'Workflow Name', body: 'اكتب اسم واضح للأتمتة دي (زي "متابعة مكالمة فايتة" أو "ترحيب ليد جديد").' },
+  { title: 'اختار الـ Message Template', body: 'اختار نفس القالب (Template) اللي عملته إنت بنفسك مسبقًا وخد موافقة ميتا عليه.' },
+  { title: 'Create Workflow', body: 'دوس تأكيد الحفظ.' },
+  { title: 'انسخ الرابط النهائي', body: 'من قسم "Configure Webhook Data"، انسخ رابط "Webhook Callback URL" — وهتلاقيه جاهز تلزقه في الخانة تحت.' },
 ]
 
 // Copyable read-only URL field — same visual as the Bevatel one.
@@ -55,79 +62,105 @@ function CopyField({ label, url }: { label: string; url: string }) {
   )
 }
 
-// Step-by-step modal — one screen per action, Previous/Next navigation. The
-// last step folds in the actual save field (reusing the parent's workflow-
-// url state/handler) so finishing the wizard and saving the result happen
-// in the same place instead of a separate step.
-function AutomationWizard({ onClose, workflowUrl, setWorkflowUrl, onSave, saving, saved, error }: {
-  onClose: () => void
-  workflowUrl: string
-  setWorkflowUrl: (v: string) => void
+interface AutomationSaveField {
+  value: string
+  setValue: (v: string) => void
   onSave: () => void
   saving: boolean
   saved: boolean
   error: string
+}
+
+// Step-by-step modal — starts by asking which automation this is for (each
+// type saves to its own field/URL and has its own trigger in the backend),
+// then one screen per action with Previous/Next navigation. The last step
+// folds in the actual save field for whichever type was picked, so
+// finishing the wizard and saving the result happen in the same place.
+function AutomationWizard({ onClose, fields }: {
+  onClose: () => void
+  fields: Record<AutomationTypeKey, AutomationSaveField>
 }) {
+  const [type, setType] = useState<AutomationTypeKey | null>(null)
   const [step, setStep] = useState(0)
   const isLast = step === WIZARD_STEPS.length - 1
   const current = WIZARD_STEPS[step]
+  const field = type ? fields[type] : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
       <div className="card w-full max-w-lg p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-muted2">الخطوة {step + 1} من {WIZARD_STEPS.length}</p>
+          <p className="text-xs font-semibold text-muted2">
+            {type ? `الخطوة ${step + 1} من ${WIZARD_STEPS.length}` : 'اختيار نوع الأتمتة'}
+          </p>
           <button onClick={onClose} type="button" className="text-muted2 hover:text-foreground transition p-1 rounded-lg" title="إغلاق">
             <X size={18} />
           </button>
         </div>
 
-        <div className="w-full bg-surface2 rounded-full h-1.5">
-          <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${((step + 1) / WIZARD_STEPS.length) * 100}%` }} />
-        </div>
-
-        <div>
-          <h3 className="font-bold text-foreground text-base mb-2">{current.title}</h3>
-          <p className="text-sm text-muted leading-relaxed">{current.body}</p>
-        </div>
-
-        {isLast && (
-          <div className="border-t border-border pt-3 space-y-2">
-            <p className="text-xs font-semibold text-foreground">الصق الرابط هنا واحفظه</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <input dir="ltr" value={workflowUrl} onChange={e => setWorkflowUrl(e.target.value)}
-                placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[14rem]" />
-              <button onClick={onSave} disabled={saving} className="btn btn-primary text-xs !py-1.5">
-                {saving ? 'جارٍ الحفظ...' : 'حفظ'}
-              </button>
+        {!type ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted">عايز تعمل أتمتة لأي حالة؟</p>
+            <div className="space-y-2">
+              {AUTOMATION_TYPES.map(t => (
+                <button key={t.key} onClick={() => setType(t.key)}
+                  className="w-full text-start p-3 rounded-xl border border-border hover:border-primary hover:bg-surface2 transition">
+                  <p className="font-semibold text-foreground text-sm">{t.label}</p>
+                  <p className="text-xs text-muted2 mt-0.5">{t.description}</p>
+                </button>
+              ))}
             </div>
-            {saved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
-            {error && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{error}</span>}
           </div>
-        )}
+        ) : (
+          <>
+            <div className="w-full bg-surface2 rounded-full h-1.5">
+              <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${((step + 1) / WIZARD_STEPS.length) * 100}%` }} />
+            </div>
 
-        <div className="flex items-center gap-2 pt-1">
-          <button onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}
-            className="btn btn-outline text-xs !py-1.5 gap-1.5 disabled:opacity-40">
-            <ArrowRight size={14} /> السابق
-          </button>
-          {!isLast ? (
-            <button onClick={() => setStep(s => Math.min(WIZARD_STEPS.length - 1, s + 1))}
-              className="btn btn-primary text-xs !py-1.5 gap-1.5 ms-auto">
-              التالي <ArrowLeft size={14} />
-            </button>
-          ) : (
-            <button onClick={onClose} className="btn btn-outline text-xs !py-1.5 ms-auto">
-              إغلاق
-            </button>
-          )}
-        </div>
+            <div>
+              <h3 className="font-bold text-foreground text-base mb-2">{current.title}</h3>
+              <p className="text-sm text-muted leading-relaxed">{current.body}</p>
+            </div>
+
+            {isLast && field && (
+              <div className="border-t border-border pt-3 space-y-2">
+                <p className="text-xs font-semibold text-foreground">الصق الرابط هنا واحفظه</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input dir="ltr" value={field.value} onChange={e => field.setValue(e.target.value)}
+                    placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[14rem]" />
+                  <button onClick={field.onSave} disabled={field.saving} className="btn btn-primary text-xs !py-1.5">
+                    {field.saving ? 'جارٍ الحفظ...' : 'حفظ'}
+                  </button>
+                </div>
+                {field.saved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+                {field.error && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{field.error}</span>}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button onClick={() => (step === 0 ? setType(null) : setStep(s => s - 1))}
+                className="btn btn-outline text-xs !py-1.5 gap-1.5">
+                <ArrowRight size={14} /> {step === 0 ? 'رجوع لاختيار النوع' : 'السابق'}
+              </button>
+              {!isLast ? (
+                <button onClick={() => setStep(s => Math.min(WIZARD_STEPS.length - 1, s + 1))}
+                  className="btn btn-primary text-xs !py-1.5 gap-1.5 ms-auto">
+                  التالي <ArrowLeft size={14} />
+                </button>
+              ) : (
+                <button onClick={onClose} className="btn btn-outline text-xs !py-1.5 ms-auto">
+                  إغلاق
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-export default function RafeeqSocialIntegration({ tenantId, secret, api, missedCallWorkflowUrl }: Props) {
+export default function RafeeqSocialIntegration({ tenantId, secret, api, missedCallWorkflowUrl, newLeadWorkflowUrl }: Props) {
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -142,6 +175,12 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
   const [savingWorkflow, setSavingWorkflow] = useState(false)
   const [workflowSaved, setWorkflowSaved] = useState(false)
   const [workflowError, setWorkflowError] = useState('')
+
+  const [newLeadUrl, setNewLeadUrl] = useState(newLeadWorkflowUrl || '')
+  const [savingNewLead, setSavingNewLead] = useState(false)
+  const [newLeadSaved, setNewLeadSaved] = useState(false)
+  const [newLeadError, setNewLeadError] = useState('')
+
   const [wizardOpen, setWizardOpen] = useState(false)
 
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
@@ -200,6 +239,29 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
       setWorkflowError('تعذّر الاتصال')
     } finally {
       setSavingWorkflow(false)
+    }
+  }
+
+  // Same idea as saveWorkflowUrl, for the "new lead" automation's own
+  // Workflow URL — kept as a separate field/handler since it's a distinct
+  // trigger condition (sub_status becoming 'new_lead') from the missed-call one.
+  async function saveNewLeadUrl() {
+    setSavingNewLead(true)
+    setNewLeadSaved(false)
+    setNewLeadError('')
+    try {
+      const res = await fetch('/api/client-admin/rafeeqsocial', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newLeadWorkflowUrl: newLeadUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setNewLeadError(data.error || 'تعذّر الحفظ'); return }
+      setNewLeadSaved(true)
+    } catch {
+      setNewLeadError('تعذّر الاتصال')
+    } finally {
+      setSavingNewLead(false)
     }
   }
 
@@ -301,12 +363,16 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
       {wizardOpen && (
         <AutomationWizard
           onClose={() => setWizardOpen(false)}
-          workflowUrl={workflowUrl}
-          setWorkflowUrl={setWorkflowUrl}
-          onSave={saveWorkflowUrl}
-          saving={savingWorkflow}
-          saved={workflowSaved}
-          error={workflowError}
+          fields={{
+            missed_call: {
+              value: workflowUrl, setValue: setWorkflowUrl, onSave: saveWorkflowUrl,
+              saving: savingWorkflow, saved: workflowSaved, error: workflowError,
+            },
+            new_lead: {
+              value: newLeadUrl, setValue: setNewLeadUrl, onSave: saveNewLeadUrl,
+              saving: savingNewLead, saved: newLeadSaved, error: newLeadError,
+            },
+          }}
         />
       )}
 
@@ -351,6 +417,22 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
             </button>
             {workflowSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
             {workflowError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{workflowError}</span>}
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-semibold text-foreground mb-1">ترحيب الليد الجديد تلقائيًا (اختياري)</p>
+          <p className="text-xs text-muted2 mb-2">
+            الصق هنا رابط &quot;Webhook Callback URL&quot; الخاص بـ Workflow القالب المُعتمَد (Template) اللي عايز يتبعت للعميل تلقائيًا لما ليد جديدة توصل بحالة فرعية &quot;جديد&quot; تحديدًا (مش أول استقبال اتصال أو رسالة). سيبه فاضي لو مش عايز الميزة دي.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input dir="ltr" value={newLeadUrl} onChange={e => setNewLeadUrl(e.target.value)}
+              placeholder="https://rafeeq.social/webhook/whatsapp-workflow/..." className="input text-xs py-1.5 flex-1 min-w-[16rem]" />
+            <button onClick={saveNewLeadUrl} disabled={savingNewLead} className="btn btn-primary text-xs !py-1.5">
+              {savingNewLead ? 'جارٍ الحفظ...' : 'حفظ'}
+            </button>
+            {newLeadSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+            {newLeadError && <span className="text-xs" style={{ color: 'var(--danger,#dc2626)' }}>{newLeadError}</span>}
           </div>
         </div>
 

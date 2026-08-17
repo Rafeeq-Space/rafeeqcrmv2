@@ -2,6 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { assignRoundRobinTenantWide } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
+import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 import type { AdConnection, AdPlatform } from '@/lib/types'
 
 export interface ParsedLeadFields {
@@ -232,6 +233,10 @@ export async function recordAndImportLead(
       type: 'lead_assigned',
       leadId: lead.id,
     })
+  }
+
+  if (fields.phone) {
+    triggerRafeeqSocialNewLeadWorkflow(connection.tenant_id, fields.phone, fields.name || '').catch(console.error)
   }
 
   return { imported: true as const, leadId: lead.id as string }
