@@ -44,6 +44,20 @@ export function phoneKey(raw?: string | null): string {
   return digits.length >= 9 ? digits.slice(-9) : digits
 }
 
+// Bevatel occasionally reports a Saudi caller's number in local format —
+// "0551198553" (a leading 0, no country code) — instead of the full
+// international "966551198553" (confirmed live). Fine for phoneKey-based
+// matching (it only looks at the last 9 digits either way), but every
+// Rafeeq Social API call downstream (assign-to-team-member, the missed-call
+// workflow trigger, direct message sends) needs the real international
+// number — sending it the bare local form silently fails to reach the
+// right subscriber. Normalized once, right where the number comes off the
+// call payload, so everything downstream gets the correct form.
+export function normalizeSaudiPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  return /^05\d{8}$/.test(digits) ? `966${digits.slice(1)}` : digits
+}
+
 // Arabic label (with emoji) for a WhatsApp media attachment's type — shared by
 // Bevatel's `attachments[].file_type` (confirmed live: "image") and Rafeeq
 // Social's `user_message.type` (confirmed live: "image"; other WhatsApp media
@@ -160,6 +174,15 @@ export interface AppendResult {
   created: boolean
   assigned: boolean
   agentMatched: boolean
+  // True only when activityBody was actually logged as a NEW row this call —
+  // false for a duplicate delivery of the same event (23505 on external_id).
+  // Callers that trigger a real side effect once per physical event (e.g.
+  // handleBevatelCall's missed-call template) must gate on this, not on
+  // `leadId` alone — Bevatel resends the same call_id across several
+  // call.timeout deliveries (one per queue extension) before the final
+  // call.abandoned/call.ended, and without this gate each delivery re-ran
+  // the side effect independently.
+  activityLogged: boolean
 }
 
 export interface EventLog {
@@ -213,7 +236,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
-  if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false }
+  if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false, activityLogged: false }
 
   // Look for an existing lead in this tenant with the same phone. Filtered by
   // the DB-maintained phone_key column rather than fetching every lead in the
@@ -302,12 +325,12 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         .eq('phone_key', key)
         .limit(1)
         .maybeSingle()
-      if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
+      if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false }
       leadId = dupe.id
       existingAssignedId = dupe.assigned_sales_id ?? null
       existingAssignedIsAdmin = (dupe.assigned_sales as { role?: string } | null)?.role === 'client_admin'
     } else {
-      return { leadId: null, created: false, assigned: false, agentMatched: !!agent }
+      return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false }
     }
   }
 
@@ -340,6 +363,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // Skip the timeline comment for contact-only events (no message body). The
   // external_id (Bevatel's message id) is deduped by a unique index, so a
   // re-sent webhook silently no-ops instead of duplicating the message.
+  let logged = false
   if (activityBody) {
     const base = {
       tenant_id: tenantId,
@@ -356,7 +380,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     // 23505 = duplicate external_id (message already logged) — expected, ignore.
     // Any other error usually means the external_id column isn't provisioned
     // yet; retry without it so the message still lands on the timeline.
-    let logged = !commentErr
+    logged = !commentErr
     if (commentErr && commentErr.code !== '23505') {
       const { error: retryErr } = await supa.from('lead_activities').insert(base)
       logged = !retryErr
@@ -411,7 +435,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     }
   }
 
-  return { leadId, created, assigned, agentMatched: !!agent }
+  return { leadId, created, assigned, agentMatched: !!agent, activityLogged: logged }
 }
 
 // Reverse sync: the Bevatel contact's crm_status attribute → CRM lead status.
@@ -744,13 +768,14 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
 
   // The customer's number lives under a different field depending on the
   // event: caller_number/customer_number for timeout/abandoned, connected_line_num
-  // for ended.
-  const phone =
+  // for ended. Normalized to full international form — see normalizeSaudiPhone.
+  const phone = normalizeSaudiPhone(
     (data.caller_number as string) ||
     (data.customer_number as string) ||
     (data.connected_line_num as string) ||
     (data.from_number as string) ||
     ''
+  )
   if (!phone) {
     await recordEvent(tenantId, {
       kind: 'call', event: eventType || 'unknown', direction: inbound ? 'in' : 'out', phone: 'بدون رقم',
@@ -815,7 +840,15 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   // unassigned indefinitely otherwise. Only steps in when nobody owns this
   // lead yet; an existing owner (e.g. a customer already assigned to a rep)
   // is never touched by a missed call — see the sticky-assignment note above.
-  if (abandoned && res.leadId) {
+  //
+  // Gated on activityLogged, not just leadId — confirmed live that Bevatel
+  // resends the SAME call_id across several call.timeout deliveries (one per
+  // queue extension) before the final call.abandoned/call.ended, and every
+  // one of them independently matches `abandoned` (the regex matches
+  // "timeout" too). Without this gate, one real missed call fired the
+  // WhatsApp follow-up template (and round-robin) once per delivery — up to
+  // 7 times for a single call in the confirmed case — instead of once.
+  if (abandoned && res.leadId && res.activityLogged) {
     const { data: leadRow } = await adminSupabase()
       .from('leads')
       .select('assigned_sales_id, data')
