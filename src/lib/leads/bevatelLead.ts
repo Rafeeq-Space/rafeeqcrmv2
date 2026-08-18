@@ -719,6 +719,35 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
 // ── Calls (Bevatel Call Center) ───────────────────────────────────────────────
 
+// Confirmed live (2026-08-18): a single real missed call can generate THREE
+// different call_ids across its lifecycle — call.started, call.abandoned,
+// and call.ended (with a non-ANSWER dial_status) each reported a distinct
+// id, ~45 seconds apart, for what a human would call one call. The
+// call_id-based dedupe in appendToLead (activityLogged) only catches exact
+// repeats of the SAME id — it can't catch this, since every id genuinely is
+// new. This is a second, coarser guard specifically for the WhatsApp
+// follow-up template: skip firing it again if this lead already got one
+// within the cooldown window, regardless of call_id. Deliberately NOT
+// applied to the assignment logic above (harmless/idempotent to re-run) or
+// to the timeline comment (still logs each event — just doesn't re-fire the
+// template) — and deliberately short, so a genuinely separate missed call
+// minutes/hours later (the user's explicit "always send, no exceptions"
+// decision) still gets its own template.
+const MISSED_CALL_TEMPLATE_COOLDOWN_MS = 5 * 60 * 1000
+
+async function missedCallTemplateSentRecently(leadId: string, excludeExternalId: string | undefined, withinMs: number): Promise<boolean> {
+  const { data } = await adminSupabase()
+    .from('lead_activities')
+    .select('created_at, external_id')
+    .eq('lead_id', leadId)
+    .like('external_id', 'bevatel_call_%')
+    .order('created_at', { ascending: false })
+    .limit(5)
+  if (!data) return false
+  const now = Date.now()
+  return data.some(a => a.external_id !== excludeExternalId && now - new Date(a.created_at).getTime() < withinMs)
+}
+
 // Distributes a missed/abandoned call's lead round-robin across every active
 // rep in the tenant — Bevatel reports no agent for a call nobody answered, so
 // without this the lead would sit unassigned indefinitely. Persists the
@@ -824,13 +853,14 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
   // on it so one physical call doesn't post several "missed call" comments.
   // call.ended carries the identifier under `id` instead of `call_id`.
   const callId = (data.call_id ?? data.id) != null ? String(data.call_id ?? data.id) : undefined
+  const callExternalId = callId ? `bevatel_call_${callId}` : undefined
 
   const res = await appendToLead({
     tenantId,
     phone,
     source: 'bevatel_call',
     activityBody: body,
-    activityExternalId: callId ? `bevatel_call_${callId}` : undefined,
+    activityExternalId: callExternalId,
     activityActorLabel: agent.name || agent.email || undefined,
     agent,
   })
@@ -901,7 +931,8 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       .eq('id', tenantId)
       .single()
     const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
-    if (workflowUrl) {
+    const recentlySent = workflowUrl && await missedCallTemplateSentRecently(res.leadId, callExternalId, MISSED_CALL_TEMPLATE_COOLDOWN_MS)
+    if (workflowUrl && !recentlySent) {
       // Push the CRM's own assignment decision to Rafeeq Social FIRST, and
       // wait for it — before the workflow below ever creates/touches a
       // subscriber for this phone number over there. Confirmed live this
