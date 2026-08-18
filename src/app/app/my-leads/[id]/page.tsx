@@ -4,7 +4,7 @@ import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import LeadProfile from '@/components/app/LeadProfile'
 import { rafeeqSocialChatUrl } from '@/lib/leads/rafeeqSocialSend'
 import { leadPhone } from '@/lib/utils'
-import type { Lead, LeadEvent } from '@/lib/types'
+import type { Lead, LeadEvent, FinancingRequest } from '@/lib/types'
 
 const LEAD_DETAIL_SELECT =
   '*, campaigns(id, name, source), forms(id, name), assigned_sales:profiles!assigned_sales_id(id, full_name), assigned_team:teams!assigned_team_id(id, name, manager_id)'
@@ -52,6 +52,12 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
   const phone = leadPhone((lead as Lead).data)
   const rsChatUrl = phone ? await rafeeqSocialChatUrl(viewer.tenantId, phone) : null
 
+  const { data: financingRequest } = await supa
+    .from('financing_requests')
+    .select('*')
+    .eq('lead_id', id)
+    .maybeSingle()
+
   return (
     <LeadProfile
       lead={lead as Lead}
@@ -64,6 +70,7 @@ export default async function MyLeadProfilePage({ params }: { params: Promise<{ 
       bevatel={bevatel}
       rafeeqSocialChatUrl={rsChatUrl}
       conversionEvents={(conversionEvents || []) as LeadEvent[]}
+      financingRequest={(financingRequest as FinancingRequest) || null}
     />
   )
 }

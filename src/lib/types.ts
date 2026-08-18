@@ -370,6 +370,25 @@ export interface LeadEvent {
   sent_at: string
 }
 
+export interface FinancingRequest {
+  id: string
+  tenant_id: string
+  lead_id: string
+  status: string // FinancingStatus — see src/lib/leads/financingStatus.ts
+  phone: string | null
+  request_type: string | null // 'individual' | 'company'
+  financing_entity: string | null
+  car: string | null
+  car_model: string | null
+  car_type: string | null
+  allowed_amount: string | null
+  salary: string | null
+  customer_name: string | null
+  request_date: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface LeadShare {
   id: string
   tenant_id: string

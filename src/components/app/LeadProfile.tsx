@@ -8,11 +8,12 @@ import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
-  Radio, CheckCircle2, AlertTriangle,
+  Radio, CheckCircle2, AlertTriangle, Landmark,
 } from 'lucide-react'
-import type { Lead, LeadActivity, KnowledgeFile, LeadEvent } from '@/lib/types'
+import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey, STATUS_DOT } from '@/lib/leads/subStatus'
+import { FINANCING_STATUSES, FINANCING_STATUS_COLORS, type FinancingStatus } from '@/lib/leads/financingStatus'
 import { useToast } from '@/components/ToastProvider'
 
 interface Option { id: string; name: string; team_id?: string | null }
@@ -29,13 +30,14 @@ interface Props {
   bevatel?: { host: string; accountId: string } | null
   rafeeqSocialChatUrl?: string | null
   conversionEvents?: LeadEvent[]
+  financingRequest?: FinancingRequest | null
 }
 
 function digits(s: string) {
   return s.replace(/[^\d+]/g, '').replace(/^\+/, '')
 }
 
-export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null, rafeeqSocialChatUrl = null, conversionEvents = [] }: Props) {
+export default function LeadProfile({ lead: initialLead, activities: initialActivities, role, backPath, tenantId, viewerId, members = [], teams = [], bevatel = null, rafeeqSocialChatUrl = null, conversionEvents = [], financingRequest: initialFinancingRequest = null }: Props) {
   const [lead, setLead] = useState(initialLead)
   const [activities, setActivities] = useState<LeadActivity[]>(initialActivities)
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
@@ -48,6 +50,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [showAssign, setShowAssign] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [shareId, setShareId] = useState('')
+  const [financingRequest, setFinancingRequest] = useState(initialFinancingRequest)
+  const [showFinancingModal, setShowFinancingModal] = useState(false)
+  const [savingFinancingStatus, setSavingFinancingStatus] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
   const { showToast } = useToast()
@@ -124,6 +129,28 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
       setLead(prev => ({ ...prev, status: sub.status, sub_status: key }))
       setActivities(prev => [...prev, r.activity])
     }
+  }
+
+  // Shared by the standalone status dropdown (sends only `status`) and the
+  // popup's full save (sends every field) — the API merges either against
+  // whatever's already saved, so a bare status change never wipes the rest.
+  // `updatedLead`/`activity` only come back when rejecting the request moved
+  // the LEAD's own sub_status too (see the route) — applied here so the
+  // status badge/picker and timeline reflect it immediately.
+  async function saveFinancingRequest(fields: Record<string, unknown>) {
+    const r = await post(`/api/leads/${lead.id}/financing-request`, fields)
+    if (!r) return null
+    if (r.financingRequest) setFinancingRequest(r.financingRequest)
+    if (r.updatedLead) setLead(prev => ({ ...prev, status: r.updatedLead.status, sub_status: r.updatedLead.sub_status }))
+    if (r.activity) setActivities(prev => [...prev, r.activity])
+    return r.financingRequest as FinancingRequest
+  }
+
+  async function changeFinancingStatus(status: FinancingStatus) {
+    if (financingRequest?.status === status) return
+    setSavingFinancingStatus(true)
+    await saveFinancingRequest({ status })
+    setSavingFinancingStatus(false)
   }
 
   async function logCall(result: 'answered' | 'no_answer') {
@@ -304,6 +331,30 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             <div className="mb-4">
               <StatusPicker currentKey={lead.sub_status || null} busy={busy} onPick={changeSubStatus} />
             </div>
+
+            {/* طلب تمويل — appears once the lead first reaches "رفع طلب", and
+                stays visible/editable afterward regardless of where the
+                lead's own status moves to next (e.g. after a rejection). */}
+            {(lead.sub_status === 'application_submitted' || financingRequest) && (
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFinancingModal(true)}
+                  className="btn btn-outline text-sm !py-1.5 flex-1 flex items-center justify-center gap-1.5"
+                >
+                  <Landmark size={15} /> طلب تمويل
+                </button>
+                <select
+                  className="input !w-auto text-sm"
+                  value={financingRequest?.status || 'new'}
+                  disabled={savingFinancingStatus}
+                  onChange={e => changeFinancingStatus(e.target.value as FinancingStatus)}
+                  style={{ color: FINANCING_STATUS_COLORS[(financingRequest?.status as FinancingStatus) || 'new'] }}
+                >
+                  {FINANCING_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-2.5 text-sm border-t border-border pt-4">
               {phone && <div className="flex items-center gap-2 text-foreground"><Phone size={15} className="text-muted2" /> <span dir="ltr">{phone}</span></div>}
@@ -521,6 +572,16 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
           </div>
         </div>
       </div>
+
+      {showFinancingModal && (
+        <FinancingRequestModal
+          lead={lead}
+          financingRequest={financingRequest}
+          busy={busy}
+          onClose={() => setShowFinancingModal(false)}
+          onSave={saveFinancingRequest}
+        />
+      )}
     </div>
   )
 }
@@ -660,6 +721,112 @@ function TimelineItem({ activity: a }: { activity: LeadActivity }) {
           {a.body}
         </div>
       )}
+    </div>
+  )
+}
+
+// Today's date as YYYY-MM-DD, for a fresh request's default "التاريخ".
+function todayIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+interface FinancingFormState {
+  phone: string
+  request_type: string
+  financing_entity: string
+  car: string
+  car_model: string
+  car_type: string
+  allowed_amount: string
+  salary: string
+  customer_name: string
+  request_date: string
+}
+
+// All fields editable, pre-filled from the saved financing_requests row if
+// one exists, else from the lead's own data (name/phone) for a first-time
+// fill — see LeadProfile's saveFinancingRequest for how the save is merged
+// server-side against whatever's already there.
+function FinancingRequestModal({ lead, financingRequest, busy, onClose, onSave }: {
+  lead: Lead
+  financingRequest: FinancingRequest | null
+  busy: boolean
+  onClose: () => void
+  onSave: (fields: Record<string, unknown>) => Promise<FinancingRequest | null>
+}) {
+  const [form, setForm] = useState<FinancingFormState>({
+    phone: financingRequest?.phone || leadPhone(lead.data) || '',
+    request_type: financingRequest?.request_type || '',
+    financing_entity: financingRequest?.financing_entity || '',
+    car: financingRequest?.car || '',
+    car_model: financingRequest?.car_model || '',
+    car_type: financingRequest?.car_type || '',
+    allowed_amount: financingRequest?.allowed_amount || '',
+    salary: financingRequest?.salary || '',
+    customer_name: financingRequest?.customer_name || leadName(lead.data) || '',
+    request_date: financingRequest?.request_date || todayIso(),
+  })
+
+  function set<K extends keyof FinancingFormState>(key: K, value: string) {
+    setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function save() {
+    const r = await onSave({ ...form })
+    if (r) onClose()
+  }
+
+  const field = (label: string, key: keyof FinancingFormState, opts?: { type?: string }) => (
+    <label className="text-sm block">
+      <span className="block text-muted2 mb-1">{label}</span>
+      <input
+        type={opts?.type || 'text'}
+        className="input"
+        value={form[key]}
+        onChange={e => set(key, e.target.value)}
+        dir={opts?.type === 'date' ? 'ltr' : undefined}
+      />
+    </label>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-foreground flex items-center gap-2"><Landmark size={18} style={{ color: 'var(--primary)' }} /> طلب تمويل</h3>
+          <button onClick={onClose} type="button" className="text-muted2 hover:text-foreground transition p-1 rounded-lg" title="إغلاق">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {field('اسم العميل', 'customer_name')}
+          {field('رقم الهاتف', 'phone')}
+          <label className="text-sm block">
+            <span className="block text-muted2 mb-1">نوع الطلب</span>
+            <select className="input" value={form.request_type} onChange={e => set('request_type', e.target.value)}>
+              <option value="">اختر</option>
+              <option value="individual">أفراد</option>
+              <option value="company">شركات</option>
+            </select>
+          </label>
+          {field('جهة التمويل', 'financing_entity')}
+          {field('السيارة', 'car')}
+          {field('موديل السيارة', 'car_model')}
+          {field('نوع السيارة', 'car_type')}
+          {field('المسموح', 'allowed_amount')}
+          {field('الراتب', 'salary')}
+          {field('التاريخ', 'request_date', { type: 'date' })}
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <button onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
+          <button onClick={save} disabled={busy} className="btn btn-primary flex-1 flex items-center justify-center gap-1.5">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} {busy ? 'جارٍ الحفظ...' : 'حفظ'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
