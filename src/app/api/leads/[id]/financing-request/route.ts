@@ -72,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     allowed_amount?: string
     salary?: string
     customer_name?: string
+    showroom_name?: string
     request_date?: string
   }
   try {
@@ -121,6 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         allowed_amount: field('allowed_amount'),
         salary: field('salary'),
         customer_name: field('customer_name'),
+        showroom_name: field('showroom_name'),
         request_date: 'request_date' in body ? (body.request_date || null) : (existing?.request_date ?? null),
         updated_at: new Date().toISOString(),
       },

@@ -743,6 +743,7 @@ interface FinancingFormState {
   allowed_amount: string
   salary: string
   customer_name: string
+  showroom_name: string
   request_date: string
 }
 
@@ -767,6 +768,7 @@ function FinancingRequestModal({ lead, financingRequest, busy, onClose, onSave }
     allowed_amount: financingRequest?.allowed_amount || '',
     salary: financingRequest?.salary || '',
     customer_name: financingRequest?.customer_name || leadName(lead.data) || '',
+    showroom_name: financingRequest?.showroom_name || '',
     request_date: financingRequest?.request_date || todayIso(),
   })
 
@@ -819,6 +821,7 @@ function FinancingRequestModal({ lead, financingRequest, busy, onClose, onSave }
           {field('نوع السيارة', 'car_type')}
           {field('المسموح', 'allowed_amount', { type: 'number' })}
           {field('الراتب', 'salary', { type: 'number' })}
+          {field('اسم المعرض', 'showroom_name')}
           {field('التاريخ', 'request_date', { type: 'date' })}
         </div>
 

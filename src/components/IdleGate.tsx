@@ -55,7 +55,14 @@ export default function IdleGate() {
         </p>
         <div className="flex gap-2 pt-1">
           <button
-            onClick={() => { setReloading(true); window.location.reload() }}
+            onClick={() => {
+              setReloading(true)
+              // reload() is synchronous and navigates away immediately — fired
+              // right after setState, the browser never gets a chance to paint
+              // the spinner first. Deferring two frames guarantees one repaint
+              // happens before the page actually starts unloading.
+              requestAnimationFrame(() => requestAnimationFrame(() => window.location.reload()))
+            }}
             disabled={reloading}
             className="btn btn-primary flex-1 gap-1.5"
           >

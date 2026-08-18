@@ -384,6 +384,7 @@ export interface FinancingRequest {
   allowed_amount: string | null
   salary: string | null
   customer_name: string | null
+  showroom_name: string | null
   request_date: string | null
   created_at: string
   updated_at: string
