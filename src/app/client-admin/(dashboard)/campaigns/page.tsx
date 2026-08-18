@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import DashboardView from '@/components/app/DashboardView'
@@ -8,6 +9,9 @@ export default async function ClientAdminCampaignsPage() {
   const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user!.id).single()
   const tenantId = profile?.tenant_id || ''
   const isAdmin = profile?.role === 'client_admin'
+  // client_admin only — the parent layout lets client_sales_manager into
+  // /client-admin generally, but this section is admin-only specifically.
+  if (!isAdmin) redirect('/client-admin/dashboard')
 
   const [
     { data: campaigns },

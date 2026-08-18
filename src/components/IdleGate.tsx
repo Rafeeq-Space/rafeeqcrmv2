@@ -21,6 +21,7 @@ export default function IdleGate() {
   const router = useRouter()
   const [idle, setIdle] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [reloading, setReloading] = useState(false)
 
   useEffect(() => {
     // checkIdleGate() is sticky (see idleTracker.ts) — once it flips to true
@@ -53,8 +54,12 @@ export default function IdleGate() {
           مفيش أي نشاط منك على الصفحة دي من فترة — برجاء تحديث الصفحة لمتابعة العمل، أو تسجيل الخروج لو انتهيت.
         </p>
         <div className="flex gap-2 pt-1">
-          <button onClick={() => window.location.reload()} className="btn btn-primary flex-1 gap-1.5">
-            <RefreshCw size={14} /> تحديث
+          <button
+            onClick={() => { setReloading(true); window.location.reload() }}
+            disabled={reloading}
+            className="btn btn-primary flex-1 gap-1.5"
+          >
+            <RefreshCw size={14} className={reloading ? 'animate-spin' : ''} /> {reloading ? 'جارٍ التحديث...' : 'تحديث'}
           </button>
           <button onClick={signOut} disabled={signingOut} className="btn btn-outline flex-1 gap-1.5">
             <LogOut size={14} /> {signingOut ? 'جارٍ الخروج...' : 'تسجيل الخروج'}

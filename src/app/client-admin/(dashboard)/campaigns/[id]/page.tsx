@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -11,6 +11,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   const { data: profile } = await supabase.from('profiles').select('tenant_id, role').eq('id', user!.id).single()
   const tenantId = profile?.tenant_id || ''
   const isAdmin = profile?.role === 'client_admin'
+  // client_admin only — matches campaigns/page.tsx.
+  if (!isAdmin) redirect('/client-admin/dashboard')
 
   const { data: campaign } = await supabase
     .from('campaigns')

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, ClipboardList, LayoutDashboard, Users, Bell, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Goal, UserCircle } from 'lucide-react'
+import { BookOpen, ClipboardList, LayoutDashboard, Users, Bell, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Goal, UserCircle, Loader2 } from 'lucide-react'
 import Logo from '@/components/Logo'
 import { createClient } from '@/lib/supabase/client'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -82,6 +82,27 @@ export default function AppNav({ profile }: Props) {
   const [mounted, setMounted] = useState(false)
   const unread = useUnreadNotifications()
 
+  // Shows a spinner on whichever nav link was just clicked, until the route
+  // actually finishes changing — a page that fetches data server-side (most
+  // of these) otherwise gives no feedback between the click and the new page
+  // appearing, and a slow load reads as "the click didn't register". Reset
+  // during render (React's own recommended pattern for "clear state when a
+  // prop changes") rather than in an effect, so it clears in the same paint
+  // as the new page instead of one tick later.
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+  const [pendingPathname, setPendingPathname] = useState(pathname)
+  if (pathname !== pendingPathname) {
+    setPendingPathname(pathname)
+    setPendingHref(null)
+  }
+  // Safety net — if navigation is interrupted/fails for some reason, don't
+  // leave the spinner stuck forever.
+  useEffect(() => {
+    if (!pendingHref) return
+    const t = setTimeout(() => setPendingHref(null), 8000)
+    return () => clearTimeout(t)
+  }, [pendingHref])
+
   useEffect(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     if (stored !== null) setCollapsed(stored === '1')
@@ -115,12 +136,13 @@ export default function AppNav({ profile }: Props) {
         {!mini && <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">القائمة الرئيسية</p>}
         {navItems.map(({ href, label, desc, icon: Icon }) => {
           const active = pathname.startsWith(href)
+          const pending = pendingHref === href
           const badge = href.endsWith('/notifications') ? unread : 0
           return (
             <Link
               key={href}
               href={href}
-              onClick={onNavigate}
+              onClick={() => { if (!active) setPendingHref(href); onNavigate?.() }}
               title={mini ? label : undefined}
               className={`group flex items-start rounded-xl transition ${
                 mini ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
@@ -131,7 +153,9 @@ export default function AppNav({ profile }: Props) {
               }`}
             >
               <span className={`relative ${mini ? 'shrink-0' : 'mt-0.5 shrink-0'}`}>
-                <Icon size={19} style={active ? { color: 'var(--primary)' } : undefined} />
+                {pending
+                  ? <Loader2 size={19} className="animate-spin" style={{ color: 'var(--primary)' }} />
+                  : <Icon size={19} style={active ? { color: 'var(--primary)' } : undefined} />}
                 {badge > 0 && (
                   <span className="absolute -top-1.5 -end-1.5 min-w-[15px] h-[15px] px-1 rounded-full text-[0.55rem] font-bold flex items-center justify-center text-white" style={{ background: 'var(--danger)' }}>
                     {badge > 9 ? '9+' : badge}
