@@ -42,7 +42,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ financingRequest: financingRequest || null })
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+// POST, not PUT — every other lead-detail action (activity/assign/share/
+// attachments) is called via the same shared client-side `post()` helper,
+// which is hardcoded to POST; matching that convention here instead of
+// introducing PUT as an outlier is what the client actually calls.
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const viewer = await requireTenantUser()
   if (!viewer) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -76,6 +80,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   if (body.request_type && !['individual', 'company'].includes(body.request_type)) {
     return NextResponse.json({ error: 'Invalid request_type' }, { status: 400 })
+  }
+  if (body.allowed_amount && !/^\d+(\.\d+)?$/.test(body.allowed_amount.trim())) {
+    return NextResponse.json({ error: 'المسموح لازم يكون رقم' }, { status: 400 })
+  }
+  if (body.salary && !/^\d+(\.\d+)?$/.test(body.salary.trim())) {
+    return NextResponse.json({ error: 'الراتب لازم يكون رقم' }, { status: 400 })
   }
 
   // Merged with whatever's already saved — the standalone status dropdown

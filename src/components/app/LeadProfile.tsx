@@ -815,8 +815,8 @@ function FinancingRequestModal({ lead, financingRequest, busy, onClose, onSave }
           {field('السيارة', 'car')}
           {field('موديل السيارة', 'car_model')}
           {field('نوع السيارة', 'car_type')}
-          {field('المسموح', 'allowed_amount')}
-          {field('الراتب', 'salary')}
+          {field('المسموح', 'allowed_amount', { type: 'number' })}
+          {field('الراتب', 'salary', { type: 'number' })}
           {field('التاريخ', 'request_date', { type: 'date' })}
         </div>
 
