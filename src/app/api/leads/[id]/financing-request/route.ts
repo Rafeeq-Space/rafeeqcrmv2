@@ -6,9 +6,11 @@ import { pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
 import { pushSubStatusToRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
 import { pushStatusToSheet } from '@/lib/leads/sheetSync'
 import { statusForSubStatus, subStatusByKey } from '@/lib/leads/subStatus'
-import { isFinancingStatus } from '@/lib/leads/financingStatus'
+import { isFinancingStatus, FINANCING_STATUS_LABELS, type FinancingStatus } from '@/lib/leads/financingStatus'
 import { LEAD_STATUS_LABELS } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
+
+const ACTIVITY_SELECT = '*, actor:profiles!actor_id(id, full_name), mentioned:profiles!mentioned_id(id, full_name)'
 
 // The lead's sub-status the financing request bounces it to the moment it's
 // marked "مرفوض" — an explicit product decision (use the existing
@@ -98,6 +100,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .maybeSingle()
 
   const status = body.status && isFinancingStatus(body.status) ? body.status : (existing?.status || 'new')
+  const isNewRequest = !existing
+  const statusChanged = !isNewRequest && existing.status !== status
   const newlyRejected = status === 'rejected' && existing?.status !== 'rejected'
   const field = (key: keyof typeof body) => (key in body ? (body[key]?.trim() || null) : (existing?.[key] ?? null))
 
@@ -127,11 +131,47 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Reported back to the client when set, so it can update the lead's status
-  // badge/picker in place without a manual refresh — the PUT above already
-  // changed it in the database by this point.
+  // Reported back to the client so the timeline updates live without a
+  // manual refresh — every activity actually inserted this request, in
+  // order (the initial "submitted" log, or a status-change log, then
+  // possibly the lead-side rejection one too).
+  const activities: unknown[] = []
+  // Only set when rejecting the financing also moved the LEAD's own status —
+  // lets the client update the status badge/picker in place too.
   let updatedLead: { status: string; sub_status: string } | null = null
-  let rejectionActivity: unknown = null
+
+  // Log every financing-request event on the lead's own timeline, same as a
+  // manual lead status change — the first save ("تم رفع طلب تمويل"), and any
+  // later status change ("من X إلى Y"), each with its own timestamp.
+  if (isNewRequest) {
+    const { data: activity } = await supa
+      .from('lead_activities')
+      .insert({
+        tenant_id: viewer.tenantId,
+        lead_id: leadId,
+        actor_id: viewer.id,
+        type: 'comment',
+        body: '📋 تم رفع طلب تمويل للعميل',
+      })
+      .select(ACTIVITY_SELECT)
+      .single()
+    if (activity) activities.push(activity)
+  } else if (statusChanged) {
+    const fromLabel = FINANCING_STATUS_LABELS[existing!.status as FinancingStatus] || existing!.status
+    const toLabel = FINANCING_STATUS_LABELS[status as FinancingStatus] || status
+    const { data: activity } = await supa
+      .from('lead_activities')
+      .insert({
+        tenant_id: viewer.tenantId,
+        lead_id: leadId,
+        actor_id: viewer.id,
+        type: 'comment',
+        body: `📋 تم تغيير حالة طلب التمويل من «${fromLabel}» إلى «${toLabel}»`,
+      })
+      .select(ACTIVITY_SELECT)
+      .single()
+    if (activity) activities.push(activity)
+  }
 
   // Rejecting the financing is the one point where this touches the lead's
   // own status — moves it to "تواصل لاحق", exactly like a manual sub-status
@@ -162,9 +202,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         to_status: to,
         body: `تم رفض طلب التمويل — تم تحويل الحالة تلقائيًا من «${fromLabel}» إلى «${toLabel}»`,
       })
-      .select('*, actor:profiles!actor_id(id, full_name), mentioned:profiles!mentioned_id(id, full_name)')
+      .select(ACTIVITY_SELECT)
       .single()
-    rejectionActivity = activity
+    if (activity) activities.push(activity)
 
     after(async () => {
       await Promise.all([
@@ -176,5 +216,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     })
   }
 
-  return NextResponse.json({ financingRequest, updatedLead, activity: rejectionActivity })
+  return NextResponse.json({ financingRequest, updatedLead, activities })
 }

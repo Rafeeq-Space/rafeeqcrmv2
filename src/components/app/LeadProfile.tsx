@@ -134,15 +134,17 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   // Shared by the standalone status dropdown (sends only `status`) and the
   // popup's full save (sends every field) — the API merges either against
   // whatever's already saved, so a bare status change never wipes the rest.
-  // `updatedLead`/`activity` only come back when rejecting the request moved
-  // the LEAD's own sub_status too (see the route) — applied here so the
-  // status badge/picker and timeline reflect it immediately.
+  // `activities` carries every timeline entry the server just logged (the
+  // initial "تم رفع طلب تمويل", any later status change, and — only when
+  // rejecting also moved the LEAD's own sub_status — that change too, which
+  // is when `updatedLead` comes back as well) — applied here so the status
+  // badge/picker and timeline reflect all of it immediately.
   async function saveFinancingRequest(fields: Record<string, unknown>) {
     const r = await post(`/api/leads/${lead.id}/financing-request`, fields)
     if (!r) return null
     if (r.financingRequest) setFinancingRequest(r.financingRequest)
     if (r.updatedLead) setLead(prev => ({ ...prev, status: r.updatedLead.status, sub_status: r.updatedLead.sub_status }))
-    if (r.activity) setActivities(prev => [...prev, r.activity])
+    if (r.activities?.length) setActivities(prev => [...prev, ...r.activities])
     return r.financingRequest as FinancingRequest
   }
 
