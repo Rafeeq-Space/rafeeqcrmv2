@@ -17,8 +17,19 @@ export async function GET(request: Request) {
   const state = url.searchParams.get('state')
   const deniedOrError = url.searchParams.get('error')
 
+  // This route's own URL is always the fixed root domain (it must be, to
+  // match Snapchat's registered redirect_uri exactly) — but the admin
+  // needs to land back on THEIR tenant's own subdomain
+  // (sub.rafeeqcrm.com/admin/...), not the bare root domain, which has no
+  // /client-admin route at all and 404s. Resolve the admin's tenant
+  // subdomain once and build every redirect against that instead.
+  const supabase = adminSupabase()
+  const { data: tenant } = await supabase.from('tenants').select('subdomain').eq('id', auth.tenantId).single()
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'rafeeqcrm.com'
+  const tenantBaseUrl = tenant?.subdomain ? `https://${tenant.subdomain}.${rootDomain}` : `https://${rootDomain}`
+
   const finish = (ok: boolean, message: string) => {
-    const dest = new URL('/client-admin/ad-connections', request.url)
+    const dest = new URL('/admin/ad-connections', tenantBaseUrl)
     dest.searchParams.set(ok ? 'snapchat_success' : 'snapchat_error', message)
     return NextResponse.redirect(dest)
   }
@@ -26,7 +37,6 @@ export async function GET(request: Request) {
   if (deniedOrError) return finish(false, 'تم إلغاء الربط من طرف سناب شات')
   if (!code || !state) return finish(false, 'رد غير مكتمل من سناب شات')
 
-  const supabase = adminSupabase()
   const { data: connection } = await supabase.from('ad_connections').select('*').eq('id', state).single()
   if (!connection || connection.tenant_id !== auth.tenantId || connection.platform !== 'snapchat') {
     return finish(false, 'اتصال غير صالح')
