@@ -54,80 +54,259 @@ function maskToken(token: string) {
   return `•••• ${token.slice(-4)}`
 }
 
-// Form ID picker for an already-saved, OAuth-connected Snapchat connection —
-// fetches the account's real Lead Generation Forms live and renders them as
-// a dropdown, instead of making the admin go find and copy-paste a raw UUID
-// by hand (the awkward manual step third-party tools like Driftrock hide
-// behind a one-click picker). Only usable once the connection exists AND is
-// connected — a brand-new, unsaved connection falls back to the plain text
-// field below it (same chicken-and-egg reason form_id is optional at
-// creation — see add_snapchat_oauth_refresh.sql's migration comment).
+// ─── Snapchat setup wizard ──────────────────────────────────────────
+// Mirrors the Connect → Mapping → Destinations → Review flow used by
+// third-party lead-sync tools (Driftrock's own setup wizard, specifically)
+// instead of one flat pile of fields. Only usable once the connection is
+// saved (editing) — a brand-new, unsaved connection falls back to the plain
+// Client ID/Secret/Ad Account ID fields in ConnectionModal, since nothing
+// past "Connect" is reachable before the row (and its id) exist.
 interface SnapFormField { slot: string; description: string; editable: boolean }
 interface SnapFormOption { id: string; name: string; status: string; fields: SnapFormField[] }
+interface SnapWizardForm {
+  name: string
+  pixel_id: string
+  snap_client_id: string
+  snap_client_secret: string
+  snap_ad_account_id: string
+  form_id: string
+  default_campaign_id: string
+  snap_field_mapping: Record<string, string>
+}
 
-function SnapchatFormPicker({
-  connectionId, value, onChange, fieldMapping, onMappingChange,
+const SNAP_STEPS: { n: 1 | 2 | 3 | 4; label: string }[] = [
+  { n: 1, label: 'الربط' },
+  { n: 2, label: 'المطابقة' },
+  { n: 3, label: 'الوجهة' },
+  { n: 4, label: 'المراجعة' },
+]
+
+function SnapchatStepIndicator({ step, onJump }: { step: 1 | 2 | 3 | 4; onJump: (n: 1 | 2 | 3 | 4) => void }) {
+  return (
+    <div className="flex items-center mb-4">
+      {SNAP_STEPS.map((s, i) => (
+        <div key={s.n} className="flex items-center" style={{ flex: i < SNAP_STEPS.length - 1 ? 1 : '0 0 auto' }}>
+          <button type="button" onClick={() => onJump(s.n)} className="flex flex-col items-center gap-1">
+            <span
+              className="flex items-center justify-center rounded-full text-xs font-bold shrink-0"
+              style={{
+                width: 24, height: 24,
+                background: step >= s.n ? 'var(--primary)' : 'var(--surface-1)',
+                color: step >= s.n ? '#fff' : 'var(--muted2)',
+                border: step >= s.n ? 'none' : '1px solid var(--border)',
+              }}
+            >
+              {step > s.n ? '✓' : s.n}
+            </span>
+            <span className="text-xs" style={{ color: step === s.n ? 'var(--foreground)' : 'var(--muted2)' }}>{s.label}</span>
+          </button>
+          {i < SNAP_STEPS.length - 1 && (
+            <div className="flex-1 h-px mx-1" style={{ background: step > s.n ? 'var(--primary)' : 'var(--border)' }} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SnapchatWizard({
+  connection, campaigns, form, setForm, onRefresh,
 }: {
-  connectionId: string
-  value: string
-  onChange: (id: string) => void
-  fieldMapping: Record<string, string>
-  onMappingChange: (mapping: Record<string, string>) => void
+  connection: AdConnection
+  campaigns: CampaignOption[]
+  form: SnapWizardForm
+  setForm: (updater: (prev: SnapWizardForm) => SnapWizardForm) => void
+  onRefresh: () => void
 }) {
+  const connected = !!connection.snap_refresh_token
+  const activated = !!connection.snap_integration_id
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(!connected || !form.form_id ? 1 : activated ? 4 : 2)
   const [forms, setForms] = useState<SnapFormOption[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [loadingForms, setLoadingForms] = useState(false)
+  const [formsError, setFormsError] = useState('')
+  const [savingStep1, setSavingStep1] = useState(false)
+  const [step1Error, setStep1Error] = useState('')
+  const [savingStep2, setSavingStep2] = useState(false)
+  const [step2Error, setStep2Error] = useState('')
+  const [savingStep3, setSavingStep3] = useState(false)
+  const [step3Error, setStep3Error] = useState('')
+  const [activating, setActivating] = useState(false)
+  const [activateError, setActivateError] = useState('')
 
-  async function load() {
-    setLoading(true)
-    setError('')
+  async function loadForms() {
+    setLoadingForms(true)
+    setFormsError('')
     try {
-      const res = await fetch(`/api/client-admin/ad-connections/${connectionId}/snapchat-forms`)
+      const res = await fetch(`/api/client-admin/ad-connections/${connection.id}/snapchat-forms`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'خطأ')
       setForms(data.forms || [])
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'خطأ')
+      setFormsError(err instanceof Error ? err.message : 'خطأ')
     } finally {
-      setLoading(false)
+      setLoadingForms(false)
     }
   }
 
-  const selected = forms?.find(f => f.id === value)
+  // Shared PATCH used by every step's "next" button — each step only saves
+  // the fields it owns, but always as a real persist (not just local state),
+  // since there's no single flat "save" button at the bottom of this wizard
+  // the way the other platforms' modals have.
+  async function savePartial(fields: Record<string, unknown>): Promise<boolean> {
+    const res = await fetch(`/api/client-admin/ad-connections/${connection.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'خطأ')
+    return true
+  }
+
+  async function saveStep1(): Promise<boolean> {
+    setSavingStep1(true)
+    setStep1Error('')
+    try {
+      return await savePartial({
+        name: form.name,
+        pixel_id: form.pixel_id,
+        snap_client_id: form.snap_client_id || null,
+        snap_client_secret: form.snap_client_secret || null,
+        snap_ad_account_id: form.snap_ad_account_id || null,
+        form_id: form.form_id || null,
+      })
+    } catch (err: unknown) {
+      setStep1Error(err instanceof Error ? err.message : 'خطأ')
+      return false
+    } finally {
+      setSavingStep1(false)
+    }
+  }
+
+  async function saveStep2(): Promise<boolean> {
+    setSavingStep2(true)
+    setStep2Error('')
+    try {
+      return await savePartial({
+        snap_field_mapping: Object.keys(form.snap_field_mapping).length ? form.snap_field_mapping : null,
+      })
+    } catch (err: unknown) {
+      setStep2Error(err instanceof Error ? err.message : 'خطأ')
+      return false
+    } finally {
+      setSavingStep2(false)
+    }
+  }
+
+  async function saveStep3(): Promise<boolean> {
+    setSavingStep3(true)
+    setStep3Error('')
+    try {
+      return await savePartial({ default_campaign_id: form.default_campaign_id || null })
+    } catch (err: unknown) {
+      setStep3Error(err instanceof Error ? err.message : 'خطأ')
+      return false
+    } finally {
+      setSavingStep3(false)
+    }
+  }
+
+  async function activate() {
+    setActivating(true)
+    setActivateError('')
+    try {
+      const res = await fetch(`/api/client-admin/ad-connections/${connection.id}/register-snap-webhook`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      onRefresh()
+    } catch (err: unknown) {
+      setActivateError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setActivating(false)
+    }
+  }
+
+  const selectedForm = forms?.find(f => f.id === form.form_id)
+  const campaignName = campaigns.find(c => c.id === form.default_campaign_id)?.name
 
   return (
     <div>
-      <label className="label">Form ID</label>
-      {forms ? (
-        <select className="input" value={value} onChange={e => onChange(e.target.value)}>
-          <option value="">اختر فورم</option>
-          {forms.map(f => (
-            <option key={f.id} value={f.id}>{f.name} — {f.status}{f.id === value ? ' (محدد حاليًا)' : ''}</option>
-          ))}
-        </select>
-      ) : (
-        <input dir="ltr" className="input text-start" value={value} readOnly
-          placeholder="اضغط تحديث القائمة لجلب الفورمات من سناب شات" />
-      )}
-      <button type="button" onClick={load} disabled={loading} className="btn btn-outline w-full text-xs py-1.5 mt-2">
-        {loading ? 'جارٍ الجلب...' : forms ? '🔄 تحديث القائمة' : 'جلب قائمة الفورمات من سناب شات'}
-      </button>
-      {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+      <SnapchatStepIndicator step={step} onJump={setStep} />
 
-      {selected && selected.fields.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-border space-y-2">
-          <p className="text-xs text-muted2">
-            كل حقول الفورم ده — الحقول القياسية بتُحفظ تلقائيًا، والأسئلة المخصصة بس محتاجة تسميها:
-          </p>
-          {selected.fields.map((f, i) => f.editable ? (
+      {step === 1 && (
+        <div className="space-y-3">
+          <div>
+            <label className="label">Client ID *</label>
+            <input dir="ltr" className="input text-start" value={form.snap_client_id}
+              onChange={e => setForm(p => ({ ...p, snap_client_id: e.target.value.trim() }))} />
+            <p className="text-xs text-muted2 mt-1">من Snapchat Business Manager ← Business Details ← My Apps.</p>
+          </div>
+          <div>
+            <label className="label">Client Secret *</label>
+            <input dir="ltr" type="password" className="input text-start" value={form.snap_client_secret}
+              onChange={e => setForm(p => ({ ...p, snap_client_secret: e.target.value.trim() }))}
+              placeholder="اتركه كما هو أو أدخل قيمة جديدة" />
+          </div>
+          <div>
+            <label className="label">Ad Account ID *</label>
+            <input dir="ltr" className="input text-start" value={form.snap_ad_account_id}
+              onChange={e => setForm(p => ({ ...p, snap_ad_account_id: e.target.value.trim() }))}
+              placeholder="من Snapchat Ads Manager" />
+          </div>
+
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs text-muted2 mb-1.5">
+              {connected ? '✓ الحساب مربوط عبر OAuth — يتجدد التوكن تلقائيًا.' : 'اضغط "حفظ" بالأسفل أولًا (لو عدّلت البيانات فوق)، ثم اربط الحساب.'}
+            </p>
+            <a
+              href={`/api/client-admin/ad-connections/${connection.id}/snapchat-oauth/start`}
+              className="btn btn-outline w-full text-xs py-1.5 inline-flex items-center justify-center"
+              aria-disabled={!connection.snap_client_id}
+              onClick={e => { if (!connection.snap_client_id) e.preventDefault() }}
+            >
+              {connected ? 'إعادة الربط مع سناب شات' : 'ربط الحساب مع سناب شات'}
+            </a>
+          </div>
+
+          {connected && (
+            <div className="pt-2 border-t border-border">
+              <label className="label">اختر الفورم (Lead Generation Form)</label>
+              {forms ? (
+                <select className="input" value={form.form_id} onChange={e => setForm(p => ({ ...p, form_id: e.target.value }))}>
+                  <option value="">اختر فورم</option>
+                  {forms.map(f => <option key={f.id} value={f.id}>{f.name} — {f.status}</option>)}
+                </select>
+              ) : (
+                <input dir="ltr" className="input text-start" value={form.form_id} readOnly
+                  placeholder="اضغط جلب القائمة تحت" />
+              )}
+              <button type="button" onClick={loadForms} disabled={loadingForms} className="btn btn-outline w-full text-xs py-1.5 mt-2">
+                {loadingForms ? 'جارٍ الجلب...' : forms ? '🔄 تحديث القائمة' : 'جلب قائمة الفورمات من سناب شات'}
+              </button>
+              {formsError && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{formsError}</p>}
+            </div>
+          )}
+
+          {step1Error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{step1Error}</p>}
+          <button type="button" onClick={async () => { if (await saveStep1()) setStep(2) }} disabled={savingStep1}
+            className="btn btn-primary w-full">
+            {savingStep1 ? 'جارٍ الحفظ...' : 'حفظ والمتابعة للمطابقة ←'}
+          </button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-3">
+          {!selectedForm && <p className="text-xs text-muted2">رجّع لخطوة الربط واختار فورم أولًا (وجلّب قائمة الفورمات لو لسه ما فعلتش).</p>}
+          {selectedForm && selectedForm.fields.length > 0 && selectedForm.fields.map((f, i) => f.editable ? (
             <label key={`${f.slot}-${i}`} className="text-sm block">
-              <span className="block text-muted2 mb-1 text-xs">{f.description || f.slot} <span className="text-xs" style={{ color: 'var(--warning)' }}>(سؤال مخصص — سمّه)</span></span>
-              <input className="input text-sm" value={fieldMapping[f.slot] || ''}
+              <span className="block text-muted2 mb-1 text-xs">{f.description || f.slot} <span style={{ color: 'var(--warning)' }}>(سؤال مخصص — سمّه)</span></span>
+              <input className="input text-sm" value={form.snap_field_mapping[f.slot] || ''}
                 onChange={e => {
-                  const next = { ...fieldMapping }
+                  const next = { ...form.snap_field_mapping }
                   if (e.target.value.trim()) next[f.slot] = e.target.value.trim()
                   else delete next[f.slot]
-                  onMappingChange(next)
+                  setForm(p => ({ ...p, snap_field_mapping: next }))
                 }}
                 placeholder="مثال: نوع السيارة" />
             </label>
@@ -137,11 +316,89 @@ function SnapchatFormPicker({
               <span className="text-xs text-muted2">✓ يُحفظ تلقائيًا</span>
             </div>
           ))}
+          {selectedForm && selectedForm.fields.length === 0 && (
+            <p className="text-xs text-muted2">الفورم ده مفيهوش أي حقول معرّفة.</p>
+          )}
+          {step2Error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{step2Error}</p>}
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setStep(1)} className="btn btn-outline flex-1">→ السابق</button>
+            <button type="button" disabled={savingStep2} onClick={async () => { if (await saveStep2()) setStep(3) }} className="btn btn-primary flex-1">
+              {savingStep2 ? 'جارٍ الحفظ...' : 'حفظ والتالي ←'}
+            </button>
+          </div>
         </div>
       )}
-      {selected && selected.fields.length === 0 && (
-        <p className="text-xs text-muted2 mt-2">الفورم ده مفيهوش أي حقول معرّفة.</p>
+
+      {step === 3 && (
+        <div className="space-y-3">
+          <div>
+            <label className="label">الحملة الافتراضية (وجهة الليدز داخل الـCRM)</label>
+            <select className="input" value={form.default_campaign_id}
+              onChange={e => setForm(p => ({ ...p, default_campaign_id: e.target.value }))}>
+              <option value="">بدون حملة (غير محدد)</option>
+              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <p className="text-xs text-muted2 mt-1">أي ليد جديد من هذا الفورم يُنسب تلقائيًا لهذه الحملة.</p>
+          </div>
+          {step3Error && <p className="text-xs" style={{ color: 'var(--danger)' }}>{step3Error}</p>}
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setStep(2)} className="btn btn-outline flex-1">→ السابق</button>
+            <button type="button" disabled={savingStep3} onClick={async () => { if (await saveStep3()) setStep(4) }} className="btn btn-primary flex-1">
+              {savingStep3 ? 'جارٍ الحفظ...' : 'حفظ والتالي ←'}
+            </button>
+          </div>
+        </div>
       )}
+
+      {step === 4 && (
+        <div className="space-y-3">
+          <div className="text-sm space-y-1.5 p-3 rounded-lg" style={{ background: 'var(--surface-1)' }}>
+            <p><span className="text-muted2">الحساب:</span> <span className="text-foreground font-semibold">{form.name}</span></p>
+            <p><span className="text-muted2">الفورم:</span> <span className="text-foreground font-semibold">{selectedForm?.name || form.form_id || '—'}</span></p>
+            <p><span className="text-muted2">الحملة الافتراضية:</span> <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span></p>
+            <p><span className="text-muted2">الأسئلة المسمّاة:</span> <span className="text-foreground font-semibold">{Object.keys(form.snap_field_mapping).length || 'لا يوجد'}</span></p>
+          </div>
+          <p className="text-xs text-muted2">
+            {activated ? '✓ استقبال الليدز مفعّل لهذا الفورم.' : 'اضغط لتفعيل استقبال الليدز من سناب شات على هذا الفورم.'}
+          </p>
+          <button type="button" onClick={activate} disabled={activating || !form.form_id || !connected}
+            className="btn btn-primary w-full">
+            {activating ? 'جارٍ التفعيل...' : activated ? 'إعادة تفعيل استقبال الليدز' : 'تفعيل استقبال الليدز'}
+          </button>
+          {activateError && <p className="text-xs" style={{ color: 'var(--danger)' }}>{activateError}</p>}
+          <button type="button" onClick={() => setStep(3)} className="btn btn-outline w-full">→ السابق</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Compact status summary shown on the connection card (list view) — the
+// full interactive wizard above lives in the edit modal; this is just an
+// at-a-glance progress readout so opening "تعديل" isn't the only way to see
+// how far along a connection is.
+function SnapchatStatusSummary({ connection }: { connection: AdConnection }) {
+  const connected = !!connection.snap_refresh_token
+  const formChosen = connected && !!connection.form_id
+  const destinationSet = formChosen && !!connection.default_campaign_id
+  const activated = !!connection.snap_integration_id
+  const chips: { label: string; done: boolean }[] = [
+    { label: 'الربط', done: connected },
+    { label: 'المطابقة', done: formChosen },
+    { label: 'الوجهة', done: destinationSet },
+    { label: 'المراجعة', done: activated },
+  ]
+  return (
+    <div className="mt-3 pt-3 border-t border-border flex items-center gap-1.5 flex-wrap">
+      {chips.map((s, i) => (
+        <span key={i} className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+          style={{
+            background: s.done ? 'var(--success-soft)' : 'var(--surface-1)',
+            color: s.done ? 'var(--success)' : 'var(--muted2)',
+          }}>
+          {s.done ? '✓' : '○'} {s.label}
+        </span>
+      ))}
     </div>
   )
 }
@@ -258,7 +515,7 @@ function ConnectionModal({
             </div>
           )}
 
-          {form.platform === 'snapchat' && (
+          {form.platform === 'snapchat' && !editing && (
             <>
               <div>
                 <label className="label">Client ID *</label>
@@ -271,8 +528,7 @@ function ConnectionModal({
               <div>
                 <label className="label">Client Secret *</label>
                 <input dir="ltr" type="password" className="input text-start" value={form.snap_client_secret}
-                  onChange={e => setForm({ ...form, snap_client_secret: e.target.value.trim() })} required
-                  placeholder={editing ? 'اتركه كما هو أو أدخل قيمة جديدة' : ''} />
+                  onChange={e => setForm({ ...form, snap_client_secret: e.target.value.trim() })} required />
                 <p className="text-xs text-muted2 mt-1">
                   Access Token هنا بيتولّد تلقائيًا بعد الحفظ عن طريق زرار &quot;ربط الحساب مع سناب شات&quot; — ما تكتبه يدويًا، توكنات سناب شات صلاحيتها ساعة واحدة بس وبتتجدد تلقائيًا.
                 </p>
@@ -286,6 +542,9 @@ function ConnectionModal({
                   لازم نعرفه عشان نجيب قايمة الفورمات بتاعتك تلقائيًا بعد الربط، بدل ما تدور على Form ID يدويًا.
                 </p>
               </div>
+              <p className="text-xs text-muted2">
+                بعد الحفظ، رجّع لتعديل هذا الاتصال وستظهر لك خطوات الإعداد كاملة (الربط ← المطابقة ← الوجهة ← المراجعة).
+              </p>
             </>
           )}
 
@@ -301,27 +560,17 @@ function ConnectionModal({
             </div>
           )}
 
-          {form.platform === 'snapchat' && editing && connection?.snap_refresh_token ? (
-            <SnapchatFormPicker
-              connectionId={connection.id}
-              value={form.form_id}
-              onChange={id => setForm({ ...form, form_id: id })}
-              fieldMapping={form.snap_field_mapping}
-              onMappingChange={mapping => setForm({ ...form, snap_field_mapping: mapping })}
+          {form.platform === 'snapchat' && editing && connection && (
+            <SnapchatWizard
+              connection={connection}
+              campaigns={campaigns}
+              form={form}
+              setForm={updater => setForm(prev => ({ ...prev, ...updater(prev) }))}
+              onRefresh={onSaved}
             />
-          ) : form.platform === 'snapchat' && (
-            <div>
-              <label className="label">Form ID (اختياري الآن — يُضاف بعد الربط)</label>
-              <input dir="ltr" className="input text-start" value={form.form_id}
-                onChange={e => setForm({ ...form, form_id: e.target.value.trim() })}
-                placeholder="سيبه فاضي الآن، وارجع وحطه بعد ما تربط الحساب" />
-              <p className="text-xs text-muted2 mt-1">
-                بعد ما تحفظ وتربط الحساب (OAuth)، رجّع لتعديل الاتصال ده وهتقدر تختار الفورم من قايمة تلقائية.
-              </p>
-            </div>
           )}
 
-          {(form.platform === 'tiktok' || form.platform === 'facebook' || form.platform === 'snapchat') && (
+          {(form.platform === 'tiktok' || form.platform === 'facebook' || (form.platform === 'snapchat' && !editing)) && (
             <div>
               <label className="label">الحملة الافتراضية لليدز النموذج الداخلي</label>
               <select className="input" value={form.default_campaign_id}
@@ -384,12 +633,18 @@ function ConnectionModal({
           )}
 
           {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
-            <button type="submit" disabled={loading} className="btn btn-primary flex-1">
-              {loading ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة الحساب'}
-            </button>
-          </div>
+          {form.platform === 'snapchat' && editing && connection ? (
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-outline flex-1">إغلاق</button>
+            </div>
+          ) : (
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
+              <button type="submit" disabled={loading} className="btn btn-primary flex-1">
+                {loading ? 'جارٍ الحفظ...' : editing ? 'حفظ التعديلات' : 'إضافة الحساب'}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>
@@ -444,76 +699,6 @@ function FacebookWebhookNote({ connection, campaigns }: { connection: AdConnecti
         استقبال ليدز Lead Ads يعمل عبر ويبهوك عام على مستوى المنصة بالكامل (وليس رابطًا خاصًا بهذا الحساب) — يتطلب أيضًا موافقة Meta App Review على صلاحية leads_retrieval حتى تصل ليدز صفحات حقيقية (غير تجريبية).
       </p>
       <p className="text-xs text-muted2 mt-1">
-        الحملة الافتراضية: <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span>
-      </p>
-    </div>
-  )
-}
-
-// Registers (or re-registers) this Snapchat connection's webhook with
-// Snapchat's Marketing API so its Lead Generation form starts pushing
-// submissions here — see registerSnapchatWebhook.
-// Step 1 of 2 for Snapchat: connect the OAuth App once (redirects away to
-// Snapchat's own consent screen and back — see the snapchat-oauth/start and
-// .../callback routes). Must succeed before the webhook-registration button
-// below can do anything, since that call needs a live access_token.
-function SnapchatConnectField({ connection }: { connection: AdConnection }) {
-  const connected = !!connection.snap_refresh_token
-  return (
-    <div className="mt-3 pt-3 border-t border-border">
-      <p className="text-xs text-muted2 mb-1.5">
-        {connected
-          ? '✓ الحساب مربوط عبر OAuth — يتجدد التوكن تلقائيًا كل ساعة.'
-          : connection.snap_client_id
-            ? 'لم يتم ربط الحساب بعد — اضغط الزر بالأسفل لإكمال الربط عبر سناب شات.'
-            : 'أدخل Client ID وClient Secret أولاً واحفظ، ثم اضغط للربط.'}
-      </p>
-      <a
-        href={`/api/client-admin/ad-connections/${connection.id}/snapchat-oauth/start`}
-        className="btn btn-outline w-full text-xs py-1.5 inline-flex items-center justify-center"
-        aria-disabled={!connection.snap_client_id}
-        onClick={e => { if (!connection.snap_client_id) e.preventDefault() }}
-      >
-        {connected ? 'إعادة الربط مع سناب شات' : 'ربط الحساب مع سناب شات'}
-      </a>
-    </div>
-  )
-}
-
-// Step 2 of 2: register this form's lead webhook with Snapchat — only
-// meaningful once step 1 above has produced a live access_token.
-function SnapchatWebhookField({ connection, campaigns, onSaved }: { connection: AdConnection; campaigns: CampaignOption[]; onSaved: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const campaignName = campaigns.find(c => c.id === connection.default_campaign_id)?.name
-  const notConnectedYet = !connection.snap_refresh_token
-
-  async function register() {
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch(`/api/client-admin/ad-connections/${connection.id}/register-snap-webhook`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'خطأ')
-      onSaved()
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'خطأ')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="mt-3 pt-3 border-t border-border">
-      <p className="text-xs text-muted2 mb-1.5">
-        {connection.snap_integration_id ? '✓ تم تفعيل استقبال ليدز هذا الفورم.' : 'لم يتم تفعيل استقبال ليدز هذا الفورم بعد.'}
-      </p>
-      <button type="button" onClick={register} disabled={loading || !connection.form_id || notConnectedYet} className="btn btn-outline w-full text-xs py-1.5">
-        {loading ? 'جارٍ التسجيل...' : connection.snap_integration_id ? 'إعادة تسجيل الويبهوك' : 'تفعيل استقبال الليدز'}
-      </button>
-      {notConnectedYet && <p className="text-xs mt-1 text-muted2">اربط الحساب مع سناب شات أولاً (فوق) قبل تفعيل الليدز.</p>}
-      {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
-      <p className="text-xs text-muted2 mt-1.5">
         الحملة الافتراضية: <span className="text-foreground font-semibold">{campaignName || 'غير محددة'}</span>
       </p>
     </div>
@@ -618,9 +803,6 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
               {conn.platform === 'facebook' && conn.page_id && (
                 <p className="text-sm text-muted mt-0.5" dir="ltr">Page ID: {conn.page_id}</p>
               )}
-              {conn.platform === 'snapchat' && conn.form_id && (
-                <p className="text-sm text-muted mt-0.5" dir="ltr">Form ID: {conn.form_id}</p>
-              )}
               {conn.platform === 'tiktok' && (
                 <p className="text-sm text-muted mt-0.5" dir="ltr">
                   CRM Event Set: {conn.tiktok_event_set_id || '—'}
@@ -631,8 +813,7 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
               </p>
               {conn.platform === 'tiktok' && <WebhookUrlField connection={conn} campaigns={campaigns} />}
               {conn.platform === 'facebook' && <FacebookWebhookNote connection={conn} campaigns={campaigns} />}
-              {conn.platform === 'snapchat' && <SnapchatConnectField connection={conn} />}
-              {conn.platform === 'snapchat' && <SnapchatWebhookField connection={conn} campaigns={campaigns} onSaved={refresh} />}
+              {conn.platform === 'snapchat' && <SnapchatStatusSummary connection={conn} />}
               <div className="flex items-center gap-1 justify-end mt-4 pt-3 border-t border-border">
                 <button onClick={() => { setEditConn(conn); setShowModal(true) }} className="text-muted2 hover:text-foreground transition p-1.5 rounded-lg" title="تعديل">
                   <Pencil size={15} />
