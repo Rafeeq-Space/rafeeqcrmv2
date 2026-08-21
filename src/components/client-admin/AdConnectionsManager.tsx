@@ -54,6 +54,58 @@ function maskToken(token: string) {
   return `•••• ${token.slice(-4)}`
 }
 
+// Form ID picker for an already-saved, OAuth-connected Snapchat connection —
+// fetches the account's real Lead Generation Forms live and renders them as
+// a dropdown, instead of making the admin go find and copy-paste a raw UUID
+// by hand (the awkward manual step third-party tools like Driftrock hide
+// behind a one-click picker). Only usable once the connection exists AND is
+// connected — a brand-new, unsaved connection falls back to the plain text
+// field below it (same chicken-and-egg reason form_id is optional at
+// creation — see add_snapchat_oauth_refresh.sql's migration comment).
+function SnapchatFormPicker({
+  connectionId, value, onChange,
+}: { connectionId: string; value: string; onChange: (id: string) => void }) {
+  const [forms, setForms] = useState<{ id: string; name: string; status: string }[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/client-admin/ad-connections/${connectionId}/snapchat-forms`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      setForms(data.forms || [])
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <label className="label">Form ID</label>
+      {forms ? (
+        <select className="input" value={value} onChange={e => onChange(e.target.value)}>
+          <option value="">اختر فورم</option>
+          {forms.map(f => (
+            <option key={f.id} value={f.id}>{f.name} — {f.status}{f.id === value ? ' (محدد حاليًا)' : ''}</option>
+          ))}
+        </select>
+      ) : (
+        <input dir="ltr" className="input text-start" value={value} readOnly
+          placeholder="اضغط تحديث القائمة لجلب الفورمات من سناب شات" />
+      )}
+      <button type="button" onClick={load} disabled={loading} className="btn btn-outline w-full text-xs py-1.5 mt-2">
+        {loading ? 'جارٍ الجلب...' : forms ? '🔄 تحديث القائمة' : 'جلب قائمة الفورمات من سناب شات'}
+      </button>
+      {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+    </div>
+  )
+}
+
 // ─── Add / Edit modal ──────────────────────────────────────────────
 function ConnectionModal({
   connection, defaultPlatform, campaigns, onClose, onSaved,
@@ -79,6 +131,7 @@ function ConnectionModal({
     tiktok_client_secret: connection?.tiktok_client_secret || '',
     snap_client_id: connection?.snap_client_id || '',
     snap_client_secret: connection?.snap_client_secret || '',
+    snap_ad_account_id: connection?.snap_ad_account_id || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -105,6 +158,7 @@ function ConnectionModal({
               tiktok_client_secret: form.tiktok_client_secret || null,
               snap_client_id: form.snap_client_id || null,
               snap_client_secret: form.snap_client_secret || null,
+              snap_ad_account_id: form.snap_ad_account_id || null,
             }),
           })
         : await fetch('/api/client-admin/ad-connections', {
@@ -181,6 +235,15 @@ function ConnectionModal({
                   Access Token هنا بيتولّد تلقائيًا بعد الحفظ عن طريق زرار &quot;ربط الحساب مع سناب شات&quot; — ما تكتبه يدويًا، توكنات سناب شات صلاحيتها ساعة واحدة بس وبتتجدد تلقائيًا.
                 </p>
               </div>
+              <div>
+                <label className="label">Ad Account ID *</label>
+                <input dir="ltr" className="input text-start" value={form.snap_ad_account_id}
+                  onChange={e => setForm({ ...form, snap_ad_account_id: e.target.value.trim() })} required
+                  placeholder="من Snapchat Ads Manager" />
+                <p className="text-xs text-muted2 mt-1">
+                  لازم نعرفه عشان نجيب قايمة الفورمات بتاعتك تلقائيًا بعد الربط، بدل ما تدور على Form ID يدويًا.
+                </p>
+              </div>
             </>
           )}
 
@@ -196,14 +259,20 @@ function ConnectionModal({
             </div>
           )}
 
-          {form.platform === 'snapchat' && (
+          {form.platform === 'snapchat' && editing && connection?.snap_refresh_token ? (
+            <SnapchatFormPicker
+              connectionId={connection.id}
+              value={form.form_id}
+              onChange={id => setForm({ ...form, form_id: id })}
+            />
+          ) : form.platform === 'snapchat' && (
             <div>
               <label className="label">Form ID (اختياري الآن — يُضاف بعد الربط)</label>
               <input dir="ltr" className="input text-start" value={form.form_id}
                 onChange={e => setForm({ ...form, form_id: e.target.value.trim() })}
-                placeholder="سيبه فاضي الآن، وارجع وحطه بعد ما تربط الحساب وتاخد الـForm ID" />
+                placeholder="سيبه فاضي الآن، وارجع وحطه بعد ما تربط الحساب" />
               <p className="text-xs text-muted2 mt-1">
-                غير قابل للحصول عليه إلا بعد ربط الحساب (OAuth) — احفظ الاتصال أولًا من غيره، بعدين رجّع لينا نجيبه لك.
+                بعد ما تحفظ وتربط الحساب (OAuth)، رجّع لتعديل الاتصال ده وهتقدر تختار الفورم من قايمة تلقائية.
               </p>
             </div>
           )}

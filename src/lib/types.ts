@@ -40,6 +40,10 @@ export interface AdConnection {
   // subdomain, since the callback itself lands on the bare root domain
   // where their session cookie isn't present. Cleared after use.
   snap_oauth_state?: string | null
+  // Snapchat Ad Account ID — needed to fetch this account's Lead Generation
+  // Forms live (see snapchat-forms route), so form_id can be picked from a
+  // dropdown instead of typed in by hand.
+  snap_ad_account_id?: string | null
   // tiktok: optional test-events code from TikTok Events Manager. When set,
   // conversion events are sent to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.

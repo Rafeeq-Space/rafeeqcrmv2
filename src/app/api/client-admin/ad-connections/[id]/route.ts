@@ -26,6 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.tiktok_client_secret !== undefined) updates.tiktok_client_secret = body.tiktok_client_secret || null
   if (body.snap_client_id !== undefined) updates.snap_client_id = body.snap_client_id || null
   if (body.snap_client_secret !== undefined) updates.snap_client_secret = body.snap_client_secret || null
+  if (body.snap_ad_account_id !== undefined) updates.snap_ad_account_id = body.snap_ad_account_id || null
 
   const { data, error } = await supabase.from('ad_connections').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
