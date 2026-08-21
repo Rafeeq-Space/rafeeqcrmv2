@@ -61,9 +61,20 @@ export function verifySnapchatSignature(rawBody: string, timestamp: string, sign
  * route. Requires "Organization Admin" access on the ad account. Snapchat
  * allows only one webhook integration per form — re-running this against a
  * form that already has a different integration (e.g. Zapier/LeadsBridge)
- * may fail or silently replace it. Endpoint path, request/response field
- * names below follow Snapchat's publicly documented Marketing API shape but
- * haven't been exercised against a live account.
+ * may fail or silently replace it.
+ *
+ * VERIFIED against a live account 2026-08-21 (it previously wasn't, and the
+ * request/response shapes guessed at the time were both wrong):
+ *   - The body MUST be wrapped in a `webhook_integrations` array, matching
+ *     the convention every other Snapchat write endpoint uses
+ *     (`lead_generation_forms: [...]`, `campaigns: [...]`). Sending a flat
+ *     `{form_id, webhook_url}` object made Snapchat answer
+ *     `500 INTERNAL_FAILURE` with no hint about the real cause — which read
+ *     exactly like an outage on their side, and was misdiagnosed as one
+ *     until the documented example was checked directly.
+ *   - The response nests the result the same way:
+ *     `webhook_integrations[0].webhook_integration.{integration_id,hmac_secret}`
+ *     — not flat top-level fields.
  */
 export async function registerSnapchatWebhook(connection: AdConnection, baseUrl: string) {
   if (!connection.form_id) throw new Error('أدخل رقم الفورم (Form ID) أولاً')
@@ -80,15 +91,26 @@ export async function registerSnapchatWebhook(connection: AdConnection, baseUrl:
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ form_id: connection.form_id, webhook_url: webhookUrl }),
+    body: JSON.stringify({
+      webhook_integrations: [{ form_id: connection.form_id, webhook_url: webhookUrl }],
+    }),
   })
   const json = await res.json().catch(() => null)
   if (!res.ok || !json) {
-    throw new Error(json?.message || json?.error || 'فشل تسجيل الويبهوك مع سناب شات')
+    throw new Error(
+      json?.display_message || json?.debug_message || json?.message || json?.error ||
+      'فشل تسجيل الويبهوك مع سناب شات'
+    )
   }
 
-  const integrationId: string | undefined = json.integrationId || json.integration_id
-  const hmacSecret: string | undefined = json.hmacSecret || json.hmac_secret
+  const entry = json.webhook_integrations?.[0]
+  const integration = entry?.webhook_integration
+  if (!integration) {
+    throw new Error(entry?.sub_request_error_reason || json.display_message || 'رد غير متوقع من سناب شات')
+  }
+
+  const integrationId: string | undefined = integration.integration_id
+  const hmacSecret: string | undefined = integration.hmac_secret
 
   return { integrationId, hmacSecret, webhookUrl }
 }
