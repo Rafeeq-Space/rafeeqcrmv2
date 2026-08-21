@@ -23,6 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.tiktok_test_event_code !== undefined) updates.tiktok_test_event_code = body.tiktok_test_event_code || null
   if (body.tiktok_event_set_id !== undefined) updates.tiktok_event_set_id = body.tiktok_event_set_id || null
   if (body.tiktok_crm_access_token !== undefined) updates.tiktok_crm_access_token = body.tiktok_crm_access_token || null
+  if (body.tiktok_client_secret !== undefined) updates.tiktok_client_secret = body.tiktok_client_secret || null
 
   const { data, error } = await supabase.from('ad_connections').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

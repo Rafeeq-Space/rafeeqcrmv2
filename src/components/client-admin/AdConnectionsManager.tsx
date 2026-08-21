@@ -75,6 +75,7 @@ function ConnectionModal({
     tiktok_test_event_code: connection?.tiktok_test_event_code || '',
     tiktok_event_set_id: connection?.tiktok_event_set_id || '',
     tiktok_crm_access_token: connection?.tiktok_crm_access_token || '',
+    tiktok_client_secret: connection?.tiktok_client_secret || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -98,6 +99,7 @@ function ConnectionModal({
               tiktok_test_event_code: form.tiktok_test_event_code || null,
               tiktok_event_set_id: form.tiktok_event_set_id || null,
               tiktok_crm_access_token: form.tiktok_crm_access_token || null,
+              tiktok_client_secret: form.tiktok_client_secret || null,
             }),
           })
         : await fetch('/api/client-admin/ad-connections', {
@@ -208,6 +210,18 @@ function ConnectionModal({
                 placeholder={editing ? 'اتركه كما هو أو أدخل توكن جديد' : ''} />
               <p className="text-xs text-muted2 mt-1">
                 توكن منفصل عن Access Token الأساسي فوق، ولازم يُولَّد من صفحة الـ CRM Event Set نفسها (زرار &quot;Generate access token&quot;) — كل توكن في تيك توك له صلاحية على الأصل الذي وُلِّد منه فقط، فالتوكن الأساسي لن يعمل هنا ولا هذا التوكن يعمل مع البكسل.
+              </p>
+            </div>
+          )}
+
+          {form.platform === 'tiktok' && (
+            <div>
+              <label className="label">Client Secret (اختياري — لتفعيل التحقق من توقيع الويبهوك)</label>
+              <input dir="ltr" type="password" className="input text-start" value={form.tiktok_client_secret}
+                onChange={e => setForm({ ...form, tiktok_client_secret: e.target.value.trim() })}
+                placeholder={editing ? 'اتركه كما هو أو أدخل قيمة جديدة' : ''} />
+              <p className="text-xs text-muted2 mt-1">
+                من TikTok Developer Portal ← App details ← Credentials. حاليًا للتسجيل والمراجعة فقط (log-only) — لا يُرفض أي طلب بناءً عليه بعد.
               </p>
             </div>
           )}

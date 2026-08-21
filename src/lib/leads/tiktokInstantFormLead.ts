@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { findLeadField, recordAndImportLead } from '@/lib/leads/adLeadWebhook'
 import type { AdConnection } from '@/lib/types'
 
@@ -38,7 +39,63 @@ export function extractLeadFields(payload: unknown) {
  * connection's default_campaign_id (may be null, i.e. unassigned campaign).
  * Mirrors the Google Sheets webhook's create-lead + syncLeadEvent pattern.
  */
-export async function importTikTokWebhookLead(connection: AdConnection, payload: unknown) {
+export async function importTikTokWebhookLead(
+  connection: AdConnection,
+  payload: unknown,
+  signatureStatus?: TikTokSignatureStatus
+) {
   const fields = extractLeadFields(payload)
-  return recordAndImportLead(connection, 'tiktok', payload, fields)
+  return recordAndImportLead(connection, 'tiktok', payload, fields, { signature_status: signatureStatus ?? null })
+}
+
+
+/**
+ * HMAC-SHA256 verification of TikTok's "Tiktok-Signature" header — documented
+ * at developers.tiktok.com/docs/en/webhooks-verification (confirmed
+ * 2026-08-19; earlier comments in this codebase assumed this wasn't publicly
+ * reachable — it is, just not linked from anywhere obvious).
+ *
+ * Header shape: "t=<unix timestamp>,s=<hex hmac-sha256>". The signed message
+ * is `${timestamp}.${rawBody}`, keyed with the TikTok app's client_secret —
+ * same construction as verifySnapchatSignature, different key/header name.
+ *
+ * maxAgeSeconds guards against a replay attack (a captured valid request
+ * resent later) — TikTok's docs call checking this "strongly recommended".
+ *
+ * NOTE: this is currently wired into the webhook route in *log-only* mode —
+ * see the route's comment for why it doesn't reject a request yet even when
+ * this returns 'invalid'.
+ */
+export type TikTokSignatureStatus = 'valid' | 'invalid' | 'missing_header' | 'no_secret_configured'
+
+export function verifyTikTokSignature(
+  rawBody: string,
+  header: string | null,
+  clientSecret: string | null | undefined,
+  maxAgeSeconds = 5 * 60
+): TikTokSignatureStatus {
+  if (!clientSecret) return 'no_secret_configured'
+  if (!header) return 'missing_header'
+
+  const parts = Object.fromEntries(
+    header.split(',').map(p => {
+      const [k, v] = p.split('=')
+      return [k?.trim(), v?.trim()]
+    })
+  )
+  const timestamp = parts.t
+  const signature = parts.s
+  if (!timestamp || !signature) return 'invalid'
+
+  const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestamp))
+  if (!Number.isFinite(ageSeconds) || ageSeconds > maxAgeSeconds) return 'invalid'
+
+  try {
+    const expected = crypto.createHmac('sha256', clientSecret).update(`${timestamp}.${rawBody}`).digest('hex')
+    const expBuf = Buffer.from(expected)
+    const sigBuf = Buffer.from(signature)
+    return expBuf.length === sigBuf.length && crypto.timingSafeEqual(expBuf, sigBuf) ? 'valid' : 'invalid'
+  } catch {
+    return 'invalid'
+  }
 }

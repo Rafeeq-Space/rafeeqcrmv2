@@ -125,7 +125,11 @@ export async function recordAndImportLead(
   connection: AdConnection,
   platform: AdPlatform,
   rawPayload: unknown,
-  fields: ParsedLeadFields
+  fields: ParsedLeadFields,
+  // Platform-specific metadata to persist alongside the raw delivery —
+  // currently just TikTok's signature_status (see tiktokInstantFormLead.ts).
+  // Merged into the initial insert; absent/undefined keys are simply omitted.
+  extraFields?: Record<string, unknown>
 ) {
   const supabase = adminSupabase()
 
@@ -138,6 +142,7 @@ export async function recordAndImportLead(
       external_lead_id: fields.externalLeadId || null,
       raw_payload: rawPayload as object,
       status: 'received',
+      ...extraFields,
     })
     .select()
     .single()

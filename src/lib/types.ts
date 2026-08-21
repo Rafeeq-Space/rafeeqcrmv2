@@ -40,6 +40,11 @@ export interface AdConnection {
   // event_source: 'web' (website/landing-page leads that carry a ttclid).
   tiktok_event_set_id?: string | null
   tiktok_crm_access_token?: string | null
+  // TikTok Developer app's client_secret — HMAC key for verifying the
+  // "Tiktok-Signature" header on Instant Form webhook deliveries. Null =
+  // signature checking is off for this connection (log-only mode until
+  // enabled — see tiktokInstantFormLead.ts / the webhook route).
+  tiktok_client_secret?: string | null
   created_at: string
 }
 
