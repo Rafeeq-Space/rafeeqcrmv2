@@ -35,6 +35,11 @@ export interface AdConnection {
   snap_client_secret?: string | null
   snap_refresh_token?: string | null
   snap_token_expires_at?: string | null
+  // One-time nonce for the OAuth callback (see snapchat-oauth/callback) —
+  // generated while the admin is still authenticated on their own
+  // subdomain, since the callback itself lands on the bare root domain
+  // where their session cookie isn't present. Cleared after use.
+  snap_oauth_state?: string | null
   // tiktok: optional test-events code from TikTok Events Manager. When set,
   // conversion events are sent to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.
