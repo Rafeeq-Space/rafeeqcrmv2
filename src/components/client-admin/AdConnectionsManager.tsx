@@ -62,10 +62,19 @@ function maskToken(token: string) {
 // connected — a brand-new, unsaved connection falls back to the plain text
 // field below it (same chicken-and-egg reason form_id is optional at
 // creation — see add_snapchat_oauth_refresh.sql's migration comment).
+interface SnapCustomField { slot: string; description: string }
+interface SnapFormOption { id: string; name: string; status: string; customFields: SnapCustomField[] }
+
 function SnapchatFormPicker({
-  connectionId, value, onChange,
-}: { connectionId: string; value: string; onChange: (id: string) => void }) {
-  const [forms, setForms] = useState<{ id: string; name: string; status: string }[] | null>(null)
+  connectionId, value, onChange, fieldMapping, onMappingChange,
+}: {
+  connectionId: string
+  value: string
+  onChange: (id: string) => void
+  fieldMapping: Record<string, string>
+  onMappingChange: (mapping: Record<string, string>) => void
+}) {
+  const [forms, setForms] = useState<SnapFormOption[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -83,6 +92,8 @@ function SnapchatFormPicker({
       setLoading(false)
     }
   }
+
+  const selected = forms?.find(f => f.id === value)
 
   return (
     <div>
@@ -102,6 +113,30 @@ function SnapchatFormPicker({
         {loading ? 'جارٍ الجلب...' : forms ? '🔄 تحديث القائمة' : 'جلب قائمة الفورمات من سناب شات'}
       </button>
       {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
+
+      {selected && selected.customFields.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border space-y-2">
+          <p className="text-xs text-muted2">
+            الفورم ده فيه أسئلة مخصصة — حدد كل سؤال هيتسجل تحت أي اسم في بيانات الليد (سيبه فاضي لو عايز تتجاهله):
+          </p>
+          {selected.customFields.map(cf => (
+            <label key={cf.slot} className="text-sm block">
+              <span className="block text-muted2 mb-1 text-xs">{cf.description || cf.slot}</span>
+              <input className="input text-sm" value={fieldMapping[cf.slot] || ''}
+                onChange={e => {
+                  const next = { ...fieldMapping }
+                  if (e.target.value.trim()) next[cf.slot] = e.target.value.trim()
+                  else delete next[cf.slot]
+                  onMappingChange(next)
+                }}
+                placeholder="مثال: نوع السيارة" />
+            </label>
+          ))}
+        </div>
+      )}
+      {selected && selected.customFields.length === 0 && (
+        <p className="text-xs text-muted2 mt-2">الفورم ده مفيهوش أسئلة مخصصة تحتاج تسمية.</p>
+      )}
     </div>
   )
 }
@@ -132,6 +167,7 @@ function ConnectionModal({
     snap_client_id: connection?.snap_client_id || '',
     snap_client_secret: connection?.snap_client_secret || '',
     snap_ad_account_id: connection?.snap_ad_account_id || '',
+    snap_field_mapping: connection?.snap_field_mapping || {},
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -159,6 +195,7 @@ function ConnectionModal({
               snap_client_id: form.snap_client_id || null,
               snap_client_secret: form.snap_client_secret || null,
               snap_ad_account_id: form.snap_ad_account_id || null,
+              snap_field_mapping: Object.keys(form.snap_field_mapping).length ? form.snap_field_mapping : null,
             }),
           })
         : await fetch('/api/client-admin/ad-connections', {
@@ -264,6 +301,8 @@ function ConnectionModal({
               connectionId={connection.id}
               value={form.form_id}
               onChange={id => setForm({ ...form, form_id: id })}
+              fieldMapping={form.snap_field_mapping}
+              onMappingChange={mapping => setForm({ ...form, snap_field_mapping: mapping })}
             />
           ) : form.platform === 'snapchat' && (
             <div>

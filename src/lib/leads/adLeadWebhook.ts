@@ -10,6 +10,11 @@ export interface ParsedLeadFields {
   name?: string
   email?: string
   phone?: string
+  // Extra labeled answers to merge into the lead's `data` alongside
+  // name/email/phone — currently just Snapchat's mapped CUSTOM question
+  // slots (see snapchatLeadAds.ts). Key is the admin-chosen label, not a
+  // platform field name.
+  extra?: Record<string, string>
 }
 
 /**
@@ -191,6 +196,7 @@ export async function recordAndImportLead(
         name: fields.name || '',
         email: fields.email || '',
         phone: fields.phone || '',
+        ...fields.extra,
       },
       source: platform,
       status: 'new',

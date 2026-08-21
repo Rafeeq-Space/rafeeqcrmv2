@@ -18,20 +18,47 @@ export interface SnapchatLeadPayload {
  * Snapchat's Lead Generation webhook payload delivers plaintext, fixed
  * field names directly (unlike TikTok/Facebook, which need flexible
  * key-pattern matching) — per Snapchat's Marketing API docs for
- * `public_webhook` integrations. Not verified against a live payload.
+ * `public_webhook` integrations. Verified live 2026-08-21 (Send Test Lead
+ * Data): first_name/last_name/phone_number/lead_id arrive exactly as
+ * documented.
+ *
+ * A form's CUSTOM questions (e.g. "What car are you looking for?") arrive as
+ * generic custom_field_1..custom_field_8 slots with no question text
+ * attached — fieldMapping (admin-configured per connection, see
+ * AdConnectionsManager.tsx's SnapchatFormPicker) supplies the real label for
+ * whichever slots are in use, and only mapped slots make it into the lead's
+ * data (an unmapped slot is dropped rather than saved under a meaningless
+ * "custom_field_3" key).
+ *
+ * NOTE: the assumption that custom_field_N corresponds positionally to the
+ * Nth CUSTOM entry in the form's own form_fields array (the same order the
+ * admin sees when mapping) is NOT yet verified against a live payload — the
+ * one form tested so far (2026-08-21) had no custom questions. Confirm this
+ * against a real delivery before trusting it on a form that has any.
  */
-export function extractSnapchatLeadFields(payload: SnapchatLeadPayload): ParsedLeadFields {
+export function extractSnapchatLeadFields(
+  payload: SnapchatLeadPayload,
+  fieldMapping?: Record<string, string> | null
+): ParsedLeadFields {
   const name = [payload.first_name, payload.last_name].filter(Boolean).join(' ').trim()
+  const extra: Record<string, string> = {}
+  if (fieldMapping) {
+    for (const [slot, label] of Object.entries(fieldMapping)) {
+      const value = payload[slot]
+      if (label && typeof value === 'string' && value.trim()) extra[label] = value
+    }
+  }
   return {
     externalLeadId: payload.lead_id,
     name: name || undefined,
     email: payload.email,
     phone: payload.phone_number,
+    extra: Object.keys(extra).length ? extra : undefined,
   }
 }
 
 export async function importSnapchatLead(connection: AdConnection, payload: unknown) {
-  const fields = extractSnapchatLeadFields((payload || {}) as SnapchatLeadPayload)
+  const fields = extractSnapchatLeadFields((payload || {}) as SnapchatLeadPayload, connection.snap_field_mapping)
   return recordAndImportLead(connection, 'snapchat', payload, fields)
 }
 

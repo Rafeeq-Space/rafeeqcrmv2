@@ -37,10 +37,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: json?.display_message || 'فشل جلب الفورمات من سناب شات' }, { status: 502 })
     }
 
-    const forms = (json.lead_generation_forms || [])
-      .map((entry: { lead_generation_form?: { id?: string; name?: string; status?: string } }) => entry.lead_generation_form)
-      .filter(Boolean)
-      .map((f: { id?: string; name?: string; status?: string }) => ({ id: f.id, name: f.name, status: f.status }))
+    type SnapFormField = { type?: string; custom_form_field_properties?: { description?: string } }
+    type SnapForm = { id?: string; name?: string; status?: string; form_fields?: SnapFormField[] }
+
+    const forms = ((json.lead_generation_forms || []) as { lead_generation_form?: SnapForm }[])
+      .map(entry => entry.lead_generation_form)
+      .filter((f): f is SnapForm => !!f)
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        status: f.status,
+        // Only CUSTOM questions need mapping — standard fields (FIRST_NAME,
+        // PHONE_NUMBER, ...) already land in the lead correctly without one.
+        // Numbered positionally (custom_field_1, custom_field_2, ...) to
+        // match the slot keys the webhook payload uses — see the
+        // "NOT yet verified" note on extractSnapchatLeadFields.
+        customFields: (f.form_fields || [])
+          .filter(ff => ff.type === 'CUSTOM')
+          .map((ff, i) => ({ slot: `custom_field_${i + 1}`, description: ff.custom_form_field_properties?.description || '' })),
+      }))
 
     return NextResponse.json({ forms })
   } catch (err) {

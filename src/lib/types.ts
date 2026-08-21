@@ -44,6 +44,11 @@ export interface AdConnection {
   // Forms live (see snapchat-forms route), so form_id can be picked from a
   // dropdown instead of typed in by hand.
   snap_ad_account_id?: string | null
+  // Maps the form's CUSTOM question slots (webhook payload keys
+  // custom_field_1..custom_field_8, no question text attached) to an
+  // admin-chosen label — e.g. {"custom_field_1": "نوع السيارة"}. See
+  // snapchatLeadAds.ts.
+  snap_field_mapping?: Record<string, string> | null
   // tiktok: optional test-events code from TikTok Events Manager. When set,
   // conversion events are sent to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.
