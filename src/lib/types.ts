@@ -26,6 +26,15 @@ export interface AdConnection {
   form_id?: string | null // snapchat: the specific Lead Generation form
   snap_integration_id?: string | null
   snap_hmac_secret?: string | null
+  // Snapchat OAuth (Marketing API access tokens expire after 60 minutes —
+  // see snapchatOAuth.ts). snap_client_id/snap_client_secret are the
+  // tenant's own OAuth App credentials; snap_refresh_token is long-lived and
+  // used to silently mint new access_tokens (stored in `access_token`
+  // above) before snap_token_expires_at is reached.
+  snap_client_id?: string | null
+  snap_client_secret?: string | null
+  snap_refresh_token?: string | null
+  snap_token_expires_at?: string | null
   // tiktok: optional test-events code from TikTok Events Manager. When set,
   // conversion events are sent to the pixel's "Test events" tab (live) instead
   // of the real event stream — used to verify the integration during setup.

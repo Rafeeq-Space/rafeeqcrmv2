@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadEmail, leadPhone } from '@/lib/utils'
+import { getValidSnapchatAccessToken } from '@/lib/leads/snapchatOAuth'
 import type { AdConnection } from '@/lib/types'
 
 const META_API_VERSION = 'v21.0'
@@ -305,8 +306,11 @@ export async function syncLeadEvent(params: {
       }
 
       try {
+        // Never conn.access_token directly — it may already be expired
+        // (Snapchat access tokens last 60 minutes). This refreshes first if needed.
+        const accessToken = await getValidSnapchatAccessToken(conn)
         const snapRes = await fetch(
-          `https://tr.snapchat.com/v3/${conn.pixel_id}/events?access_token=${conn.access_token}`,
+          `https://tr.snapchat.com/v3/${conn.pixel_id}/events?access_token=${accessToken}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

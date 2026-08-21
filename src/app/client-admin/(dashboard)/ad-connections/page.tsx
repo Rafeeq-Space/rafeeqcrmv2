@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase } from '@/lib/supabase/admin'
@@ -51,20 +52,25 @@ export default async function AdConnectionsPage() {
   }
 
   return (
-    <AdConnectionsManager
-      tenantId={tenantId}
-      connections={connections || []}
-      campaigns={campaigns || []}
-      bevatel={bevatel}
-      rafeeqSocial={{
-        secret: rafeeqSocialSecret,
-        api: {
-          hasToken: !!tenant?.rafeeqsocial_api_token,
-          phoneNumberId: (tenant?.rafeeqsocial_phone_number_id as string) || '',
-        },
-        missedCallWorkflowUrl: (tenant?.rafeeqsocial_missed_call_workflow_url as string) || '',
-        newLeadWorkflowUrl: (tenant?.rafeeqsocial_new_lead_workflow_url as string) || '',
-      }}
-    />
+    // AdConnectionsManager reads the Snapchat OAuth callback's result via
+    // useSearchParams() — Next requires a Suspense boundary around any
+    // client component that calls it, or the build fails.
+    <Suspense>
+      <AdConnectionsManager
+        tenantId={tenantId}
+        connections={connections || []}
+        campaigns={campaigns || []}
+        bevatel={bevatel}
+        rafeeqSocial={{
+          secret: rafeeqSocialSecret,
+          api: {
+            hasToken: !!tenant?.rafeeqsocial_api_token,
+            phoneNumberId: (tenant?.rafeeqsocial_phone_number_id as string) || '',
+          },
+          missedCallWorkflowUrl: (tenant?.rafeeqsocial_missed_call_workflow_url as string) || '',
+          newLeadWorkflowUrl: (tenant?.rafeeqsocial_new_lead_workflow_url as string) || '',
+        }}
+      />
+    </Suspense>
   )
 }

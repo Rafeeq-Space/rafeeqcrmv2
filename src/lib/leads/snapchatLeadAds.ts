@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { recordAndImportLead } from '@/lib/leads/adLeadWebhook'
+import { getValidSnapchatAccessToken } from '@/lib/leads/snapchatOAuth'
 import type { ParsedLeadFields } from '@/lib/leads/adLeadWebhook'
 import type { AdConnection } from '@/lib/types'
 
@@ -68,12 +69,15 @@ export async function registerSnapchatWebhook(connection: AdConnection, baseUrl:
   if (!connection.form_id) throw new Error('أدخل رقم الفورم (Form ID) أولاً')
   if (!connection.webhook_secret) throw new Error('لا يوجد رابط سري لهذا الحساب')
 
+  // Never read connection.access_token directly here — it may already be
+  // expired (60-minute lifetime). This transparently refreshes first if needed.
+  const accessToken = await getValidSnapchatAccessToken(connection)
   const webhookUrl = `${baseUrl}/api/leads/snapchat-webhook/${connection.id}/${connection.webhook_secret}`
 
   const res = await fetch('https://adsapi.snapchat.com/v1/lead_gen/integrations/public_webhook', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${connection.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ form_id: connection.form_id, webhook_url: webhookUrl }),
