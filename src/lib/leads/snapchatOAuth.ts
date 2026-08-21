@@ -17,6 +17,17 @@ import type { AdConnection } from '@/lib/types'
 
 const TOKEN_URL = 'https://accounts.snapchat.com/login/oauth2/access_token'
 const AUTHORIZE_URL = 'https://accounts.snapchat.com/login/oauth2/authorize'
+
+// MUST exactly match the "Snap redirect URIs" value registered on the
+// OAuth App in Snapchat Business Manager, byte for byte — confirmed live
+// (2026-08-21) that Snapchat's /oauth2/api/auth rejects any mismatch with
+// {"error":"invalid_request","error_description":"Invalid redirect_uri."}.
+// Deliberately a fixed root-domain constant, NOT derived from the
+// request's Host header: an admin reaches these routes via their own
+// tenant subdomain (sub.rafeeqcrm.com/admin/...), so a header-derived value
+// would never match a redirect_uri registered against the bare root domain.
+export const SNAPCHAT_OAUTH_REDIRECT_URI =
+  `${process.env.NEXT_PUBLIC_SITE_URL || 'https://rafeeqcrm.com'}/api/client-admin/ad-connections/snapchat-oauth/callback`
 // Refresh a bit before the real 60-minute expiry lands, so a slow request
 // never straddles the boundary and gets a 401 mid-flight.
 const REFRESH_BUFFER_MS = 5 * 60 * 1000

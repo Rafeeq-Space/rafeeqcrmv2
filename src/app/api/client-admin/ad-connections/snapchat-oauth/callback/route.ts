@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { headers } from 'next/headers'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
 import { adminSupabase } from '@/lib/supabase/admin'
-import { exchangeSnapchatCode } from '@/lib/leads/snapchatOAuth'
+import { exchangeSnapchatCode, SNAPCHAT_OAUTH_REDIRECT_URI } from '@/lib/leads/snapchatOAuth'
 
 // Snapchat redirects the admin's browser back here after they approve (or
 // deny) access on Snapchat's own consent screen. `state` is the connection
@@ -36,15 +35,13 @@ export async function GET(request: Request) {
     return finish(false, 'بيانات Client ID/Client Secret غير محفوظة لهذا الاتصال')
   }
 
-  const h = await headers()
-  const proto = h.get('x-forwarded-proto') || 'https'
-  const host = h.get('host')
-  // Must match the exact redirect_uri used in the /start request — Snapchat
-  // rejects the exchange otherwise.
-  const redirectUri = `${proto}://${host}/api/client-admin/ad-connections/snapchat-oauth/callback`
-
   try {
-    const tokens = await exchangeSnapchatCode(connection.snap_client_id, connection.snap_client_secret, code, redirectUri)
+    const tokens = await exchangeSnapchatCode(
+      connection.snap_client_id,
+      connection.snap_client_secret,
+      code,
+      SNAPCHAT_OAUTH_REDIRECT_URI
+    )
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString()
     const { error } = await supabase
       .from('ad_connections')

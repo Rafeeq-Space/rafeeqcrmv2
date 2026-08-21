@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
-import { headers } from 'next/headers'
 import { requireClientAdmin } from '@/lib/auth/requireClientAdmin'
 import { adminSupabase } from '@/lib/supabase/admin'
-import { buildSnapchatAuthorizeUrl } from '@/lib/leads/snapchatOAuth'
+import { buildSnapchatAuthorizeUrl, SNAPCHAT_OAUTH_REDIRECT_URI } from '@/lib/leads/snapchatOAuth'
 
 // Kicks off the one-time OAuth authorization: redirects the admin's browser
 // to Snapchat's own login/consent screen. `state` carries this connection's
@@ -31,15 +30,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return errorRedirect('أدخل Client ID وClient Secret أولاً ثم احفظ التعديلات')
   }
 
-  const h = await headers()
-  const proto = h.get('x-forwarded-proto') || 'https'
-  const host = h.get('host')
-  // Fixed, connection-agnostic path — this exact URL is what gets registered
-  // as the redirect_uri when creating the OAuth App in Snapchat Business
-  // Manager. It can't include the connection id (Snapchat requires the
-  // redirect_uri to be a static, pre-registered value), so `state` is what
-  // ties the callback back to the right row instead.
-  const redirectUri = `${proto}://${host}/api/client-admin/ad-connections/snapchat-oauth/callback`
-
-  return NextResponse.redirect(buildSnapchatAuthorizeUrl(connection.snap_client_id, redirectUri, connection.id))
+  // MUST be the exact static string registered as the redirect_uri in
+  // Snapchat's OAuth App settings — Snapchat rejects any mismatch with
+  // "Invalid redirect_uri" (confirmed live, 2026-08-21). Deriving this from
+  // the request's Host header was the original (broken) approach: an admin
+  // reached this route via their own tenant subdomain
+  // (sub.rafeeqcrm.com/admin/...), so the derived redirect_uri never
+  // matched the one registered against the bare root domain. Using the
+  // fixed root-domain constant instead makes it match regardless of which
+  // subdomain the admin was on when they clicked "connect".
+  return NextResponse.redirect(
+    buildSnapchatAuthorizeUrl(connection.snap_client_id, SNAPCHAT_OAUTH_REDIRECT_URI, connection.id)
+  )
 }
