@@ -198,10 +198,13 @@ function ConnectionModal({
 
           {form.platform === 'snapchat' && (
             <div>
-              <label className="label">Form ID *</label>
+              <label className="label">Form ID (اختياري الآن — يُضاف بعد الربط)</label>
               <input dir="ltr" className="input text-start" value={form.form_id}
-                onChange={e => setForm({ ...form, form_id: e.target.value.trim() })} required
-                placeholder="معرّف نموذج Lead Generation في سناب شات" />
+                onChange={e => setForm({ ...form, form_id: e.target.value.trim() })}
+                placeholder="سيبه فاضي الآن، وارجع وحطه بعد ما تربط الحساب وتاخد الـForm ID" />
+              <p className="text-xs text-muted2 mt-1">
+                غير قابل للحصول عليه إلا بعد ربط الحساب (OAuth) — احفظ الاتصال أولًا من غيره، بعدين رجّع لينا نجيبه لك.
+              </p>
             </div>
           )}
 
