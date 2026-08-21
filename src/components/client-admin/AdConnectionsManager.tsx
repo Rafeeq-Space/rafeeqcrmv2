@@ -62,8 +62,8 @@ function maskToken(token: string) {
 // connected — a brand-new, unsaved connection falls back to the plain text
 // field below it (same chicken-and-egg reason form_id is optional at
 // creation — see add_snapchat_oauth_refresh.sql's migration comment).
-interface SnapCustomField { slot: string; description: string }
-interface SnapFormOption { id: string; name: string; status: string; customFields: SnapCustomField[] }
+interface SnapFormField { slot: string; description: string; editable: boolean }
+interface SnapFormOption { id: string; name: string; status: string; fields: SnapFormField[] }
 
 function SnapchatFormPicker({
   connectionId, value, onChange, fieldMapping, onMappingChange,
@@ -114,28 +114,33 @@ function SnapchatFormPicker({
       </button>
       {error && <p className="text-xs mt-1" style={{ color: 'var(--danger)' }}>{error}</p>}
 
-      {selected && selected.customFields.length > 0 && (
+      {selected && selected.fields.length > 0 && (
         <div className="mt-3 pt-3 border-t border-border space-y-2">
           <p className="text-xs text-muted2">
-            الفورم ده فيه أسئلة مخصصة — حدد كل سؤال هيتسجل تحت أي اسم في بيانات الليد (سيبه فاضي لو عايز تتجاهله):
+            كل حقول الفورم ده — الحقول القياسية بتُحفظ تلقائيًا، والأسئلة المخصصة بس محتاجة تسميها:
           </p>
-          {selected.customFields.map(cf => (
-            <label key={cf.slot} className="text-sm block">
-              <span className="block text-muted2 mb-1 text-xs">{cf.description || cf.slot}</span>
-              <input className="input text-sm" value={fieldMapping[cf.slot] || ''}
+          {selected.fields.map((f, i) => f.editable ? (
+            <label key={`${f.slot}-${i}`} className="text-sm block">
+              <span className="block text-muted2 mb-1 text-xs">{f.description || f.slot} <span className="text-xs" style={{ color: 'var(--warning)' }}>(سؤال مخصص — سمّه)</span></span>
+              <input className="input text-sm" value={fieldMapping[f.slot] || ''}
                 onChange={e => {
                   const next = { ...fieldMapping }
-                  if (e.target.value.trim()) next[cf.slot] = e.target.value.trim()
-                  else delete next[cf.slot]
+                  if (e.target.value.trim()) next[f.slot] = e.target.value.trim()
+                  else delete next[f.slot]
                   onMappingChange(next)
                 }}
                 placeholder="مثال: نوع السيارة" />
             </label>
+          ) : (
+            <div key={`${f.slot}-${i}`} className="flex items-center justify-between text-sm py-1">
+              <span className="text-foreground">{f.description}</span>
+              <span className="text-xs text-muted2">✓ يُحفظ تلقائيًا</span>
+            </div>
           ))}
         </div>
       )}
-      {selected && selected.customFields.length === 0 && (
-        <p className="text-xs text-muted2 mt-2">الفورم ده مفيهوش أسئلة مخصصة تحتاج تسمية.</p>
+      {selected && selected.fields.length === 0 && (
+        <p className="text-xs text-muted2 mt-2">الفورم ده مفيهوش أي حقول معرّفة.</p>
       )}
     </div>
   )

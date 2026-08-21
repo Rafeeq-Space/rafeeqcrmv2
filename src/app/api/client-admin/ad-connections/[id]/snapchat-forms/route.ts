@@ -40,22 +40,47 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     type SnapFormField = { type?: string; custom_form_field_properties?: { description?: string } }
     type SnapForm = { id?: string; name?: string; status?: string; form_fields?: SnapFormField[] }
 
+    // Fixed Arabic labels for every standard (non-CUSTOM) type Snapchat's
+    // form builder offers — shown for transparency (so the admin sees the
+    // form's full contents, not just the questions that need naming) even
+    // though these are captured automatically with no mapping required.
+    const STANDARD_LABELS: Record<string, string> = {
+      FIRST_NAME: 'الاسم الأول',
+      LAST_NAME: 'اسم العائلة',
+      EMAIL: 'البريد الإلكتروني',
+      PHONE_NUMBER: 'رقم الهاتف',
+      ADDRESS: 'العنوان',
+      POSTAL_CODE: 'الرمز البريدي',
+      BIRTHDAY_DATE: 'تاريخ الميلاد',
+      JOB_TITLE: 'الوظيفة',
+      COMPANY_NAME: 'اسم الشركة',
+    }
+
     const forms = ((json.lead_generation_forms || []) as { lead_generation_form?: SnapForm }[])
       .map(entry => entry.lead_generation_form)
       .filter((f): f is SnapForm => !!f)
-      .map(f => ({
-        id: f.id,
-        name: f.name,
-        status: f.status,
-        // Only CUSTOM questions need mapping — standard fields (FIRST_NAME,
-        // PHONE_NUMBER, ...) already land in the lead correctly without one.
-        // Numbered positionally (custom_field_1, custom_field_2, ...) to
-        // match the slot keys the webhook payload uses — see the
-        // "NOT yet verified" note on extractSnapchatLeadFields.
-        customFields: (f.form_fields || [])
-          .filter(ff => ff.type === 'CUSTOM')
-          .map((ff, i) => ({ slot: `custom_field_${i + 1}`, description: ff.custom_form_field_properties?.description || '' })),
-      }))
+      .map(f => {
+        let customIndex = 0
+        const fields = (f.form_fields || []).map(ff => {
+          if (ff.type === 'CUSTOM') {
+            customIndex += 1
+            // Positionally numbered (custom_field_1, custom_field_2, ...) to
+            // match the slot keys the webhook payload uses — see the
+            // "NOT yet verified" note on extractSnapchatLeadFields.
+            return {
+              editable: true as const,
+              slot: `custom_field_${customIndex}`,
+              description: ff.custom_form_field_properties?.description || '',
+            }
+          }
+          return {
+            editable: false as const,
+            slot: ff.type || '',
+            description: STANDARD_LABELS[ff.type || ''] || ff.type || '',
+          }
+        })
+        return { id: f.id, name: f.name, status: f.status, fields }
+      })
 
     return NextResponse.json({ forms })
   } catch (err) {

@@ -36,18 +36,44 @@ export interface SnapchatLeadPayload {
  * one form tested so far (2026-08-21) had no custom questions. Confirm this
  * against a real delivery before trusting it on a form that has any.
  */
+// Standard (non-CUSTOM) form-field types Snapchat supports beyond
+// first_name/last_name/email/phone_number (those four feed the lead's
+// name/email/phone directly, not `extra`) — fixed Arabic labels, no admin
+// configuration needed since these payload keys always mean the same thing
+// regardless of which form they came from.
+const STANDARD_FIELD_LABELS: Record<string, string> = {
+  postal_code: 'الرمز البريدي',
+  address_line_1: 'العنوان',
+  address_line_2: 'العنوان (تفاصيل إضافية)',
+  address_level_1: 'المدينة / المنطقة',
+  address_level_2: 'الحي / المنطقة الفرعية',
+  birthday: 'تاريخ الميلاد',
+  job_title: 'الوظيفة',
+  company_name: 'اسم الشركة',
+}
+
 export function extractSnapchatLeadFields(
   payload: SnapchatLeadPayload,
   fieldMapping?: Record<string, string> | null
 ): ParsedLeadFields {
   const name = [payload.first_name, payload.last_name].filter(Boolean).join(' ').trim()
   const extra: Record<string, string> = {}
+
+  // Standard fields beyond name/email/phone — captured automatically
+  // whenever the form includes them, no mapping required.
+  for (const [key, label] of Object.entries(STANDARD_FIELD_LABELS)) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) extra[label] = value
+  }
+
+  // CUSTOM question slots — only captured for slots the admin has named.
   if (fieldMapping) {
     for (const [slot, label] of Object.entries(fieldMapping)) {
       const value = payload[slot]
       if (label && typeof value === 'string' && value.trim()) extra[label] = value
     }
   }
+
   return {
     externalLeadId: payload.lead_id,
     name: name || undefined,
