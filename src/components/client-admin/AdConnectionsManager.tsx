@@ -925,9 +925,8 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
         </div>
       )}
       {/* Header — title + clock always share one row regardless of screen
-          width or button presence; the description is its own line below
-          so it never pushes the clock onto a second row. */}
-      <div className="flex items-center gap-4 mb-1">
+          width or button presence. */}
+      <div className="flex items-center gap-4 mb-6">
         <h1 className="text-2xl font-extrabold text-foreground me-auto">التكاملات</h1>
         {!onIntegration && (
           <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
@@ -936,9 +935,6 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
         )}
         <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
-      <p className="text-muted text-sm mb-6">
-        المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
-      </p>
 
       {/* Platform tabs */}
       <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border w-fit mb-6 flex-wrap">
