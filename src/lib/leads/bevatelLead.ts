@@ -476,14 +476,19 @@ async function assignChatRoundRobin(tenantId: string): Promise<{ id: string; tea
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended, excluded_from_distribution')
+    .select('id, team_id, suspended, excluded_from_distribution, bevatel_agent_id')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
   // This is real distribution — nobody claimed it, so a rep is picked by
   // rotation. It has to honour the exclusion, unlike an answered call or an
   // assigned conversation, where the agent reflects work someone actually did.
-  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
+  // Also restricted to reps who actually have a Bevatel Chat identity on file
+  // — bevatel_agent_id used to be pure identity-matching metadata (who this
+  // person is in Bevatel, for after-the-fact attribution); it's now doing
+  // double duty as the eligibility gate for this pool too, so a rep who only
+  // handles e.g. Rafeeq Social never gets round-robined a chat lead.
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution && r.bevatel_agent_id)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('bevatel_chat_rr_index').eq('id', tenantId).single()
@@ -758,14 +763,16 @@ async function assignMissedCallRoundRobin(tenantId: string): Promise<{ id: strin
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended, excluded_from_distribution')
+    .select('id, team_id, suspended, excluded_from_distribution, bevatel_extension')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
   // This is real distribution — nobody claimed it, so a rep is picked by
   // rotation. It has to honour the exclusion, unlike an answered call or an
   // assigned conversation, where the agent reflects work someone actually did.
-  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
+  // Also restricted to reps who actually have a Bevatel Call Center extension
+  // on file — see the identical comment on assignChatRoundRobin above.
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution && r.bevatel_extension)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('bevatel_call_rr_index').eq('id', tenantId).single()

@@ -167,13 +167,18 @@ export async function recordAndImportLead(
   if (fields.externalLeadId) {
     const { data: dup } = await supabase
       .from('ad_lead_webhook_events')
-      .select('id')
+      .select('id, lead_id')
       .eq('connection_id', connection.id)
       .eq('external_lead_id', fields.externalLeadId)
       .eq('status', 'imported')
       .limit(1)
     if (dup && dup.length > 0) {
-      await finish('skipped_duplicate')
+      // Same external_lead_id as an already-imported delivery — a retried
+      // webhook notification for the same lead, not a second real visit, so
+      // this links the redundant delivery to the same lead (for a complete
+      // ad_lead_webhook_events audit trail) without adding a misleading
+      // "customer came back" timeline note.
+      await finish('skipped_duplicate', dup[0].lead_id as string | undefined)
       return { imported: false, reason: 'duplicate' as const }
     }
   }
@@ -214,7 +219,33 @@ export async function recordAndImportLead(
     // rather than "unparsed", which would wrongly suggest the payload couldn't
     // be read and send someone digging through raw_payload for a broken parser.
     if (error?.code === '23505') {
-      await finish('skipped_duplicate')
+      // Cross-source duplicate: this phone already has a lead from another
+      // platform/source. Look it up so ad_lead_webhook_events links to the
+      // surviving lead (instead of orphaning this delivery) and the
+      // existing lead's timeline shows the customer came in again here.
+      const { data: keyRow } = await supabase.rpc('compute_lead_phone_key', {
+        d: { name: fields.name || '', email: fields.email || '', phone: fields.phone || '' },
+      })
+      let existingLeadId: string | undefined
+      if (keyRow) {
+        const { data: existingLead } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('tenant_id', connection.tenant_id)
+          .eq('phone_key', keyRow as string)
+          .maybeSingle()
+        existingLeadId = existingLead?.id
+      }
+      if (existingLeadId) {
+        await supabase.from('lead_activities').insert({
+          tenant_id: connection.tenant_id,
+          lead_id: existingLeadId,
+          actor_id: null,
+          type: 'comment',
+          body: `🔁 وصل ليد جديد لنفس هذا العميل من ${platform} — تم تجاهله والاحتفاظ بهذا الليد`,
+        })
+      }
+      await finish('skipped_duplicate', existingLeadId)
       return { imported: false, reason: 'duplicate' as const }
     }
     await finish('skipped_unparsed')
@@ -247,7 +278,7 @@ export async function recordAndImportLead(
   }
 
   if (fields.phone) {
-    triggerRafeeqSocialNewLeadWorkflow(connection.tenant_id, fields.phone, fields.name || '').catch(console.error)
+    triggerRafeeqSocialNewLeadWorkflow(connection.tenant_id, fields.phone, fields.name || '', assigned_sales_id).catch(console.error)
   }
 
   return { imported: true as const, leadId: lead.id as string }

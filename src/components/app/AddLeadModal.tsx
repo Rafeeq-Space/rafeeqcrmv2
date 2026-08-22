@@ -86,7 +86,17 @@ export default function AddLeadModal({ role, basePath, tenantId, campaigns = [],
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'تعذّر إنشاء العميل')
+      if (!res.ok) {
+        // Duplicate phone number — the customer already has a lead. Take the
+        // rep straight there instead of just showing an error and leaving
+        // them to go find it themselves.
+        if (res.status === 409 && json.duplicate && json.lead?.id) {
+          onClose()
+          router.push(`${basePath}/${json.lead.id}`)
+          return
+        }
+        throw new Error(json.error || 'تعذّر إنشاء العميل')
+      }
       onClose()
       router.push(`${basePath}/${json.lead.id}`)
     } catch (err: unknown) {

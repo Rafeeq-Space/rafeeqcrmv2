@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
       const phone = leadPhone(data)
       if (phone) {
-        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, phone, leadName(data)).catch(console.error))
+        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, phone, leadName(data), assigned_sales_id).catch(console.error))
       }
       if (assigned_sales_id) {
         await createNotification(supabase, {

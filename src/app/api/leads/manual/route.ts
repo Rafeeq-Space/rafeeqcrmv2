@@ -91,7 +91,29 @@ export async function POST(request: Request) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // 23505 = the phone_key unique index rejected the row: this customer is
+    // already a lead from some other source (or a previous manual entry).
+    // Every other lead-creation route in the codebase already treats this as
+    // "recognize the existing customer, don't 500" — this one didn't, so a
+    // rep manually adding someone who already exists got a raw server error
+    // instead of being pointed at the lead that's already there.
+    if (error.code === '23505') {
+      const { data: keyRow } = await supa.rpc('compute_lead_phone_key', { d: data })
+      const { data: existing } = await supa
+        .from('leads')
+        .select('id, data, assigned_sales_id')
+        .eq('tenant_id', viewer.tenantId)
+        .eq('phone_key', keyRow as string)
+        .maybeSingle()
+      return NextResponse.json({
+        error: 'هذا العميل مسجل بالفعل في النظام',
+        duplicate: true,
+        lead: existing || null,
+      }, { status: 409 })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   // Log who created the lead and when — surfaced in the lead timeline.
   await supa.from('lead_activities').insert({
@@ -110,7 +132,7 @@ export async function POST(request: Request) {
     leadId: lead.id,
   })
 
-  after(() => triggerRafeeqSocialNewLeadWorkflow(viewer.tenantId, phone, name).catch(console.error))
+  after(() => triggerRafeeqSocialNewLeadWorkflow(viewer.tenantId, phone, name, assignedSalesId).catch(console.error))
 
   return NextResponse.json({ success: true, lead }, { status: 201 })
 }

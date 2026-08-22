@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         .select('id, data, sheet_row')
         .eq('form_id', formId)
         .limit(1000)
-      const dup = (existing || []).some(l => {
+      const dup = (existing || []).find(l => {
         if (rowIndex != null && l.sheet_row === rowIndex) return true
         const d = l.data as Record<string, string>
         if (phone && digitsOnly(leadPhone(d)) === phone) return true
@@ -74,6 +74,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         return false
       })
       if (dup) {
+        // Leave a trace on the existing lead's timeline — otherwise a repeat
+        // row for a customer who's already in the CRM leaves zero evidence
+        // they ever came in again, even though no duplicate lead was created.
+        await supabase.from('lead_activities').insert({
+          tenant_id: form.tenant_id,
+          lead_id: dup.id,
+          actor_id: null,
+          type: 'comment',
+          body: '🔁 وصل صف جديد لنفس هذا العميل من Google Sheet — تم تجاهله والاحتفاظ بهذا الليد',
+        })
         return NextResponse.json({ success: true, skipped: true, reason: 'duplicate' })
       }
     }
@@ -116,6 +126,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       // every minute, so one repeat customer would block every lead behind them
       // and email a failure notice each time.
       if (error.code === '23505') {
+        // Cross-source duplicate (e.g. already a Bevatel lead) — same trace
+        // as the same-sheet dedupe above, just looked up by phone_key since
+        // we don't already have the existing lead's id in hand here.
+        const { data: keyRow } = await supabase.rpc('compute_lead_phone_key', { d: normalizedRow })
+        if (keyRow) {
+          const { data: existingLead } = await supabase
+            .from('leads')
+            .select('id')
+            .eq('tenant_id', form.tenant_id)
+            .eq('phone_key', keyRow as string)
+            .maybeSingle()
+          if (existingLead) {
+            await supabase.from('lead_activities').insert({
+              tenant_id: form.tenant_id,
+              lead_id: existingLead.id,
+              actor_id: null,
+              type: 'comment',
+              body: '🔁 وصل ليد جديد لنفس هذا العميل من Google Sheet — تم تجاهله والاحتفاظ بهذا الليد',
+            })
+          }
+        }
         return NextResponse.json({ success: true, skipped: true, reason: 'duplicate' })
       }
       throw error
@@ -132,7 +163,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
       const rawPhone = leadPhone(normalizedRow)
       if (rawPhone) {
-        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow)).catch(console.error))
+        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow), assigned_sales_id).catch(console.error))
       }
       if (assigned_sales_id) {
         await createNotification(supabase, {

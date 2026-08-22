@@ -139,7 +139,19 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
 // skipped if unset, since most tenants won't have this configured — the
 // template itself is built by hand in Rafeeq Social, same as the missed-call
 // one (see rafeeqsocial_missed_call_workflow_url in bevatelLead.ts).
-export async function triggerRafeeqSocialNewLeadWorkflow(tenantId: string, phone: string, name: string): Promise<void> {
+//
+// Gated on the assigned rep actually having a Rafeeq Social identity
+// (`profiles.rafeeqsocial_team_member_id`) — same reasoning as the
+// bevatel_agent_id gate on sendBevatelNewLeadTemplate: no point opening an
+// automated WhatsApp thread on a platform the assigned rep isn't set up to
+// follow up on. Checked AFTER the opt-in check above so a tenant that never
+// configured this workflow sees no behavior change at all.
+export async function triggerRafeeqSocialNewLeadWorkflow(
+  tenantId: string,
+  phone: string,
+  name: string,
+  assignedSalesId?: string | null
+): Promise<void> {
   if (!phone) return
   const { data } = await adminSupabase()
     .from('tenants')
@@ -148,6 +160,17 @@ export async function triggerRafeeqSocialNewLeadWorkflow(tenantId: string, phone
     .single()
   const workflowUrl = data?.rafeeqsocial_new_lead_workflow_url as string | null
   if (!workflowUrl) return
+
+  if (assignedSalesId) {
+    const { data: rep } = await adminSupabase()
+      .from('profiles')
+      .select('rafeeqsocial_team_member_id')
+      .eq('id', assignedSalesId)
+      .single()
+    if (!rep?.rafeeqsocial_team_member_id) return
+  } else {
+    return
+  }
 
   try {
     await fetch(workflowUrl, {

@@ -233,11 +233,17 @@ async function assignRafeeqSocialRoundRobin(tenantId: string): Promise<{ id: str
   const supa = adminSupabase()
   const { data: repsRaw } = await supa
     .from('profiles')
-    .select('id, team_id, suspended, excluded_from_distribution')
+    .select('id, team_id, suspended, excluded_from_distribution, rafeeqsocial_team_member_id')
     .eq('tenant_id', tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
     .order('full_name')
-  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
+  // Restricted to reps who actually have a Rafeeq Social team-member id on
+  // file — rafeeqsocial_team_member_id used to be pure identity-matching
+  // metadata; it now also gates this pool, so a rep who only handles e.g.
+  // Bevatel Call Center never gets round-robined a Rafeeq Social lead. See
+  // the identical pattern on Bevatel's assignChatRoundRobin/
+  // assignMissedCallRoundRobin in bevatelLead.ts.
+  const reps = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution && r.rafeeqsocial_team_member_id)
   if (!reps.length) return null
 
   const { data: tenant } = await supa.from('tenants').select('rafeeqsocial_rr_index').eq('id', tenantId).single()
