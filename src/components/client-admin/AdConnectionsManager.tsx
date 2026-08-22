@@ -121,6 +121,13 @@ function SnapchatWizard({
   const connected = !!connection.snap_refresh_token
   const activated = !!connection.snap_integration_id
   const [step, setStep] = useState<1 | 2 | 3 | 4>(!connected || !form.form_id ? 1 : activated ? 4 : 2)
+  // Right after creating a new connection, snap_client_id/secret/ad_account_id
+  // were JUST entered on the pre-save flat form one screen ago — re-showing
+  // them as open, empty-looking inputs on step 1 read as "why is it asking
+  // me again for what I already gave," confirmed live. Collapsed by default
+  // once they're actually saved; still editable via the toggle for someone
+  // revisiting an old connection who genuinely needs to change one.
+  const [editCredentials, setEditCredentials] = useState(!connection.snap_client_id)
   const [forms, setForms] = useState<SnapFormOption[] | null>(null)
   const [loadingForms, setLoadingForms] = useState(false)
   const [formsError, setFormsError] = useState('')
@@ -235,24 +242,38 @@ function SnapchatWizard({
 
       {step === 1 && (
         <div className="space-y-3">
-          <div>
-            <label className="label">Client ID *</label>
-            <input dir="ltr" className="input text-start" value={form.snap_client_id}
-              onChange={e => setForm(p => ({ ...p, snap_client_id: e.target.value.trim() }))} />
-            <p className="text-xs text-muted2 mt-1">من Snapchat Business Manager ← Business Details ← My Apps.</p>
-          </div>
-          <div>
-            <label className="label">Client Secret *</label>
-            <input dir="ltr" type="password" className="input text-start" value={form.snap_client_secret}
-              onChange={e => setForm(p => ({ ...p, snap_client_secret: e.target.value.trim() }))}
-              placeholder="اتركه كما هو أو أدخل قيمة جديدة" />
-          </div>
-          <div>
-            <label className="label">Ad Account ID *</label>
-            <input dir="ltr" className="input text-start" value={form.snap_ad_account_id}
-              onChange={e => setForm(p => ({ ...p, snap_ad_account_id: e.target.value.trim() }))}
-              placeholder="من Snapchat Ads Manager" />
-          </div>
+          {editCredentials ? (
+            <>
+              <div>
+                <label className="label">Client ID *</label>
+                <input dir="ltr" className="input text-start" value={form.snap_client_id}
+                  onChange={e => setForm(p => ({ ...p, snap_client_id: e.target.value.trim() }))} />
+                <p className="text-xs text-muted2 mt-1">من Snapchat Business Manager ← Business Details ← My Apps.</p>
+              </div>
+              <div>
+                <label className="label">Client Secret *</label>
+                <input dir="ltr" type="password" className="input text-start" value={form.snap_client_secret}
+                  onChange={e => setForm(p => ({ ...p, snap_client_secret: e.target.value.trim() }))}
+                  placeholder="اتركه كما هو أو أدخل قيمة جديدة" />
+              </div>
+              <div>
+                <label className="label">Ad Account ID *</label>
+                <input dir="ltr" className="input text-start" value={form.snap_ad_account_id}
+                  onChange={e => setForm(p => ({ ...p, snap_ad_account_id: e.target.value.trim() }))}
+                  placeholder="من Snapchat Ads Manager" />
+              </div>
+              {!!connection.snap_client_id && (
+                <button type="button" onClick={() => setEditCredentials(false)} className="text-xs text-muted2 hover:text-foreground underline">
+                  إخفاء — البيانات دي محفوظة بالفعل
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-between p-3 rounded-lg text-sm" style={{ background: 'var(--surface-1)' }}>
+              <span className="text-foreground">✓ Client ID وClient Secret وAd Account ID محفوظين بالفعل</span>
+              <button type="button" onClick={() => setEditCredentials(true)} className="text-xs text-primary hover:underline shrink-0">تعديل</button>
+            </div>
+          )}
 
           <div className="pt-2 border-t border-border">
             <p className="text-xs text-muted2 mb-1.5">
