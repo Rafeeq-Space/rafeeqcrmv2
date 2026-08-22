@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { MessageCircle, Copy, Check, RefreshCw, ListChecks, Plus, X, ArrowRight, ArrowLeft } from 'lucide-react'
-import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface Props {
   tenantId: string
@@ -338,15 +337,7 @@ export default function RafeeqSocialIntegration({ tenantId, secret, api, missedC
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="me-auto">
-          <h1 className="text-2xl font-extrabold text-foreground">الربط مع رفيق سوشيال</h1>
-          <p className="text-muted text-sm mt-1">
-            اربط بوت واتساب في رفيق سوشيال بالـ CRM — كل رسالة (واردة من العميل أو صادرة من الفريق) تُطابَق مع العميل بالرقم وتُسجَّل في محادثته، وتُنشأ ليد جديدة إن لم تكن موجودة.
-          </p>
-        </div>
-        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
-      </div>
+      <h1 className="text-2xl font-extrabold text-foreground mb-6">الربط مع رفيق سوشيال</h1>
 
       <RafeeqSocialStepIndicator step={step} onJump={setStep} />
 

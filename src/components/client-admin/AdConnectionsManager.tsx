@@ -924,14 +924,11 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
           {snapSuccess || snapError}
         </div>
       )}
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="me-auto">
-          <h1 className="text-2xl font-extrabold text-foreground">التكاملات</h1>
-          <p className="text-muted text-sm mt-1">
-            المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
-          </p>
-        </div>
+      {/* Header — title + clock always share one row regardless of screen
+          width or button presence; the description is its own line below
+          so it never pushes the clock onto a second row. */}
+      <div className="flex items-center gap-4 mb-1">
+        <h1 className="text-2xl font-extrabold text-foreground me-auto">التكاملات</h1>
         {!onIntegration && (
           <button onClick={() => { setEditConn(null); setShowModal(true) }} className="btn btn-primary gap-2">
             <Plus size={17} /> إضافة حساب
@@ -939,6 +936,9 @@ export default function AdConnectionsManager({ tenantId, connections, campaigns,
         )}
         <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
       </div>
+      <p className="text-muted text-sm mb-6">
+        المنصات الإعلانية والربط مع بيفاتيل — أضِف كل تكامل مرة واحدة، ثم استخدمه داخل حملاتك وعملائك.
+      </p>
 
       {/* Platform tabs */}
       <div className="flex gap-1 bg-surface2 rounded-xl p-1 border border-border w-fit mb-6 flex-wrap">

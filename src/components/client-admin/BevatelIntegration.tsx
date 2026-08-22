@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { MessageSquare, Phone, Copy, Check, RefreshCw } from 'lucide-react'
-import DateTimePrayer from '@/components/DateTimePrayer'
 
 interface BevatelApi {
   hasToken: boolean
@@ -24,6 +23,44 @@ interface Props {
   secret: string
   api: BevatelApi
   callCenterApi: BevatelCallCenterApi
+}
+
+// Same numbered-step pattern as the Rafeeq Social/Snapchat/TikTok wizards —
+// self-contained here rather than shared, same as those. Connect → Chat
+// status sync → Call Center → Review.
+const BEVATEL_STEPS: { n: 1 | 2 | 3 | 4; label: string }[] = [
+  { n: 1, label: 'الربط' },
+  { n: 2, label: 'مزامنة الحالة' },
+  { n: 3, label: 'مركز الاتصال' },
+  { n: 4, label: 'المراجعة' },
+]
+
+function BevatelStepIndicator({ step, onJump }: { step: 1 | 2 | 3 | 4; onJump: (n: 1 | 2 | 3 | 4) => void }) {
+  return (
+    <div className="flex items-center mb-6">
+      {BEVATEL_STEPS.map((s, i) => (
+        <div key={s.n} className="flex items-center" style={{ flex: i < BEVATEL_STEPS.length - 1 ? 1 : '0 0 auto' }}>
+          <button type="button" onClick={() => onJump(s.n)} className="flex flex-col items-center gap-1">
+            <span
+              className="flex items-center justify-center rounded-full text-xs font-bold shrink-0"
+              style={{
+                width: 26, height: 26,
+                background: step >= s.n ? 'var(--primary)' : 'var(--surface-1)',
+                color: step >= s.n ? '#fff' : 'var(--muted2)',
+                border: step >= s.n ? 'none' : '1px solid var(--border)',
+              }}
+            >
+              {step > s.n ? '✓' : s.n}
+            </span>
+            <span className="text-xs" style={{ color: step === s.n ? 'var(--foreground)' : 'var(--muted2)' }}>{s.label}</span>
+          </button>
+          {i < BEVATEL_STEPS.length - 1 && (
+            <div className="flex-1 h-px mx-1" style={{ background: step > s.n ? 'var(--primary)' : 'var(--border)' }} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function CopyField({ label, url }: { label: string; url: string }) {
@@ -49,6 +86,7 @@ function CopyField({ label, url }: { label: string; url: string }) {
 }
 
 export default function BevatelIntegration({ tenantId, secret, api, callCenterApi }: Props) {
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [currentSecret, setCurrentSecret] = useState(secret)
   const [rotating, setRotating] = useState(false)
 
@@ -159,141 +197,179 @@ export default function BevatelIntegration({ tenantId, secret, api, callCenterAp
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        <div className="me-auto">
-          <h1 className="text-2xl font-extrabold text-foreground">الربط مع بيفاتيل</h1>
-          <p className="text-muted text-sm mt-1">
-            اربط الشات والمكالمات في بيفاتيل بالـ CRM — كل رسالة أو مكالمة تُطابَق مع العميل بالرقم، وتُنشأ ليد جديدة إن لم تكن موجودة.
-          </p>
-        </div>
-        <button onClick={rotate} disabled={rotating} className="btn btn-outline gap-2">
-          <RefreshCw size={16} className={rotating ? 'animate-spin' : ''} /> توليد رابط جديد
-        </button>
-        <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
-      </div>
+      <h1 className="text-2xl font-extrabold text-foreground mb-6">الربط مع بيفاتيل</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card p-5 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
-              <MessageSquare size={20} style={{ color: 'var(--primary)' }} />
-            </div>
-            <div>
-              <h2 className="font-bold text-foreground">الشات (Business Chat)</h2>
-              <p className="text-xs text-muted2">رسائل واتساب والقنوات الأخرى</p>
-            </div>
-          </div>
-          <CopyField label="رابط استقبال أحداث الشات — الصقه في إعدادات Webhook بلوحة بيفاتيل:" url={chatUrl} />
-        </div>
+      <BevatelStepIndicator step={step} onJump={setStep} />
 
-        <div className="card p-5 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
-              <Phone size={20} style={{ color: 'var(--primary)' }} />
+      {step === 1 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
+                  <MessageSquare size={20} style={{ color: 'var(--primary)' }} />
+                </div>
+                <div>
+                  <h2 className="font-bold text-foreground">الشات (Business Chat)</h2>
+                  <p className="text-xs text-muted2">رسائل واتساب والقنوات الأخرى</p>
+                </div>
+              </div>
+              <CopyField label="رابط استقبال أحداث الشات — الصقه في إعدادات Webhook بلوحة بيفاتيل:" url={chatUrl} />
             </div>
-            <div>
-              <h2 className="font-bold text-foreground">مركز الاتصال (Call Center)</h2>
-              <p className="text-xs text-muted2">المكالمات الواردة والصادرة ومدتها</p>
+
+            <div className="card p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: 'var(--primary-soft)' }}>
+                  <Phone size={20} style={{ color: 'var(--primary)' }} />
+                </div>
+                <div>
+                  <h2 className="font-bold text-foreground">مركز الاتصال (Call Center)</h2>
+                  <p className="text-xs text-muted2">المكالمات الواردة والصادرة ومدتها</p>
+                </div>
+              </div>
+              <CopyField label="رابط استقبال أحداث المكالمات — الصقه في إعدادات Webhook بلوحة بيفاتيل:" url={callsUrl} />
             </div>
           </div>
-          <CopyField label="رابط استقبال أحداث المكالمات — الصقه في إعدادات Webhook بلوحة بيفاتيل:" url={callsUrl} />
-        </div>
-      </div>
 
-      <div className="card p-5 mt-4 space-y-4">
-        <div>
-          <h3 className="font-bold text-foreground text-sm">مزامنة الحالة مع بيفاتيل (اختياري)</h3>
-          <p className="text-xs text-muted2 mt-0.5">
-            بمفتاح API، تغيير حالة العميل في الـ CRM يضع الوسم المطابق على المحادثة في بيفاتيل تلقائيًا.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="sm:col-span-1">
-            <p className="text-xs text-muted2 mb-1">مفتاح API {hasToken && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
-            <input dir="ltr" type="password" value={token} onChange={e => setToken(e.target.value)}
-              placeholder={hasToken ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق التوكن'} className="input text-xs py-1.5 w-full" />
-          </div>
-          <div>
-            <p className="text-xs text-muted2 mb-1">رابط الـ API</p>
-            <input dir="ltr" value={host} onChange={e => setHost(e.target.value)} className="input text-xs py-1.5 w-full" />
-          </div>
-          <div>
-            <p className="text-xs text-muted2 mb-1">رقم الحساب</p>
-            <input dir="ltr" value={accountId} onChange={e => setAccountId(e.target.value)} className="input text-xs py-1.5 w-full" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={saveApi} disabled={savingApi} className="btn btn-primary text-xs !py-1.5">
-            {savingApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
-          </button>
-          {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
-        </div>
-      </div>
-
-      <div className="card p-5 mt-4 space-y-4">
-        <div>
-          <h3 className="font-bold text-foreground text-sm">API مركز الاتصال (Call Center) — منفصل عن مفتاح الشات</h3>
-          <p className="text-xs text-muted2 mt-0.5">
-            الـ webhook بيدّي أحداث بداية/نهاية المكالمة بس (بدون تفاصيل الرد). تفاصيل المكالمة الكاملة
-            (تم الرد، المدة، اسم الموظف) موجودة بس في API مركز الاتصال — من قسم &quot;API Keys&quot; في لوحة بيفاتيل.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <p className="text-xs text-muted2 mb-1">مفتاح API {hasCcKey && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
-            <input dir="ltr" type="password" value={ccApiKey} onChange={e => setCcApiKey(e.target.value)}
-              placeholder={hasCcKey ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق مفتاح API الخاص بمركز الاتصال'} className="input text-xs py-1.5 w-full" />
-          </div>
-          <div>
-            <p className="text-xs text-muted2 mb-1">رابط الـ API (Host)</p>
-            <input dir="ltr" value={ccHost} onChange={e => setCcHost(e.target.value)}
-              placeholder="مثال: https://cloud16.bevatel.com" className="input text-xs py-1.5 w-full" />
-          </div>
-          <div>
-            <p className="text-xs text-muted2 mb-1">Workspace ID (اختياري)</p>
-            <input dir="ltr" value={ccWorkspaceId} onChange={e => setCcWorkspaceId(e.target.value)}
-              placeholder="مثال: a1263405-04df-48f8-8fa6-e7325a4d9a5a" className="input text-xs py-1.5 w-full" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={saveCcApi} disabled={savingCcApi} className="btn btn-primary text-xs !py-1.5">
-            {savingCcApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
-          </button>
-          {ccApiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
-        </div>
-
-        <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-xs font-semibold text-foreground mb-1">مزامنة المكالمات المردود عليها</p>
-          <p className="text-xs text-muted2 mb-2">
-            تسحب تقرير مركز الاتصال وتربط كل مكالمة منتهية بالعميل (بالرقم) والموظف (بالاسم)، وتضيفها لتايم لاين العميل.
-            آمن للتكرار — المكالمة المسجّلة مسبقًا لا تتكرر.
-          </p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-xs text-muted flex items-center gap-1.5">
-              الفترة
-              <select
-                value={ccSyncDays}
-                onChange={e => setCcSyncDays(Number(e.target.value))}
-                disabled={ccSyncing}
-                className="input !py-1 !px-2 text-xs"
-              >
-                <option value={3}>آخر 3 أيام</option>
-                <option value={7}>آخر 7 أيام</option>
-                <option value={14}>آخر 14 يوم</option>
-                <option value={30}>آخر 30 يوم</option>
-              </select>
-            </label>
-            <button onClick={runCcSync} disabled={ccSyncing || !hasCcKey} className="btn btn-outline text-xs !py-1.5 gap-2">
-              <RefreshCw size={14} className={ccSyncing ? 'animate-spin' : ''} /> مزامنة الآن
+          <div className="card p-5">
+            <button onClick={rotate} disabled={rotating} className="btn btn-outline text-xs !py-1.5 gap-2">
+              <RefreshCw size={14} className={rotating ? 'animate-spin' : ''} /> توليد رابط جديد (لو تسرّب القديم)
             </button>
-            {!hasCcKey && <span className="text-xs text-muted2">احفظ مفتاح API الأول</span>}
-            {ccSyncMsg && <span className="text-xs text-muted">{ccSyncMsg}</span>}
+          </div>
+
+          <button type="button" onClick={() => setStep(2)} className="btn btn-primary w-full">التالي ←</button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <div className="card p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-foreground text-sm">مزامنة الحالة مع بيفاتيل (اختياري)</h3>
+              <p className="text-xs text-muted2 mt-0.5">
+                بمفتاح API، تغيير حالة العميل في الـ CRM يضع الوسم المطابق على المحادثة في بيفاتيل تلقائيًا. لو مش محتاجها دلوقتي، سيبها فاضية ودوس التالي.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-1">
+                <p className="text-xs text-muted2 mb-1">مفتاح API {hasToken && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
+                <input dir="ltr" type="password" value={token} onChange={e => setToken(e.target.value)}
+                  placeholder={hasToken ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق التوكن'} className="input text-xs py-1.5 w-full" />
+              </div>
+              <div>
+                <p className="text-xs text-muted2 mb-1">رابط الـ API</p>
+                <input dir="ltr" value={host} onChange={e => setHost(e.target.value)} className="input text-xs py-1.5 w-full" />
+              </div>
+              <div>
+                <p className="text-xs text-muted2 mb-1">رقم الحساب</p>
+                <input dir="ltr" value={accountId} onChange={e => setAccountId(e.target.value)} className="input text-xs py-1.5 w-full" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={saveApi} disabled={savingApi} className="btn btn-primary text-xs !py-1.5">
+                {savingApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
+              </button>
+              {apiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep(1)} className="btn btn-outline flex-1">→ السابق</button>
+            <button type="button" onClick={() => setStep(3)} className="btn btn-primary flex-1">التالي ←</button>
           </div>
         </div>
-      </div>
+      )}
 
+      {step === 3 && (
+        <div className="space-y-4">
+          <div className="card p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-foreground text-sm">API مركز الاتصال (Call Center) — منفصل عن مفتاح الشات</h3>
+              <p className="text-xs text-muted2 mt-0.5">
+                الـ webhook بيدّي أحداث بداية/نهاية المكالمة بس (بدون تفاصيل الرد). تفاصيل المكالمة الكاملة
+                (تم الرد، المدة، اسم الموظف) موجودة بس في API مركز الاتصال — من قسم &quot;API Keys&quot; في لوحة بيفاتيل.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-muted2 mb-1">مفتاح API {hasCcKey && <span className="text-[var(--success,#16a34a)]">(محفوظ ✓)</span>}</p>
+                <input dir="ltr" type="password" value={ccApiKey} onChange={e => setCcApiKey(e.target.value)}
+                  placeholder={hasCcKey ? '•••••••• (اتركه فارغًا للإبقاء)' : 'الصق مفتاح API الخاص بمركز الاتصال'} className="input text-xs py-1.5 w-full" />
+              </div>
+              <div>
+                <p className="text-xs text-muted2 mb-1">رابط الـ API (Host)</p>
+                <input dir="ltr" value={ccHost} onChange={e => setCcHost(e.target.value)}
+                  placeholder="مثال: https://cloud16.bevatel.com" className="input text-xs py-1.5 w-full" />
+              </div>
+              <div>
+                <p className="text-xs text-muted2 mb-1">Workspace ID (اختياري)</p>
+                <input dir="ltr" value={ccWorkspaceId} onChange={e => setCcWorkspaceId(e.target.value)}
+                  placeholder="مثال: a1263405-04df-48f8-8fa6-e7325a4d9a5a" className="input text-xs py-1.5 w-full" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={saveCcApi} disabled={savingCcApi} className="btn btn-primary text-xs !py-1.5">
+                {savingCcApi ? 'جارٍ الحفظ...' : 'حفظ مفتاح API'}
+              </button>
+              {ccApiSaved && <span className="text-xs text-[var(--success,#16a34a)] flex items-center gap-1"><Check size={13} /> تم الحفظ</span>}
+            </div>
+
+            <div className="border-t border-[var(--border)] pt-3">
+              <p className="text-xs font-semibold text-foreground mb-1">مزامنة المكالمات المردود عليها</p>
+              <p className="text-xs text-muted2 mb-2">
+                تسحب تقرير مركز الاتصال وتربط كل مكالمة منتهية بالعميل (بالرقم) والموظف (بالاسم)، وتضيفها لتايم لاين العميل.
+                آمن للتكرار — المكالمة المسجّلة مسبقًا لا تتكرر.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="text-xs text-muted flex items-center gap-1.5">
+                  الفترة
+                  <select
+                    value={ccSyncDays}
+                    onChange={e => setCcSyncDays(Number(e.target.value))}
+                    disabled={ccSyncing}
+                    className="input !py-1 !px-2 text-xs"
+                  >
+                    <option value={3}>آخر 3 أيام</option>
+                    <option value={7}>آخر 7 أيام</option>
+                    <option value={14}>آخر 14 يوم</option>
+                    <option value={30}>آخر 30 يوم</option>
+                  </select>
+                </label>
+                <button onClick={runCcSync} disabled={ccSyncing || !hasCcKey} className="btn btn-outline text-xs !py-1.5 gap-2">
+                  <RefreshCw size={14} className={ccSyncing ? 'animate-spin' : ''} /> مزامنة الآن
+                </button>
+                {!hasCcKey && <span className="text-xs text-muted2">احفظ مفتاح API الأول</span>}
+                {ccSyncMsg && <span className="text-xs text-muted">{ccSyncMsg}</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setStep(2)} className="btn btn-outline flex-1">→ السابق</button>
+            <button type="button" onClick={() => setStep(4)} className="btn btn-primary flex-1">التالي ←</button>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="space-y-4">
+          <div className="card p-5 space-y-1.5 text-sm">
+            <p><span className="text-muted2">مفتاح مزامنة الحالة (شات):</span> <span className="text-foreground font-semibold">{hasToken ? 'محفوظ ✓' : 'غير محفوظ'}</span></p>
+            <p><span className="text-muted2">مفتاح مركز الاتصال:</span> <span className="text-foreground font-semibold">{hasCcKey ? 'محفوظ ✓' : 'غير محفوظ'}</span></p>
+          </div>
+
+          <div className="card p-5 space-y-3">
+            <h3 className="font-bold text-foreground text-sm">جرّب الربط فعليًا</h3>
+            <p className="text-xs text-muted2">
+              بعت رسالة واتساب أو اعمل مكالمة تجريبية على رقم بيفاتيل بتاعك — يُفترض تظهر ليد جديدة هنا في مركز العملاء خلال ثوانٍ. لو ظهرت، الربط شغال صحيح.
+            </p>
+          </div>
+
+          <button type="button" onClick={() => setStep(3)} className="btn btn-outline w-full">→ السابق</button>
+        </div>
+      )}
     </div>
   )
 }
