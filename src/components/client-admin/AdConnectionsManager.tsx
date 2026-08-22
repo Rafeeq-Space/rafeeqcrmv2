@@ -623,7 +623,15 @@ function ConnectionModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const editing = !!connection
+  // Once a brand-new snapchat/tiktok connection is created, we don't close
+  // the modal and make the admin reopen "تعديل" to see the step wizard —
+  // that's exactly the "doesn't walk me through steps until after I've
+  // already done the integration" gap flagged live. Instead handleSubmit
+  // stores the freshly-created row here, which flips `editing` true and
+  // mounts the same wizard in place, continuing on the very next step.
+  const [createdConnection, setCreatedConnection] = useState<AdConnection | null>(null)
+  const activeConnection = connection || createdConnection
+  const editing = !!activeConnection
   const [form, setForm] = useState({
     platform: (connection?.platform || defaultPlatform) as AdPlatform,
     name: connection?.name || '',
@@ -677,6 +685,13 @@ function ConnectionModal({
           })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'خطأ')
+      // Wizard platforms: stay open and continue straight into the step
+      // flow on the row that was just created, instead of closing and
+      // making the admin reopen "تعديل" to see the same steps.
+      if (!editing && (form.platform === 'snapchat' || form.platform === 'tiktok') && data.connection) {
+        setCreatedConnection(data.connection)
+        return
+      }
       onSaved()
       onClose()
     } catch (err: unknown) {
@@ -726,13 +741,17 @@ function ConnectionModal({
           )}
 
           {form.platform === 'tiktok' && !editing && (
-            <p className="text-xs text-muted2">
-              بعد الحفظ، رجّع لتعديل هذا الاتصال وستظهر لك خطوات الإعداد كاملة (الربط ← CRM Event Set ← الوجهة ← المراجعة).
-            </p>
+            <>
+              <TikTokStepIndicator step={1} onJump={() => {}} />
+              <p className="text-xs text-muted2">
+                بعد الحفظ، هتكمل باقي خطوات الإعداد (CRM Event Set ← الوجهة ← المراجعة) في نفس الشاشة من غير ما تقفلها.
+              </p>
+            </>
           )}
 
           {form.platform === 'snapchat' && !editing && (
             <>
+              <SnapchatStepIndicator step={1} onJump={() => {}} />
               <div>
                 <label className="label">Client ID *</label>
                 <input dir="ltr" className="input text-start" value={form.snap_client_id}
@@ -759,7 +778,7 @@ function ConnectionModal({
                 </p>
               </div>
               <p className="text-xs text-muted2">
-                بعد الحفظ، رجّع لتعديل هذا الاتصال وستظهر لك خطوات الإعداد كاملة (الربط ← المطابقة ← الوجهة ← المراجعة).
+                بعد الحفظ، هتكمل باقي خطوات الإعداد (الربط ← المطابقة ← الوجهة ← المراجعة) في نفس الشاشة من غير ما تقفلها.
               </p>
             </>
           )}
@@ -776,9 +795,9 @@ function ConnectionModal({
             </div>
           )}
 
-          {form.platform === 'snapchat' && editing && connection && (
+          {form.platform === 'snapchat' && editing && activeConnection && (
             <SnapchatWizard
-              connection={connection}
+              connection={activeConnection}
               campaigns={campaigns}
               form={form}
               setForm={updater => setForm(prev => ({ ...prev, ...updater(prev) }))}
@@ -786,9 +805,9 @@ function ConnectionModal({
             />
           )}
 
-          {form.platform === 'tiktok' && editing && connection && (
+          {form.platform === 'tiktok' && editing && activeConnection && (
             <TikTokWizard
-              connection={connection}
+              connection={activeConnection}
               campaigns={campaigns}
               form={form}
               setForm={updater => setForm(prev => ({ ...prev, ...updater(prev) }))}
@@ -811,9 +830,9 @@ function ConnectionModal({
           )}
 
           {error && <p className="text-sm" style={{ color: 'var(--danger)' }}>{error}</p>}
-          {(form.platform === 'snapchat' || form.platform === 'tiktok') && editing && connection ? (
+          {(form.platform === 'snapchat' || form.platform === 'tiktok') && editing && activeConnection ? (
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose} className="btn btn-outline flex-1">إغلاق</button>
+              <button type="button" onClick={() => { onSaved(); onClose() }} className="btn btn-outline flex-1">إغلاق</button>
             </div>
           ) : (
             <div className="flex gap-3 pt-1">
