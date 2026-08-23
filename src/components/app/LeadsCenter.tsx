@@ -40,13 +40,13 @@ interface Props {
 // only via displayBucketForLead (see subStatus.ts), never touching the real
 // `status` column.
 const STAT_CARDS: { key: string; label: string; color: string }[] = [
-  { key: 'all', label: 'إجمالي العملاء', color: 'var(--foreground)' },
   { key: 'new', label: 'جديد', color: DISPLAY_BUCKET_COLORS.new },
   { key: 'contacted', label: DISPLAY_BUCKET_LABELS.in_progress, color: DISPLAY_BUCKET_COLORS.in_progress },
   { key: 'pending', label: DISPLAY_BUCKET_LABELS.pending, color: DISPLAY_BUCKET_COLORS.pending },
   { key: 'qualified', label: 'مؤهل', color: DISPLAY_BUCKET_COLORS.qualified },
   { key: 'converted', label: 'تم التحويل', color: DISPLAY_BUCKET_COLORS.converted },
   { key: 'lost', label: 'غير مؤهل', color: DISPLAY_BUCKET_COLORS.lost },
+  { key: 'all', label: 'إجمالي العملاء', color: 'var(--foreground)' },
 ]
 
 // Period quick-filter over the lead creation date.

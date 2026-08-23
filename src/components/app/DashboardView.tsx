@@ -310,21 +310,20 @@ export default function DashboardView({
             <span className="ms-auto text-xs text-muted2 px-1">{filteredLeads.length} عميل خلال الفترة</span>
           </div>
 
-          {/* Detailed status + response cards */}
-          <LeadStatCards leads={filteredLeads} avgResponseMs={avgResponseMs} href="/client-admin/leads" />
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {cards.map(({ label, value, icon: Icon, color, href }) => (
-              <Link key={label} href={href} className="card card-hover p-5 transition hover:border-primary">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: STAT_SOFT[color] }}>
-                  <Icon size={21} style={{ color: STAT_COLORS[color] }} />
-                </div>
-                <p className="text-2xl font-extrabold text-foreground">{value}</p>
-                <p className="text-sm text-muted mt-0.5">{label}</p>
-              </Link>
-            ))}
-          </div>
+          {/* Detailed status + response cards, plus the campaigns/forms/
+              teams/employees cards appended into the SAME grid (extraCards)
+              so they fill the leftover slots in the last row instead of
+              starting a visually separate section below with a gap. */}
+          <LeadStatCards
+            leads={filteredLeads}
+            avgResponseMs={avgResponseMs}
+            href="/client-admin/leads"
+            extraCards={cards.map(({ label, value, icon, color, href }) => ({
+              label, value, icon, href,
+              color: STAT_COLORS[color],
+              soft: STAT_SOFT[color],
+            }))}
+          />
 
           {/* Completion rate — full width, below the stat cards */}
           <Link href={completionCard.href} className="card card-hover p-5 flex items-center gap-4 transition hover:border-primary">

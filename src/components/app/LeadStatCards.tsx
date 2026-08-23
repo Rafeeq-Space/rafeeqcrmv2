@@ -1,14 +1,29 @@
 'use client'
 
 import { Users, UserPlus, MessageCircle, Hourglass, UserCheck, CheckCircle2, UserX, TrendingUp, Timer } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS } from '@/lib/leads/subStatus'
+
+export interface ExtraStatCard {
+  label: string
+  value: string | number
+  icon: LucideIcon
+  color: string
+  soft: string
+  href: string
+}
 
 interface Props {
   leads: Pick<Lead, 'status' | 'sub_status' | 'created_at'>[]
   avgResponseMs: number | null
   // Optional link the count cards navigate to (e.g. the leads center).
   href?: string
+  // Extra cards appended into this SAME grid, right after the built-in
+  // ones — so a caller's own cards (e.g. DashboardView's "الحملات/النماذج/
+  // الفِرَق/الموظفون") fill the leftover slots in the last row instead of
+  // starting a visually separate grid/section below with a gap in between.
+  extraCards?: ExtraStatCard[]
 }
 
 // Human-readable Arabic duration from milliseconds.
@@ -22,7 +37,7 @@ function fmtDuration(ms: number | null): string {
   return `${Math.round(hours / 24)} يوم`
 }
 
-export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
+export default function LeadStatCards({ leads, avgResponseMs, href, extraCards = [] }: Props) {
   const count = (s: string) => leads.filter(l => l.status === s).length
   // 'contacted' split display-only into "جاري التواصل" (actively worked) vs
   // "معلق" (stalled) — see displayBucketForLead in subStatus.ts. The real
@@ -41,13 +56,13 @@ export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
   // (see LeadsCenter.tsx) — omitted on the two cards that aren't a single
   // filterable status (a ratio, and a duration).
   const cards = [
-    { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: 'all' },
     { label: 'عملاء جدد', value: count('new'), icon: UserPlus, color: DISPLAY_BUCKET_COLORS.new, soft: 'var(--primary-soft)', statusParam: 'new' },
     { label: DISPLAY_BUCKET_LABELS.in_progress, value: countBucket('in_progress'), icon: MessageCircle, color: DISPLAY_BUCKET_COLORS.in_progress, soft: 'var(--warning-soft)', statusParam: 'contacted' },
     { label: DISPLAY_BUCKET_LABELS.pending, value: countBucket('pending'), icon: Hourglass, color: DISPLAY_BUCKET_COLORS.pending, soft: 'var(--surface2)', statusParam: 'pending' },
     { label: 'عميل مؤهل', value: count('qualified'), icon: UserCheck, color: DISPLAY_BUCKET_COLORS.qualified, soft: 'var(--purple-soft)', statusParam: 'qualified' },
     { label: 'تم البيع', value: count('converted'), icon: CheckCircle2, color: DISPLAY_BUCKET_COLORS.converted, soft: 'var(--success-soft)', statusParam: 'converted' },
     { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: DISPLAY_BUCKET_COLORS.lost, soft: 'var(--danger-soft)', statusParam: 'lost' },
+    { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: 'all' },
     { label: 'نسبة الإكمال هذا الشهر', value: `${completionRate}%`, icon: TrendingUp, color: 'var(--success)', soft: 'var(--success-soft)', statusParam: null },
     { label: 'معدل سرعة الرد', value: fmtDuration(avgResponseMs), icon: Timer, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: null },
   ]
@@ -71,6 +86,15 @@ export default function LeadStatCards({ leads, avgResponseMs, href }: Props) {
           <div key={label} className="card p-5">{body}</div>
         )
       })}
+      {extraCards.map(({ label, value, icon: Icon, color, soft, href: extraHref }) => (
+        <a key={label} href={extraHref} className="card card-hover p-5 transition hover:border-primary">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: soft }}>
+            <Icon size={21} style={{ color }} />
+          </div>
+          <p className="text-2xl font-extrabold text-foreground">{value}</p>
+          <p className="text-sm text-muted mt-0.5">{label}</p>
+        </a>
+      ))}
     </div>
   )
 }
