@@ -183,3 +183,28 @@ export function normalizeRowPhone<T extends Record<string, string>>(row: T): T {
   }
   return row
 }
+
+// Overwrites whichever field leadName()/leadPhone() would actually read (same
+// matching rule as pick() above), so a manual edit lands on the exact header
+// the lead's own source used instead of injecting a second, differently-
+// labeled field alongside it. Falls back to inserting under `fallbackKey`
+// only when no existing field matches at all.
+function setField(data: Record<string, string>, keys: string[], fallbackKey: string, value: string): Record<string, string> {
+  const nkeys = keys.map(norm)
+  for (const k of Object.keys(data)) {
+    const nk = norm(k)
+    if (!nk) continue
+    if (nkeys.some(key => nk === key || nk.includes(key) || key.includes(nk))) {
+      return { ...data, [k]: value }
+    }
+  }
+  return { ...data, [fallbackKey]: value }
+}
+
+export function setLeadName(data: Record<string, string> | undefined, value: string): Record<string, string> {
+  return setField(data || {}, NAME_KEYS, 'الاسم', value)
+}
+
+export function setLeadPhone(data: Record<string, string> | undefined, value: string): Record<string, string> {
+  return setField(data || {}, PHONE_KEYS, 'رقم الهاتف', value)
+}

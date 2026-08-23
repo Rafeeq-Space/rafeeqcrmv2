@@ -159,6 +159,20 @@ export interface AppendArgs {
   // customer's name for an incoming message, or the replying agent's name for
   // an outgoing one. Falls back to "النظام" (see TimelineItem) if omitted.
   activityActorLabel?: string
+  // True for a message WE sent via Bevatel's Developer API (the automated
+  // welcome/missed-call templates) — never a real human's reply. In that
+  // case activityActorLabel (built from Bevatel's live conversation
+  // assignee) is ignored in favour of the lead's own already-known assignee:
+  // confirmed live 2026-08-23 (twice — "Ziad Samer", then "Ahmed Elmansy")
+  // that an automated send can land on an old, reused Bevatel conversation
+  // whose assignee is a completely unrelated leftover rep, and no amount of
+  // pushing our own assignee back to Bevatel (see the contactJustLinked
+  // block in handleBevatelChat) can fix THIS message's own label — that
+  // push only affects what later messages' payloads show, since this
+  // message's payload already existed, with its stale assignee, before we
+  // ever got a chance to correct it. Using our own DB-known assignee instead
+  // of Bevatel's live snapshot sidesteps the race entirely.
+  activityActorFromAssignee?: boolean
   conversationId?: string
   contactId?: string
   agent: AgentHint
@@ -375,13 +389,26 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // re-sent webhook silently no-ops instead of duplicating the message.
   let logged = false
   if (activityBody) {
+    // See AppendArgs.activityActorFromAssignee — for our own automated send,
+    // resolve the label from the lead's own already-known assignee (the
+    // just-created lead's agent, or whoever the hand-over logic above just
+    // settled on, or the pre-existing owner) instead of trusting Bevatel's
+    // live conversation snapshot passed in as activityActorLabel.
+    let actorLabel = args.activityActorLabel ?? null
+    if (args.activityActorFromAssignee) {
+      const ownerId = created ? (agent?.id ?? null) : (assigned && agent ? agent.id : existingAssignedId)
+      if (ownerId) {
+        const { data: ownerProfile } = await supa.from('profiles').select('full_name').eq('id', ownerId).single()
+        if (ownerProfile?.full_name) actorLabel = ownerProfile.full_name as string
+      }
+    }
     const base = {
       tenant_id: tenantId,
       lead_id: leadId,
       actor_id: null,
       type: 'comment' as const,
       body: activityBody,
-      actor_label: args.activityActorLabel ?? null,
+      actor_label: actorLabel,
     }
     const { error: commentErr } = await supa
       .from('lead_activities')
@@ -565,6 +592,17 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   const text = (payload.content as string) || ''
   const incoming = payload.message_type === 'incoming' || payload.message_type === 0
 
+  // A message WE sent via Bevatel's Developer API (the automated welcome/
+  // missed-call templates) carries sender_type "DeveloperApi" on the message
+  // object nested under conversation.messages[0] — confirmed live. Used
+  // below to source the timeline comment's actor label from our own
+  // known assignee instead of Bevatel's live (possibly stale/reused-
+  // conversation) snapshot — see AppendArgs.activityActorFromAssignee.
+  const firstMessage = (Array.isArray(conversation.messages) ? conversation.messages[0] : undefined) as
+    | Record<string, unknown>
+    | undefined
+  const isDeveloperApiSend = firstMessage?.sender_type === 'DeveloperApi'
+
   // A media message (photo/document/video/voice note) arrives with
   // `content: null` and the file described in `attachments` instead — confirmed
   // live via a real Bevatel image message (see mediaTypeLabel). Without this,
@@ -639,6 +677,7 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     activityBody: body,
     activityExternalId: messageId,
     activityActorLabel: incoming ? (name || undefined) : (agent.name || agent.email || undefined),
+    activityActorFromAssignee: !incoming && isDeveloperApiSend,
     conversationId: convId,
     contactId,
     agent,

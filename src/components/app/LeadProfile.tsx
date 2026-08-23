@@ -8,7 +8,7 @@ import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
-  Radio, CheckCircle2, AlertTriangle, Landmark,
+  Radio, CheckCircle2, AlertTriangle, Landmark, Pencil,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
@@ -50,6 +50,9 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [showAssign, setShowAssign] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [shareId, setShareId] = useState('')
+  const [showEdit, setShowEdit] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
   const [financingRequest, setFinancingRequest] = useState(initialFinancingRequest)
   const [showFinancingModal, setShowFinancingModal] = useState(false)
   const [savingFinancingStatus, setSavingFinancingStatus] = useState(false)
@@ -79,6 +82,12 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   // A rep can hand their own lead to a colleague without going through a
   // manager. Only their own, and only *to* someone — the server enforces both.
   const canHandOff = !canManage && lead.assigned_sales_id === viewerId
+  // Editing the customer's own name/phone is deliberately narrower than
+  // viewing — explicit product decision (2026-08-23): only whoever this
+  // lead is CURRENTLY assigned to may edit it, regardless of role, so an
+  // admin/manager who can merely see it still can't rewrite someone else's
+  // customer data. Same condition the server itself enforces.
+  const canEdit = lead.assigned_sales_id === viewerId
   // You can't share a lead with yourself.
   const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)
@@ -177,6 +186,22 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
     if (r?.lead) { setLead(r.lead); setShowAssign(false); showToast('تم تحديث الإسناد') }
   }
 
+  async function saveEdit() {
+    const trimmedName = editName.trim()
+    const trimmedPhone = editPhone.trim()
+    const payload: { name?: string; phone?: string } = {}
+    if (trimmedName && trimmedName !== name) payload.name = trimmedName
+    if (trimmedPhone && trimmedPhone !== phone) payload.phone = trimmedPhone
+    if (!payload.name && !payload.phone) { setShowEdit(false); return }
+    const r = await post(`/api/leads/${lead.id}/edit`, payload)
+    if (r?.lead) {
+      setLead(r.lead)
+      setShowEdit(false)
+      showToast('تم حفظ التعديل')
+      refreshActivities()
+    }
+  }
+
   async function share() {
     if (!shareId) return
     const r = await post(`/api/leads/${lead.id}/share`, { profile_id: shareId })
@@ -224,11 +249,31 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="w-12 h-12 rounded-full bg-primary-soft flex items-center justify-center shrink-0">
                 <User size={22} style={{ color: 'var(--primary)' }} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h1 className="font-extrabold text-foreground truncate">{name}</h1>
                 <span className={`badge ${LEAD_STATUS_COLORS[lead.status]}`}>{LEAD_STATUS_LABELS[lead.status]}</span>
               </div>
+              {canEdit && (
+                <button
+                  onClick={() => { setEditName(name); setEditPhone(phone); setShowEdit(v => !v) }}
+                  className="btn btn-outline text-xs !py-1.5 !px-2.5 shrink-0"
+                  title="تعديل الاسم/الرقم"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
             </div>
+
+            {showEdit && canEdit && (
+              <div className="mb-4 p-3 rounded-xl bg-surface2 border border-border space-y-2">
+                <input className="input" placeholder="الاسم" value={editName} onChange={e => setEditName(e.target.value)} />
+                <input className="input" placeholder="رقم الهاتف" value={editPhone} onChange={e => setEditPhone(e.target.value)} dir="ltr" />
+                <div className="flex gap-2">
+                  <button disabled={busy} onClick={saveEdit} className="btn btn-primary flex-1 text-xs !py-1.5">حفظ</button>
+                  <button disabled={busy} onClick={() => setShowEdit(false)} className="btn btn-outline flex-1 text-xs !py-1.5">إلغاء</button>
+                </div>
+              </div>
+            )}
 
             {phone && (() => {
               // Falls back all the way to the plain account host when this
