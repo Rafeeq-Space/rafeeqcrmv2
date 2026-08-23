@@ -98,9 +98,14 @@ const ASSIGN_URL = 'https://rafeeq.social/api/v1/whatsapp/subscriber/chat/assign
 // itself imports normName from bevatelLead.ts, and importing back from there
 // into bevatelLead.ts would create a circular module dependency. This file
 // has no dependency on bevatelLead.ts at all, so it's the safe common home.
-export async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<void> {
+// Returns true only when Rafeeq Social ends up actually holding this
+// assignee — either because it already did, or because at least one variant's
+// assign call reported success. Callers that need to know whether the push
+// really landed (see pushAssignmentWhenSubscriberExists) depend on this;
+// everything else can ignore it.
+export async function pushAssignmentCore(tenantId: string, phone: string, salesId: string): Promise<boolean> {
   const creds = await tenantRafeeqSocialCreds(tenantId)
-  if (!creds) return
+  if (!creds) return false
 
   const { data: profile } = await adminSupabase()
     .from('profiles')
@@ -108,7 +113,7 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
     .eq('id', salesId)
     .single()
   const teamMemberId = (profile?.rafeeqsocial_team_member_id || '').trim()
-  if (!teamMemberId) return
+  if (!teamMemberId) return false
 
   // Skip the actual API call entirely if Rafeeq Social already shows this
   // exact assignee — confirmed live 2026-08-23: re-asserting the SAME
@@ -119,8 +124,9 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
   // repeats of the same line. Re-confirming the same, already-correct
   // assignment is a no-op we don't need to make visible in their UI.
   const current = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
-  if (current?.assignedAgentId === teamMemberId) return
+  if (current?.assignedAgentId === teamMemberId) return true
 
+  let anySucceeded = false
   for (const variant of phoneVariants(phone)) {
     const body = new URLSearchParams({
       apiToken: creds.apiToken,
@@ -129,15 +135,41 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
       team_member_id: teamMemberId,
     })
     try {
-      await fetch(ASSIGN_URL, {
+      const res = await fetch(ASSIGN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
       })
+      // Rafeeq Social answers 200 with {"status":"0","message":"..."} on a
+      // logical failure (most importantly "Subscriber not found"), so the
+      // HTTP status alone says nothing — the body has to be read.
+      const json = await res.json().catch(() => null)
+      if (json?.status === '1' || json?.status === 1) anySucceeded = true
     } catch (err) {
       console.error('pushAssigneeToRafeeqSocial failed', err)
     }
   }
+  return anySucceeded
+}
+
+// Rafeeq Social creates a subscriber record only when the first message to
+// that number is actually processed on their side — confirmed live
+// 2026-08-23 that this lags the API call that triggers it by a second or
+// two, and that assigning a not-yet-existing subscriber fails outright
+// (`{"status":"0","message":"Subscriber not found"}`). A brand-new lead's
+// very first touch is exactly that case, so a single immediate push is
+// guaranteed to miss: it runs before the subscriber exists, silently fails,
+// and nothing retries. Polls until the assignment lands (or the window is
+// exhausted) instead. Runs inside the caller's after() so nobody waits on it.
+async function pushAssignmentWhenSubscriberExists(tenantId: string, phone: string, salesId: string): Promise<void> {
+  const DELAYS_MS = [1500, 2000, 3000, 4000]
+  for (let attempt = 0; attempt <= DELAYS_MS.length; attempt++) {
+    if (await pushAssignmentCore(tenantId, phone, salesId)) return
+    const delay = DELAYS_MS[attempt]
+    if (delay == null) break
+    await new Promise(resolve => setTimeout(resolve, delay))
+  }
+  console.error(`pushAssignmentWhenSubscriberExists: gave up for phone *${phone.slice(-4)} (subscriber never appeared)`)
 }
 
 // Fires the tenant's configured "new lead" Workflow trigger (a WhatsApp
@@ -183,21 +215,19 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
     return
   }
 
-  // Push the CRM's assignment decision FIRST, before the workflow below ever
-  // creates/touches a subscriber for this phone number over there — same
-  // order, and same reason, as the missed-call follow-up in bevatelLead.ts:
-  // confirmed live there that triggering the workflow first let Rafeeq
-  // Social's own logic leave the fresh subscriber unassigned (or assign it
-  // to whoever happens to reply) since nothing had told it the CRM's
-  // decision yet. Without this, a brand-new lead whose first-ever touch is
-  // this automated workflow message had NO push at all until some later
-  // message happened to trigger handleRafeeqSocialEvent's own re-push —
-  // confirmed live 2026-08-23 (leads sitting unassigned on Rafeeq Social's
-  // side for minutes with zero webhook activity yet).
+  // An assignment push before the workflow runs only helps when a subscriber
+  // for this number ALREADY exists over there (a returning customer) — for a
+  // genuinely new number there is nothing to assign yet, and Rafeeq Social
+  // rejects the call outright. Try it anyway (cheap, and it means a
+  // returning customer's thread is already on the right rep before the
+  // message lands), then fire the workflow, then poll until the assignment
+  // actually lands on the subscriber the workflow just created. See
+  // pushAssignmentWhenSubscriberExists for the confirmed timing behavior
+  // this works around.
   try {
     await pushAssignmentCore(tenantId, phone, assignedSalesId)
   } catch (err) {
-    console.error('pushAssignmentCore (new-lead workflow) failed', err)
+    console.error('pushAssignmentCore (new-lead workflow, pre-push) failed', err)
   }
 
   try {
@@ -212,6 +242,11 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
   } catch (err) {
     console.error('rafeeqsocial new-lead workflow trigger failed', err)
   }
+
+  // The pre-push above already returned true (and this becomes a no-op via
+  // the same-assignee short-circuit) whenever the subscriber existed; this
+  // is what covers the brand-new-number case the pre-push cannot.
+  await pushAssignmentWhenSubscriberExists(tenantId, phone, assignedSalesId)
 }
 
 export interface SendResult {
