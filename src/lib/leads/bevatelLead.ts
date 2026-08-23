@@ -461,6 +461,20 @@ async function syncStatusFromAttribute(tenantId: string, leadId: string, label: 
   const sub = subStatusByLabel(label)
   if (!sub) return
 
+  // This function only ever runs from inside a real message/conversation
+  // event (handleBevatelChat) — a live Bevatel conversation already existing
+  // means real contact happened, so a reverse-sync landing on canonical
+  // "new" is never trustworthy here. Confirmed live 2026-08-23: Chatwoot
+  // fires several events per single message (created, then repeated
+  // updated deliveries — see the comment on isNewMessage above), each an
+  // independent, unsynchronized request; contactJustLinked's best-effort
+  // guard against a stale/leftover contact attribute (see its own comment)
+  // can still lose that race under concurrent delivery, so this is the
+  // actual backstop: never let this path regress an already-more-advanced
+  // lead back down to "new", no matter which attribute value or timing
+  // produced it.
+  if (sub.status === 'new') return
+
   const supa = adminSupabase()
   const { data: lead } = await supa.from('leads').select('status, sub_status').eq('id', leadId).single()
   if (!lead || lead.sub_status === sub.key) return
