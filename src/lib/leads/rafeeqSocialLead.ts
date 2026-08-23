@@ -2,6 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { appendToLead, recordEvent, phoneKey, mediaTypeLabel } from '@/lib/leads/bevatelLead'
 import { syncRafeeqSocialAssignment } from '@/lib/leads/rafeeqSocialAssign'
 import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
+import { pushAssignmentCore } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 
 // ── Rafeeq Social (rafeeq.social) message webhook ─────────────────────────────
@@ -145,6 +146,26 @@ export async function handleRafeeqSocialEvent(
         console.error('syncSubStatusFromRafeeqSocial failed', err)
       ),
     ])
+
+    // Re-push the CRM's current assignee to Rafeeq Social on EVERY event,
+    // not just at the moment the CRM decided it. Confirmed live 2026-08-23
+    // (tenant أوتو باور): Rafeeq Social's own platform can independently
+    // re-assign a subscriber to whoever replies, silently overriding a
+    // CRM decision that was only ever pushed once — the same class of gap
+    // fixed for Bevatel the same day (push status/assignee on every event,
+    // not just the first-link one). pushAssignmentCore itself no-ops if the
+    // rep has no rafeeqsocial_team_member_id, so this is always safe to call
+    // unconditionally.
+    const { data: currentLead } = await adminSupabase()
+      .from('leads')
+      .select('assigned_sales_id')
+      .eq('id', res.leadId)
+      .single()
+    if (currentLead?.assigned_sales_id) {
+      await pushAssignmentCore(tenantId, phone, currentLead.assigned_sales_id).catch(err =>
+        console.error('pushAssignmentCore (every-event re-push) failed', err)
+      )
+    }
 
     // Awaited for the same reason as the two syncs above — this function
     // only keeps running because the webhook route's after() is waiting on
