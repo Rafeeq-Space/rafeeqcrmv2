@@ -3,6 +3,7 @@ import { requireTenantUser } from '@/lib/auth/requireTenantUser'
 import { adminSupabase } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
+import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 import type { KnowledgeFile } from '@/lib/types'
 
 // Creates a lead manually from inside the CRM (as opposed to a public form
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
   })
 
   after(() => triggerRafeeqSocialNewLeadWorkflow(viewer.tenantId, phone, name, assignedSalesId).catch(console.error))
+  after(() => sendBevatelNewLeadTemplate(viewer.tenantId, phone, lead.id, assignedSalesId).catch(console.error))
 
   return NextResponse.json({ success: true, lead }, { status: 201 })
 }

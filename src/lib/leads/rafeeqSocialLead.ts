@@ -2,6 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { appendToLead, recordEvent, phoneKey, mediaTypeLabel } from '@/lib/leads/bevatelLead'
 import { syncRafeeqSocialAssignment } from '@/lib/leads/rafeeqSocialAssign'
 import { syncSubStatusFromRafeeqSocial } from '@/lib/leads/rafeeqSocialStatus'
+import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 
 // ── Rafeeq Social (rafeeq.social) message webhook ─────────────────────────────
 //
@@ -144,6 +145,27 @@ export async function handleRafeeqSocialEvent(
         console.error('syncSubStatusFromRafeeqSocial failed', err)
       ),
     ])
+
+    // Awaited for the same reason as the two syncs above — this function
+    // only keeps running because the webhook route's after() is waiting on
+    // its promise. Only on genuine creation (never on a message into an
+    // already-existing lead), and only for a brand-new customer (a lead born
+    // on Bevatel's own chat/call gets no equivalent trigger — see
+    // bevatelNewLeadTemplate.ts — since that customer already has a live
+    // thread there; a Rafeeq Social lead has no such thread on Bevatel).
+    if (res.created) {
+      // syncRafeeqSocialAssignment just ran above and may have set an owner —
+      // re-read it fresh rather than threading its outcome through, since it
+      // only returns a status string, not the assignee id itself.
+      const { data: freshLead } = await adminSupabase()
+        .from('leads')
+        .select('assigned_sales_id')
+        .eq('id', res.leadId)
+        .single()
+      await sendBevatelNewLeadTemplate(tenantId, phone, res.leadId, freshLead?.assigned_sales_id ?? null).catch(err =>
+        console.error('sendBevatelNewLeadTemplate failed', err)
+      )
+    }
   }
 
   return { ok: !!res.leadId, leadId: res.leadId }

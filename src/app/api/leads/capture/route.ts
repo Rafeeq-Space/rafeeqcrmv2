@@ -4,6 +4,7 @@ import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
+import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 import { leadName, leadPhone } from '@/lib/utils'
 
 export async function POST(request: Request) {
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       const phone = leadPhone(data)
       if (phone) {
         after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, phone, leadName(data), assigned_sales_id).catch(console.error))
+        after(() => sendBevatelNewLeadTemplate(form.tenant_id, phone, lead.id, assigned_sales_id).catch(console.error))
       }
       if (assigned_sales_id) {
         await createNotification(supabase, {

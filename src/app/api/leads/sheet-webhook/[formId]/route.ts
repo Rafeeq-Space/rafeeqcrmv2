@@ -5,6 +5,7 @@ import { syncLeadEvent } from '@/lib/leads/syncEvent'
 import { leadPhone, leadEmail, leadName, normalizeRowPhone } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
+import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 
 // Digits-only comparison so "05xxxxxxxx", "+9665xxxxxxxx" and "5xxxxxxxx"
 // (with spaces/dashes) are recognized as the same number.
@@ -164,6 +165,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       const rawPhone = leadPhone(normalizedRow)
       if (rawPhone) {
         after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow), assigned_sales_id).catch(console.error))
+        after(() => sendBevatelNewLeadTemplate(form.tenant_id, rawPhone, lead.id, assigned_sales_id).catch(console.error))
       }
       if (assigned_sales_id) {
         await createNotification(supabase, {

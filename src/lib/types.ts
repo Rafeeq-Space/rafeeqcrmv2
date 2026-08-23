@@ -136,6 +136,11 @@ export interface Tenant {
   bevatel_call_rr_index?: number
   // Round-robin counter for Bevatel chat leads nobody has claimed yet.
   bevatel_chat_rr_index?: number
+  // Pilot feature: name of a Meta-approved WhatsApp template to send
+  // automatically the moment a new lead is created (any source except a lead
+  // born from Bevatel's own chat/call, which already has a live thread).
+  // Null/unset = feature off for this tenant. See bevatelNewLeadTemplate.ts.
+  bevatel_new_lead_template_name?: string | null
 }
 
 export type UserRole = 'super_admin' | 'client_admin' | 'client_sales_manager' | 'client_user'
