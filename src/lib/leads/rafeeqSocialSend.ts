@@ -1,5 +1,5 @@
 import { adminSupabase } from '@/lib/supabase/admin'
-import { phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
+import { phoneVariants, fetchRafeeqSocialSubscriberAnyVariant } from '@/lib/leads/rafeeqSocialSubscriber'
 
 // ── Rafeeq Social (BotSailor) WhatsApp send API ───────────────────────────────
 //
@@ -110,6 +110,17 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
   const teamMemberId = (profile?.rafeeqsocial_team_member_id || '').trim()
   if (!teamMemberId) return
 
+  // Skip the actual API call entirely if Rafeeq Social already shows this
+  // exact assignee — confirmed live 2026-08-23: re-asserting the SAME
+  // assignment on every message (needed so a real drift gets corrected —
+  // see handleRafeeqSocialEvent) was posting a fresh "Conversation was
+  // assigned to <Name>" system message into the chat every single time,
+  // even when nothing had actually changed, cluttering the thread with
+  // repeats of the same line. Re-confirming the same, already-correct
+  // assignment is a no-op we don't need to make visible in their UI.
+  const current = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
+  if (current?.assignedAgentId === teamMemberId) return
+
   for (const variant of phoneVariants(phone)) {
     const body = new URLSearchParams({
       apiToken: creds.apiToken,
@@ -170,6 +181,23 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
     if (!rep?.rafeeqsocial_team_member_id) return
   } else {
     return
+  }
+
+  // Push the CRM's assignment decision FIRST, before the workflow below ever
+  // creates/touches a subscriber for this phone number over there — same
+  // order, and same reason, as the missed-call follow-up in bevatelLead.ts:
+  // confirmed live there that triggering the workflow first let Rafeeq
+  // Social's own logic leave the fresh subscriber unassigned (or assign it
+  // to whoever happens to reply) since nothing had told it the CRM's
+  // decision yet. Without this, a brand-new lead whose first-ever touch is
+  // this automated workflow message had NO push at all until some later
+  // message happened to trigger handleRafeeqSocialEvent's own re-push —
+  // confirmed live 2026-08-23 (leads sitting unassigned on Rafeeq Social's
+  // side for minutes with zero webhook activity yet).
+  try {
+    await pushAssignmentCore(tenantId, phone, assignedSalesId)
+  } catch (err) {
+    console.error('pushAssignmentCore (new-lead workflow) failed', err)
   }
 
   try {
