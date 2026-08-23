@@ -1,4 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
+import { subStatusByKey } from '@/lib/leads/subStatus'
+import { LEAD_STATUS_LABELS } from '@/lib/utils'
 
 // ── Shared low-level "send one Bevatel WhatsApp template" call ────────────
 //
@@ -61,6 +63,9 @@ export async function sendBevatelTemplateMessage(opts: {
 // blind overwrite.
 export async function markLeadMessageSentIfNew(tenantId: string, leadId: string): Promise<void> {
   const supa = adminSupabase()
+  const { data: lead } = await supa.from('leads').select('status, sub_status').eq('id', leadId).single()
+  if (!lead || lead.status !== 'new') return
+
   const { data: updated } = await supa
     .from('leads')
     .update({ status: 'contacted', sub_status: 'message_sent', updated_at: new Date().toISOString() })
@@ -68,6 +73,12 @@ export async function markLeadMessageSentIfNew(tenantId: string, leadId: string)
     .eq('status', 'new')
     .select('id')
   if (updated?.length) {
+    // `from_status`/`to_status` only carry the canonical status (contacted),
+    // which reads as the vaguer "تم التواصل" on the timeline — the body
+    // spells out the actual sub-status ("تم إرسال رسالة") so it's clear
+    // *why* it changed, not just that it did.
+    const fromLabel = subStatusByKey(lead.sub_status)?.label || LEAD_STATUS_LABELS.new
+    const toLabel = subStatusByKey('message_sent')?.label || LEAD_STATUS_LABELS.contacted
     await supa.from('lead_activities').insert({
       tenant_id: tenantId,
       lead_id: leadId,
@@ -75,6 +86,7 @@ export async function markLeadMessageSentIfNew(tenantId: string, leadId: string)
       type: 'status_change',
       from_status: 'new',
       to_status: 'contacted',
+      body: `تم إرسال رسالة واتساب تلقائية للعميل — تم تحويل الحالة من "${fromLabel}" إلى "${toLabel}"`,
     })
   }
 }

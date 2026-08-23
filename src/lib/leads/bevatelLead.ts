@@ -1,7 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
-import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
+import { pushAssigneeToBevatel, fetchConversationAssignee, pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
 import { pushAssignmentCore } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelMissedCallTemplate } from '@/lib/leads/bevatelMissedCallTemplate'
 import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
@@ -178,6 +178,16 @@ export interface AppendResult {
   // call.abandoned/call.ended, and without this gate each delivery re-ran
   // the side effect independently.
   activityLogged: boolean
+  // True only when this call is the FIRST time this lead has ever been
+  // linked to a Bevatel contact (bevatel_contact_id was null before this
+  // event). A Bevatel contact is unique per phone number and persists
+  // forever on their side, across however many separate CRM leads that same
+  // real phone number has had over time — so the very first webhook after
+  // linking can carry a `crm_status` custom attribute left over from a
+  // completely unrelated past lead. Callers that reverse-sync status off
+  // that attribute (syncStatusFromAttribute) must not trust it on this one
+  // event — see the 2026-08-23 comment at that call site.
+  contactJustLinked: boolean
 }
 
 export interface EventLog {
@@ -231,7 +241,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   const supa = adminSupabase()
 
   const key = phoneKey(phone)
-  if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false, activityLogged: false }
+  if (!key) return { leadId: null, created: false, assigned: false, agentMatched: false, activityLogged: false, contactJustLinked: false }
 
   // Look for an existing lead in this tenant with the same phone. Filtered by
   // the DB-maintained phone_key column rather than fetching every lead in the
@@ -262,6 +272,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // Backfill the Bevatel conversation/contact ids on an existing lead that
   // doesn't have them yet, so status sync can target the right conversation
   // and contact later.
+  const contactJustLinked = !!(existing && contactId && !existing.bevatel_contact_id)
   if (existing) {
     const patch: Record<string, string> = {}
     if (conversationId && !existing.bevatel_conversation_id) patch.bevatel_conversation_id = conversationId
@@ -320,12 +331,12 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         .eq('phone_key', key)
         .limit(1)
         .maybeSingle()
-      if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false }
+      if (!dupe) return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false, contactJustLinked: false }
       leadId = dupe.id
       existingAssignedId = dupe.assigned_sales_id ?? null
       existingAssignedIsAdmin = (dupe.assigned_sales as { role?: string } | null)?.role === 'client_admin'
     } else {
-      return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false }
+      return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false, contactJustLinked: false }
     }
   }
 
@@ -439,7 +450,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     }
   }
 
-  return { leadId, created, assigned, agentMatched: !!agent, activityLogged: logged }
+  return { leadId, created, assigned, agentMatched: !!agent, activityLogged: logged, contactJustLinked }
 }
 
 // Reverse sync: the Bevatel contact's crm_status attribute → CRM lead status.
@@ -621,8 +632,28 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
 
   // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
   // the CRM lead (agent changed the status in Bevatel → status in the CRM).
-  if (res.leadId && statusLabel) {
+  //
+  // Skipped on the very first event that ever links this lead to a Bevatel
+  // contact — a Bevatel contact is unique per phone number and persists
+  // forever on their side, so its crm_status attribute can be leftover from
+  // a completely unrelated, much older lead for the same phone number.
+  // Confirmed live 2026-08-23: a brand-new manually-created lead's status
+  // flipped straight back to "جديد" seconds after the welcome template
+  // fired, because the customer's Bevatel contact (reused from earlier
+  // testing) still carried "أول استقبال اتصال" from that unrelated old
+  // lead. Pushes our own status onto Bevatel's attribute instead of pulling
+  // theirs on this one event, so the two stay in sync going forward without
+  // trusting stale data neither side actually just set.
+  if (res.leadId && statusLabel && !res.contactJustLinked) {
     await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
+  } else if (res.leadId && res.contactJustLinked && contactId) {
+    const { data: linkedLead } = await adminSupabase().from('leads').select('sub_status').eq('id', res.leadId).single()
+    if (linkedLead?.sub_status) {
+      await pushSubStatusToBevatel(
+        { tenant_id: tenantId, bevatel_contact_id: contactId } as unknown as Lead,
+        linkedLead.sub_status as string
+      ).catch(() => {})
+    }
   }
 
   // A fresh/unclaimed conversation carries no agent hint, so it never goes
