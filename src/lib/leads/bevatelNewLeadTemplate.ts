@@ -1,4 +1,5 @@
 import { adminSupabase } from '@/lib/supabase/admin'
+import { sendBevatelTemplateMessage, markLeadMessageSentIfNew } from '@/lib/leads/bevatelTemplateSend'
 
 // ── New-lead WhatsApp template via Bevatel — pilot feature ────────────────
 //
@@ -83,48 +84,16 @@ export async function sendBevatelNewLeadTemplate(
     return
   }
 
-  const host = ((tenant.bevatel_api_host as string) || 'https://chat.bevatel.com').replace(/\/+$/, '')
+  const host = (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com'
 
   try {
-    // Discover the WhatsApp inbox's numeric id (required as `inbox_id` by
-    // the send call below — a different value from provider_config's
-    // phone_number_id, which this version no longer needs at all) and
-    // confirm the configured template is actually present/approved before
-    // ever sending — never fire with a guessed or stale template name.
-    const inboxRes = await fetch(`${host}/api/v1/accounts/${tenant.bevatel_account_id}/inboxes`, {
-      headers: { api_access_token: tenant.bevatel_api_token as string },
+    const { ok: sent, body: sendBody } = await sendBevatelTemplateMessage({
+      host,
+      accountId: tenant.bevatel_account_id as string,
+      apiToken: tenant.bevatel_api_token as string,
+      templateName,
+      phoneDigits: digits,
     })
-    const inboxData = await inboxRes.json()
-    const inboxes = (inboxData?.payload || []) as Array<{
-      id?: number
-      channel_type?: string
-      message_templates?: Array<{ name?: string; status?: string; language?: string }>
-    }>
-    const inbox = inboxes.find(i => i.channel_type === 'Channel::Whatsapp')
-    const template = inbox?.message_templates?.find(t => t.name === templateName && t.status === 'APPROVED')
-
-    if (!inbox?.id || !template) {
-      console.error(`bevatel new-lead template "${templateName}" not found/approved for tenant ${tenantId}`)
-      return
-    }
-
-    // Bevatel's own dedicated template-send endpoint — see the file header
-    // comment for why this replaced the earlier Meta-direct workaround.
-    const sendRes = await fetch(`${host}/developer/api/v1/messages`, {
-      method: 'POST',
-      headers: {
-        api_account_id: String(tenant.bevatel_account_id),
-        api_access_token: tenant.bevatel_api_token as string,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inbox_id: inbox.id,
-        contact: { phone_number: `+${digits}` },
-        message: { template: { name: templateName, language: template.language || 'ar' } },
-      }),
-    })
-    const sendBody = await sendRes.json().catch(() => null)
-    const sent = sendRes.ok
 
     // Logged on the lead's own timeline either way — same as every other
     // sync side effect in this codebase — so a failure here is visible to
@@ -136,9 +105,18 @@ export async function sendBevatelNewLeadTemplate(
       type: 'comment',
       body: sent
         ? '📩 تم إرسال رسالة واتساب ترحيبية تلقائية للعميل'
-        : `⚠️ فشل إرسال رسالة واتساب الترحيبية التلقائية (${sendBody?.error || sendBody?.message || 'unknown error'})`,
+        : `⚠️ فشل إرسال رسالة واتساب الترحيبية التلقائية (${(sendBody as { error?: string; message?: string } | null)?.error || (sendBody as { error?: string; message?: string } | null)?.message || 'unknown error'})`,
     })
-    if (!sent) console.error('sendBevatelNewLeadTemplate: Bevatel send failed', sendBody)
+    if (sent) {
+      // A brand-new lead is still at sub_status 'new_lead' (or the
+      // bevatel_call/bevatel_chat equivalents) the moment this fires — a
+      // real WhatsApp message just reached the customer, so it's no longer
+      // un-contacted. See markLeadMessageSentIfNew for why this is
+      // conditional, not a blind overwrite.
+      await markLeadMessageSentIfNew(tenantId, leadId)
+    } else {
+      console.error('sendBevatelNewLeadTemplate: Bevatel send failed', sendBody)
+    }
   } catch (err) {
     console.error('sendBevatelNewLeadTemplate failed', err)
   }

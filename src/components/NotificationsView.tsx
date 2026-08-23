@@ -39,7 +39,9 @@ function buildMessage(n: NotificationRow): string {
     case 'lead_shared':
       return `${actor} شارك معك العميل ${lead}`
     case 'lead_reengaged':
-      return `العميل ${lead} كان غير مؤهل وعاد للتواصل مرة أخرى`
+      // Covers both "غير مؤهل" and "تم البيع" coming back — see the
+      // corresponding comment in push.ts.
+      return `العميل ${lead} كان متوقفًا وعاد للتواصل مرة أخرى`
     case 'customer_available_now':
       return `العميل ${lead} متاح للاتصال الآن`
     default:

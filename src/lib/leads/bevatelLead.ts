@@ -3,6 +3,7 @@ import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/li
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee } from '@/lib/leads/bevatelSync'
 import { pushAssignmentCore } from '@/lib/leads/rafeeqSocialSend'
+import { sendBevatelMissedCallTemplate } from '@/lib/leads/bevatelMissedCallTemplate'
 import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
@@ -161,12 +162,6 @@ export interface AppendArgs {
   conversationId?: string
   contactId?: string
   agent: AgentHint
-  // True when `agent` came from the conversation's own assignee rather than
-  // from whoever happened to send this message. The assignee is an explicit
-  // statement of ownership on the platform's side, so it takes over a lead that
-  // already has a different owner; a message sender does not, because a
-  // colleague replying once must not silently take a lead off its owner.
-  agentIsAssignee?: boolean
 }
 
 export interface AppendResult {
@@ -334,17 +329,21 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     }
   }
 
-  // Hand the lead over when:
-  //  - nobody owns it yet, or it's still sitting on the account owner because
-  //    the first contact never reached a real rep; or
-  //  - the platform's own conversation assignee is someone else. That one is an
-  //    explicit ownership decision made on their side, and the rep working the
-  //    thread there is the one who should see it here — a lead stuck on a
-  //    different owner in the CRM than in Bevatel is invisibly wrong, which is
-  //    exactly what happened: Bevatel reported "Mohammed Ali" on all 31
-  //    deliveries while the CRM kept showing someone else.
-  const assigneeDisagrees = !!args.agentIsAssignee && !!agent && agent.id !== existingAssignedId
-  if (leadId && !created && agent && (!existingAssignedId || existingAssignedIsAdmin || assigneeDisagrees)) {
+  // Hand the lead over only when nobody real owns it yet: no assignee at all,
+  // or it's still sitting on the account owner because the first contact
+  // never reached a real rep. Deliberately does NOT re-open this once a real
+  // rep owns it, even when Bevatel's own conversation assignee later shows
+  // someone else — a lead is assigned once, by whichever side resolves it
+  // first (mirror Bevatel's assignee here, or round-robin-and-push if
+  // Bevatel has none either — see the round-robin block below), and stays
+  // put after that. An earlier version also re-assigned whenever Bevatel's
+  // live assignee disagreed with the CRM on *any* incoming message — meant
+  // to catch a CRM that had gone stale, but with no stability check at all,
+  // it meant the lead's owner could flip every time Bevatel's own assignee
+  // field changed for any reason, which is exactly the "sometimes shows two
+  // different people" instability this was built to avoid. Removed
+  // 2026-08-22 per explicit request: assign once, then never re-open.
+  if (leadId && !created && agent && (!existingAssignedId || existingAssignedIsAdmin)) {
     await supa
       .from('leads')
       .update({ assigned_sales_id: agent.id, assigned_team_id: agent.team_id })
@@ -393,28 +392,33 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     if (logged) {
       const leadUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
-      // A "lost" customer sending a new message/call is a real re-engagement
-      // signal — previously handled in total silence (status stayed "غير
-      // مؤهل" forever, nobody was told). Move it to "جارى المتابعة" and alert
-      // whoever owns it. Gated on `existing` (never true for a lead just
-      // created above, or one adopted via the 23505 race — neither can
-      // already be "lost").
-      const reengaged = existing?.status === 'lost'
+      // A "lost" OR already-"converted" customer sending a new message/call
+      // is a real re-engagement signal — previously handled in total silence
+      // (status stayed "غير مؤهل"/"تم التحويل" forever, nobody was told).
+      // Move it to "جارى المتابعة" and alert whoever owns it. Converted was
+      // added 2026-08-23 alongside lost: a "sold" customer calling back is
+      // just as much a live re-engagement (needs a follow-up/new deal, a
+      // question, a complaint...) as a lost one is — silence is wrong either
+      // way. Gated on `existing` (never true for a lead just created above,
+      // or one adopted via the 23505 race — neither can already be
+      // lost/converted).
+      const priorStatus = existing?.status
+      const reengaged = priorStatus === 'lost' || priorStatus === 'converted'
       if (reengaged) {
         leadUpdate.status = 'contacted'
         leadUpdate.sub_status = 'following_up'
       }
       await supa.from('leads').update(leadUpdate).eq('id', leadId)
 
-      if (reengaged) {
-        const fromLabel = subStatusByKey(existing?.sub_status)?.label || LEAD_STATUS_LABELS.lost
+      if (reengaged && priorStatus) {
+        const fromLabel = subStatusByKey(existing?.sub_status)?.label || LEAD_STATUS_LABELS[priorStatus]
         const toLabel = subStatusByKey('following_up')?.label || LEAD_STATUS_LABELS.contacted
         await supa.from('lead_activities').insert({
           tenant_id: tenantId,
           lead_id: leadId,
           actor_id: null,
           type: 'status_change',
-          from_status: 'lost',
+          from_status: priorStatus,
           to_status: 'contacted',
           body: `عاد العميل للتواصل بعد أن كان "${fromLabel}" — تم تحويل الحالة تلقائيًا إلى "${toLabel}"`,
         })
@@ -600,13 +604,6 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     email: pick('email'),
     name: pick('name') || pick('available_name'),
   }
-  // Incoming always reads the assignee; outgoing only falls back to it when the
-  // sender carried no identity of its own. Either way the resulting hint is an
-  // ownership statement, not just "who typed this" — see AppendArgs.
-  const senderHasIdentity = !!(
-    (topSender.email as string) || (topSender.name as string) || (topSender.available_name as string)
-  )
-  const agentIsAssignee = incoming || !senderHasIdentity
 
   const res = await appendToLead({
     tenantId,
@@ -620,7 +617,6 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     conversationId: convId,
     contactId,
     agent,
-    agentIsAssignee,
   })
 
   // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
@@ -927,6 +923,14 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       }
     }
 
+    // Shared across both follow-up mechanisms below (Rafeeq Social's workflow
+    // and Bevatel's own template) so one physical missed call — which can
+    // surface as several call_ids a few seconds apart, see the comment above
+    // MISSED_CALL_TEMPLATE_COOLDOWN_MS — never fires two different "we
+    // missed your call" messages, no matter which tenant has which
+    // integration configured.
+    const recentlySent = await missedCallTemplateSentRecently(res.leadId, callExternalId, MISSED_CALL_TEMPLATE_COOLDOWN_MS)
+
     // Missed-call WhatsApp follow-up via Rafeeq Social (e.g. the "motabaa"
     // template) — fires regardless of whether the lead already had an owner
     // or was just claimed above. Configured per tenant
@@ -938,7 +942,6 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       .eq('id', tenantId)
       .single()
     const workflowUrl = tenantRow?.rafeeqsocial_missed_call_workflow_url as string | null
-    const recentlySent = workflowUrl && await missedCallTemplateSentRecently(res.leadId, callExternalId, MISSED_CALL_TEMPLATE_COOLDOWN_MS)
     if (workflowUrl && !recentlySent) {
       // Push the CRM's own assignment decision to Rafeeq Social FIRST, and
       // wait for it — before the workflow below ever creates/touches a
@@ -968,6 +971,15 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
       } catch (err) {
         console.error('rafeeqsocial missed-call workflow trigger failed', err)
       }
+    }
+
+    // Missed-call WhatsApp follow-up via Bevatel's own dedicated
+    // template-send endpoint — a distinct integration/tenant from the Rafeeq
+    // Social workflow above (شركة سيارتي كار uses Bevatel Call, أوتو باور
+    // uses Rafeeq Social; no tenant has both configured as of 2026-08-23),
+    // opt-in via bevatel_missed_call_template_name, no-op everywhere else.
+    if (!recentlySent) {
+      await sendBevatelMissedCallTemplate(tenantId, phone, res.leadId, finalAssigneeId)
     }
   }
 

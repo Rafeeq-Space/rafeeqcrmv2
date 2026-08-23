@@ -186,11 +186,13 @@ export async function recordAndImportLead(
 
   // No form/assignee pool exists for a direct ad-webhook lead, so this
   // round-robins tenant-wide across active sales reps instead (same pool the
-  // "assign old leads" backfill tool uses).
+  // "assign old leads" backfill tool uses). Checks Bevatel for an existing
+  // assignee on this phone first — see findBevatelAssigneeByPhone.
   const { assigned_sales_id, assigned_team_id } = await assignRoundRobinTenantWide(
     supabase,
     connection.tenant_id,
-    connection.id
+    connection.id,
+    fields.phone
   )
 
   const { data: lead, error } = await supabase

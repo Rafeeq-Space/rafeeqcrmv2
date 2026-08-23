@@ -89,7 +89,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       }
     }
 
-    const { assigned_sales_id, assigned_team_id } = await assignRoundRobin(supabase, formId)
+    // Checks Bevatel for an existing assignee on this phone first — see
+    // findBevatelAssigneeByPhone.
+    const { assigned_sales_id, assigned_team_id } = await assignRoundRobin(supabase, formId, phone)
 
     // TikTok's own Google Sheets export includes a "TikTok Lead ID" column, so
     // a lead arriving this way can still be reported back with the identifier

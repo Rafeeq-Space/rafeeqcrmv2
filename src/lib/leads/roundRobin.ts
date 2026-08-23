@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { findBevatelAssigneeByPhone } from '@/lib/leads/bevatelSync'
 
 // Round-robin distribution: if the form has an assignee pool, hand the lead
 // to the next member in order and advance the form's rotating counter.
@@ -12,9 +13,17 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 //   - false ("اختيار أعضاء" / fixed, and every form created before this
 //     option existed): the form's own saved assignee_ids list, unchanged
 //     from before.
+//
+// `phone` is checked against Bevatel FIRST, before any of the pool logic
+// below, regardless of the lead's own source (form/sheet here) — a customer
+// who already has a live WhatsApp thread with a specific rep for an
+// unrelated reason should land with that same rep, not get round-robined to
+// someone else. See findBevatelAssigneeByPhone: a no-op (null) for any
+// tenant without Bevatel configured, so this costs nothing for everyone else.
 export async function assignRoundRobin(
   supabase: SupabaseClient,
-  formId: string | null | undefined
+  formId: string | null | undefined,
+  phone?: string | null
 ): Promise<{ assigned_sales_id: string | null; assigned_team_id: string | null }> {
   if (!formId) return { assigned_sales_id: null, assigned_team_id: null }
 
@@ -24,6 +33,11 @@ export async function assignRoundRobin(
     .eq('id', formId)
     .single()
   if (!form) return { assigned_sales_id: null, assigned_team_id: null }
+
+  if (phone) {
+    const bevatelRep = await findBevatelAssigneeByPhone(form.tenant_id, phone)
+    if (bevatelRep) return { assigned_sales_id: bevatelRep.id, assigned_team_id: bevatelRep.team_id }
+  }
 
   type Member = { id: string; team_id: string | null }
   let pool: string[]
@@ -84,8 +98,14 @@ export async function assignRoundRobin(
 export async function assignRoundRobinTenantWide(
   supabase: SupabaseClient,
   tenantId: string,
-  connectionId: string
+  connectionId: string,
+  phone?: string | null
 ): Promise<{ assigned_sales_id: string | null; assigned_team_id: string | null }> {
+  if (phone) {
+    const bevatelRep = await findBevatelAssigneeByPhone(tenantId, phone)
+    if (bevatelRep) return { assigned_sales_id: bevatelRep.id, assigned_team_id: bevatelRep.team_id }
+  }
+
   const { data: repsRaw } = await supabase
     .from('profiles')
     .select('id, team_id, suspended, excluded_from_distribution')

@@ -4,6 +4,8 @@ import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
 import { pushAssigneeToRafeeqSocial } from '@/lib/leads/rafeeqSocialAssign'
+import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
+import { leadPhone } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
@@ -102,6 +104,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         pushAssigneeToBevatel(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error),
         pushAssigneeToRafeeqSocial(lead as Lead, (update.assigned_sales_id as string) || null).catch(console.error),
       ])
+      // pushAssigneeToBevatel above only ever updates an EXISTING Bevatel
+      // conversation's assignee — a no-op for a lead that never had one. A
+      // lead reassigned to a newly-eligible rep (a real Bevatel Chat
+      // identity) that has no bevatel_conversation_id yet is exactly that
+      // gap: fire the same welcome template a brand-new lead gets, which
+      // creates that first conversation on Bevatel's side. Skipped entirely
+      // once a conversation already exists — re-sending a "nice to meet
+      // you" template into an existing thread would be a strange thing for
+      // the customer to receive, and sendBevatelNewLeadTemplate itself
+      // re-checks the rep's bevatel_agent_id and the tenant's opt-in before
+      // doing anything.
+      if (update.assigned_sales_id && !(lead as Lead).bevatel_conversation_id) {
+        await sendBevatelNewLeadTemplate(
+          viewer.tenantId,
+          leadPhone((lead as Lead).data as Record<string, string> | undefined),
+          leadId,
+          update.assigned_sales_id as string
+        ).catch(console.error)
+      }
     })
   }
 

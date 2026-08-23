@@ -778,8 +778,14 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
           })}
         </div>
       ) : (
-        <div className="card overflow-hidden p-0">
-          <div className="overflow-x-auto">
+        <div className="card p-0">
+          {/* overflow-x-auto only (not overflow-hidden on the outer card): the
+              status dropdown below is an absolutely-positioned popover, and
+              overflow-hidden on an ancestor clips it in BOTH axes — with very
+              few rows (e.g. a single filtered lead) the card's rendered
+              height shrinks to that one row, clipping the popover before it
+              could ever show its full option list. */}
+          <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-muted2 text-xs">

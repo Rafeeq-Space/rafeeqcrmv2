@@ -4,6 +4,7 @@ import { adminSupabase } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
+import { findBevatelAssigneeByPhone } from '@/lib/leads/bevatelSync'
 import type { KnowledgeFile } from '@/lib/types'
 
 // Creates a lead manually from inside the CRM (as opposed to a public form
@@ -58,6 +59,17 @@ export async function POST(request: Request) {
     if (rep) {
       assignedSalesId = rep.id
       assignedTeamId = (rep.team_id as string) ?? null
+    }
+  } else if (canAssignOthers) {
+    // An admin/manager adding a lead without picking a rep — the one case
+    // here that's an actual distribution decision, not a deliberate human
+    // choice (a self-assigning rep, or an admin's explicit pick, always
+    // wins as-is above). Checks Bevatel for an existing assignee on this
+    // phone first — see findBevatelAssigneeByPhone.
+    const bevatelRep = await findBevatelAssigneeByPhone(viewer.tenantId, phone)
+    if (bevatelRep) {
+      assignedSalesId = bevatelRep.id
+      assignedTeamId = bevatelRep.team_id
     }
   }
 

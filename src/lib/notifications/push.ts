@@ -36,7 +36,10 @@ function describe(type: NotificationType): { title: string; body: string } {
     case 'mention':
       return { title: 'تم ذكرك في تعليق', body: 'ذكرك أحد الزملاء في تعليق على عميل محتمل.' }
     case 'lead_reengaged':
-      return { title: 'عميل غير مؤهل عاد للتواصل', body: 'عميل كان مصنّفًا "غير مؤهل" تواصل معك مرة أخرى — اضغط للمتابعة.' }
+      // Fires for a lead coming back from EITHER "غير مؤهل" or "تم البيع" (see
+      // bevatelLead.ts's reengaged check) — kept status-agnostic here since
+      // this type has no field to say which one applied.
+      return { title: 'عميل عاد للتواصل', body: 'عميل كان متوقفًا (غير مؤهل أو تم البيع) وتواصل معك مرة أخرى — اضغط للمتابعة.' }
     case 'customer_available_now':
       return { title: 'عميل متاح للاتصال الآن', body: 'عميل رد إنه متاح دلوقتي — اتصل بيه فورًا.' }
     default:

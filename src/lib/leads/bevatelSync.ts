@@ -134,6 +134,72 @@ export async function fetchConversationAssignee(
   }
 }
 
+// Looks up whether a phone number is already assigned to someone in Bevatel
+// BEFORE the CRM makes its own round-robin decision — used by every
+// lead-intake path (TikTok, Snapchat, Facebook, Google Sheets, manual entry,
+// public form), not just Bevatel's own chat/call webhooks, so a customer
+// already mid-conversation with a rep over WhatsApp for an unrelated reason
+// doesn't get handed to a random rep instead. Only returns a rep when the
+// Bevatel agent maps to a real, active CRM profile via bevatel_agent_id —
+// same trusted-identity field pushAssigneeToBevatel relies on. Fails open
+// (null) on any error, no Bevatel config, or no match, so a Bevatel outage
+// or an unrelated tenant never blocks lead creation.
+export async function findBevatelAssigneeByPhone(
+  tenantId: string,
+  phone: string
+): Promise<{ id: string; team_id: string | null } | null> {
+  const creds = await tenantCreds(tenantId)
+  if (!creds) return null
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 9) return null
+  const last9 = digits.slice(-9)
+
+  try {
+    const searchRes = await fetch(
+      `${creds.host}/api/v1/accounts/${creds.accountId}/contacts/search?q=${digits}`,
+      { headers: { api_access_token: creds.token } },
+    )
+    if (!searchRes.ok) return null
+    const searchData = await searchRes.json()
+    const contacts = (searchData?.payload || []) as Array<{ id: number; phone_number?: string }>
+    // The search endpoint can return a loose/substring match — only trust an
+    // exact phone match (last 9 digits), same convention as phoneKey().
+    const contact = contacts.find(c => (c.phone_number || '').replace(/\D/g, '').endsWith(last9))
+    if (!contact) return null
+
+    const convRes = await fetch(
+      `${creds.host}/api/v1/accounts/${creds.accountId}/contacts/${contact.id}/conversations`,
+      { headers: { api_access_token: creds.token } },
+    )
+    if (!convRes.ok) return null
+    const convData = await convRes.json()
+    const conversations = (convData?.payload || []) as Array<{
+      meta?: { assignee?: { email?: string; name?: string; available_name?: string } }
+    }>
+    const assignee = conversations.map(c => c.meta?.assignee).find(Boolean)
+    if (!assignee) return null
+
+    const email = (assignee.email || '').trim().toLowerCase()
+    const name = (assignee.name || assignee.available_name || '').trim().toLowerCase()
+    if (!email && !name) return null
+
+    const { data: reps } = await adminSupabase()
+      .from('profiles')
+      .select('id, team_id, bevatel_agent_id, suspended')
+      .eq('tenant_id', tenantId)
+      .not('bevatel_agent_id', 'is', null)
+    const rep = (reps || []).find(r => {
+      const ident = (r.bevatel_agent_id || '').trim().toLowerCase()
+      return !!ident && (ident === email || ident === name)
+    })
+    if (!rep || rep.suspended) return null
+    return { id: rep.id, team_id: rep.team_id ?? null }
+  } catch (err) {
+    console.error('findBevatelAssigneeByPhone failed', err)
+    return null
+  }
+}
+
 // CRM assignment → set the Bevatel conversation's assignee to the matching agent.
 // Resolves the Bevatel agent by the rep's bevatel_agent_id (their Bevatel email).
 export async function pushAssigneeToBevatel(lead: Lead, salesId: string | null): Promise<void> {

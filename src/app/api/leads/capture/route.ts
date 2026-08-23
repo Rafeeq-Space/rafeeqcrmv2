@@ -41,7 +41,9 @@ export async function POST(request: Request) {
 
     // Round-robin distribution: if the form has an assignee pool, hand this lead
     // to the next member in order and advance the form's rotating counter.
-    const { assigned_sales_id, assigned_team_id } = await assignRoundRobin(supabase, form_id)
+    // (Checks Bevatel for an existing assignee on this phone first — see
+    // findBevatelAssigneeByPhone.)
+    const { assigned_sales_id, assigned_team_id } = await assignRoundRobin(supabase, form_id, leadPhone(data))
 
     const { data: lead, error } = await supabase
       .from('leads')
