@@ -92,7 +92,7 @@ export async function POST(request: Request) {
       const phone = leadPhone(data)
       if (phone) {
         after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, phone, leadName(data), assigned_sales_id).catch(console.error))
-        after(() => sendBevatelNewLeadTemplate(form.tenant_id, phone, lead.id, assigned_sales_id).catch(console.error))
+        after(() => sendBevatelNewLeadTemplate(form.tenant_id, phone, lead.id, assigned_sales_id, leadName(data)).catch(console.error))
       }
       if (assigned_sales_id) {
         await createNotification(supabase, {

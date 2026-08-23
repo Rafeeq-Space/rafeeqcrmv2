@@ -21,7 +21,8 @@ export async function sendBevatelMissedCallTemplate(
   tenantId: string,
   phone: string,
   leadId: string,
-  assignedSalesId: string | null
+  assignedSalesId: string | null,
+  name?: string | null
 ): Promise<void> {
   if (!phone) return
 
@@ -58,6 +59,7 @@ export async function sendBevatelMissedCallTemplate(
       apiToken: tenant.bevatel_api_token as string,
       templateName,
       phoneDigits: digits,
+      name: name || undefined,
     })
 
     await supa.from('lead_activities').insert({

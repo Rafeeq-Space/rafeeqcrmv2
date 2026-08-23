@@ -162,7 +162,7 @@ export async function handleRafeeqSocialEvent(
         .select('assigned_sales_id')
         .eq('id', res.leadId)
         .single()
-      await sendBevatelNewLeadTemplate(tenantId, phone, res.leadId, freshLead?.assigned_sales_id ?? null).catch(err =>
+      await sendBevatelNewLeadTemplate(tenantId, phone, res.leadId, freshLead?.assigned_sales_id ?? null, name).catch(err =>
         console.error('sendBevatelNewLeadTemplate failed', err)
       )
     }

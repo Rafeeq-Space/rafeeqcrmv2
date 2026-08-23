@@ -282,7 +282,7 @@ export async function recordAndImportLead(
 
   if (fields.phone) {
     triggerRafeeqSocialNewLeadWorkflow(connection.tenant_id, fields.phone, fields.name || '', assigned_sales_id).catch(console.error)
-    sendBevatelNewLeadTemplate(connection.tenant_id, fields.phone, lead.id, assigned_sales_id).catch(console.error)
+    sendBevatelNewLeadTemplate(connection.tenant_id, fields.phone, lead.id, assigned_sales_id, fields.name).catch(console.error)
   }
 
   return { imported: true as const, leadId: lead.id as string }

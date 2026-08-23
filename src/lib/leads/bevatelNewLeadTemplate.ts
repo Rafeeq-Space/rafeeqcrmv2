@@ -35,7 +35,8 @@ export async function sendBevatelNewLeadTemplate(
   tenantId: string,
   phone: string,
   leadId: string,
-  assignedSalesId?: string | null
+  assignedSalesId?: string | null,
+  name?: string | null
 ): Promise<void> {
   if (!phone) return
 
@@ -93,6 +94,7 @@ export async function sendBevatelNewLeadTemplate(
       apiToken: tenant.bevatel_api_token as string,
       templateName,
       phoneDigits: digits,
+      name: name || undefined,
     })
 
     // Logged on the lead's own timeline either way — same as every other

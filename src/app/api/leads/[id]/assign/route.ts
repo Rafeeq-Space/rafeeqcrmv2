@@ -5,7 +5,7 @@ import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
 import { pushAssigneeToRafeeqSocial } from '@/lib/leads/rafeeqSocialAssign'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
-import { leadPhone } from '@/lib/utils'
+import { leadPhone, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // Assigns a lead to a sales rep (profile) and/or a team.
@@ -120,7 +120,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           viewer.tenantId,
           leadPhone((lead as Lead).data as Record<string, string> | undefined),
           leadId,
-          update.assigned_sales_id as string
+          update.assigned_sales_id as string,
+          leadName((lead as Lead).data as Record<string, string> | undefined)
         ).catch(console.error)
       }
     })

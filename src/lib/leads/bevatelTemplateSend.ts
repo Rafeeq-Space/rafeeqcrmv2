@@ -17,6 +17,17 @@ export async function sendBevatelTemplateMessage(opts: {
   apiToken: string
   templateName: string
   phoneDigits: string
+  // Passed through to Bevatel's `contact` object so a brand-new contact
+  // (this phone's first-ever touch on their side) gets created with the
+  // customer's real name instead of none at all. The payload never carried
+  // this before 2026-08-23 — every contact checked live that day already
+  // had a real name from earlier, unrelated Bevatel activity on that same
+  // phone, so the missing field's actual on-screen effect (reported as a
+  // bare "New Lead" placeholder on a Sheet-sourced contact) wasn't directly
+  // reproduced on a genuinely first-touch number — but omitting a field we
+  // already know the value of is a real gap regardless of the exact
+  // fallback Bevatel shows for it.
+  name?: string
 }): Promise<{ ok: boolean; body: unknown }> {
   const host = opts.host.replace(/\/+$/, '')
 
@@ -50,7 +61,42 @@ export async function sendBevatelTemplateMessage(opts: {
     }),
   })
   const sendBody = await sendRes.json().catch(() => null)
-  return { ok: sendRes.ok, body: sendBody }
+  const ok = sendRes.ok
+
+  // Confirmed live 2026-08-23: the send call above creates a brand-new
+  // contact as a bare "New Contact" regardless of any name passed inside
+  // its own `contact` object — that field is silently ignored at creation
+  // time. The only way to actually set it is a separate follow-up update,
+  // done here right after a successful send. Only overwrites an obviously
+  // placeholder/blank name — never a real one Bevatel already has (e.g.
+  // the customer's own WhatsApp profile name from earlier organic activity
+  // on a reused contact).
+  if (ok && opts.name) {
+    try {
+      const last9 = opts.phoneDigits.slice(-9)
+      const searchRes = await fetch(
+        `${host}/api/v1/accounts/${opts.accountId}/contacts/search?q=${opts.phoneDigits}`,
+        { headers: { api_access_token: opts.apiToken } },
+      )
+      if (searchRes.ok) {
+        const searchData = await searchRes.json()
+        const contacts = (searchData?.payload || []) as Array<{ id: number; name?: string; phone_number?: string }>
+        const contact = contacts.find(c => (c.phone_number || '').replace(/\D/g, '').endsWith(last9))
+        const placeholder = !contact?.name || contact.name.trim() === '' || contact.name.trim() === 'New Contact'
+        if (contact && placeholder) {
+          await fetch(`${host}/api/v1/accounts/${opts.accountId}/contacts/${contact.id}`, {
+            method: 'PUT',
+            headers: { api_access_token: opts.apiToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: opts.name }),
+          })
+        }
+      }
+    } catch (err) {
+      console.error('sendBevatelTemplateMessage: contact name fix-up failed', err)
+    }
+  }
+
+  return { ok, body: sendBody }
 }
 
 // A lead sitting at the canonical "new" status (whichever sub-status put it

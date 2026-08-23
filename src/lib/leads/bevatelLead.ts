@@ -1084,7 +1084,10 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
     // uses Rafeeq Social; no tenant has both configured as of 2026-08-23),
     // opt-in via bevatel_missed_call_template_name, no-op everywhere else.
     if (!recentlySent) {
-      await sendBevatelMissedCallTemplate(tenantId, phone, res.leadId, finalAssigneeId)
+      await sendBevatelMissedCallTemplate(
+        tenantId, phone, res.leadId, finalAssigneeId,
+        leadName((leadRow?.data as Record<string, string>) || undefined)
+      )
     }
   }
 
