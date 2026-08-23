@@ -4,7 +4,8 @@ import { adminSupabase } from '@/lib/leads/access'
 import { createNotification } from '@/lib/notifications/create'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
-import { findBevatelAssigneeByPhone } from '@/lib/leads/bevatelSync'
+import { findBevatelAssigneeNameByPhone } from '@/lib/leads/bevatelSync'
+import { SOURCE_LABELS } from '@/lib/utils'
 import type { KnowledgeFile } from '@/lib/types'
 
 // Creates a lead manually from inside the CRM (as opposed to a public form
@@ -44,6 +45,48 @@ export async function POST(request: Request) {
   const email = body.email?.trim()
   if (email) data['البريد الإلكتروني'] = email
 
+  // Hard-block on any phone collision — with a REAL person about to submit
+  // this form (unlike an automated ad/sheet webhook, where nobody's there to
+  // read a message), the safest thing is to stop and show exactly what's
+  // already known about this number rather than silently picking a side.
+  // Explicit product decision (2026-08-23), applies to every role equally.
+  //
+  // 1) Already a lead in this CRM (any source) — named by source + current
+  // assignee, so whoever's adding it knows exactly who to go find instead of
+  // creating a competing record.
+  const { data: keyRow } = await supa.rpc('compute_lead_phone_key', { d: data })
+  if (keyRow) {
+    const { data: existing } = await supa
+      .from('leads')
+      .select('id, source, assigned_sales:profiles!assigned_sales_id(full_name)')
+      .eq('tenant_id', viewer.tenantId)
+      .eq('phone_key', keyRow as string)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json({
+        error: 'هذا الرقم موجود بالفعل في النظام',
+        conflict: true,
+        conflictSource: 'crm' as const,
+        sourceLabel: SOURCE_LABELS[existing.source as string] || (existing.source as string),
+        assigneeName: (existing.assigned_sales as { full_name?: string } | null)?.full_name || null,
+        leadId: existing.id,
+      }, { status: 409 })
+    }
+  }
+
+  // 2) No CRM lead yet, but Bevatel already has a live conversation for this
+  // number assigned to someone — a no-op (null) for any tenant without
+  // Bevatel configured, and for a number Bevatel's never seen.
+  const bevatelAssigneeName = await findBevatelAssigneeNameByPhone(viewer.tenantId, phone)
+  if (bevatelAssigneeName) {
+    return NextResponse.json({
+      error: 'هذا الرقم مسنّد بالفعل لموظف آخر في بيفاتيل',
+      conflict: true,
+      conflictSource: 'bevatel' as const,
+      assigneeName: bevatelAssigneeName,
+    }, { status: 409 })
+  }
+
   // Resolve assignment. Only admins/managers may hand the lead to someone else;
   // everyone else (and any unresolved case) is assigned to the creator.
   let assignedSalesId = viewer.id
@@ -59,17 +102,6 @@ export async function POST(request: Request) {
     if (rep) {
       assignedSalesId = rep.id
       assignedTeamId = (rep.team_id as string) ?? null
-    }
-  } else if (canAssignOthers) {
-    // An admin/manager adding a lead without picking a rep — the one case
-    // here that's an actual distribution decision, not a deliberate human
-    // choice (a self-assigning rep, or an admin's explicit pick, always
-    // wins as-is above). Checks Bevatel for an existing assignee on this
-    // phone first — see findBevatelAssigneeByPhone.
-    const bevatelRep = await findBevatelAssigneeByPhone(viewer.tenantId, phone)
-    if (bevatelRep) {
-      assignedSalesId = bevatelRep.id
-      assignedTeamId = bevatelRep.team_id
     }
   }
 
@@ -105,24 +137,26 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
-    // 23505 = the phone_key unique index rejected the row: this customer is
-    // already a lead from some other source (or a previous manual entry).
-    // Every other lead-creation route in the codebase already treats this as
-    // "recognize the existing customer, don't 500" — this one didn't, so a
-    // rep manually adding someone who already exists got a raw server error
-    // instead of being pointed at the lead that's already there.
+    // 23505 = the phone_key unique index rejected the row — a concurrent
+    // request created the same customer a moment after the proactive check
+    // above ran clean. Same conflict shape as that check, for the frontend
+    // to render identically; genuinely rare (a real race, not the normal
+    // path — the check above catches the overwhelming majority of cases).
     if (error.code === '23505') {
-      const { data: keyRow } = await supa.rpc('compute_lead_phone_key', { d: data })
+      const { data: keyRow2 } = await supa.rpc('compute_lead_phone_key', { d: data })
       const { data: existing } = await supa
         .from('leads')
-        .select('id, data, assigned_sales_id')
+        .select('id, source, assigned_sales:profiles!assigned_sales_id(full_name)')
         .eq('tenant_id', viewer.tenantId)
-        .eq('phone_key', keyRow as string)
+        .eq('phone_key', keyRow2 as string)
         .maybeSingle()
       return NextResponse.json({
-        error: 'هذا العميل مسجل بالفعل في النظام',
-        duplicate: true,
-        lead: existing || null,
+        error: 'هذا الرقم موجود بالفعل في النظام',
+        conflict: true,
+        conflictSource: 'crm' as const,
+        sourceLabel: existing ? (SOURCE_LABELS[existing.source as string] || (existing.source as string)) : undefined,
+        assigneeName: (existing?.assigned_sales as { full_name?: string } | null)?.full_name || null,
+        leadId: existing?.id || null,
       }, { status: 409 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })

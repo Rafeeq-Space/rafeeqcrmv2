@@ -144,10 +144,13 @@ export async function fetchConversationAssignee(
 // same trusted-identity field pushAssigneeToBevatel relies on. Fails open
 // (null) on any error, no Bevatel config, or no match, so a Bevatel outage
 // or an unrelated tenant never blocks lead creation.
-export async function findBevatelAssigneeByPhone(
+// Shared lookup behind both findBevatelAssigneeByPhone (resolves to a CRM
+// profile) and findBevatelAssigneeNameByPhone (raw display name, no CRM
+// mapping needed) — one Bevatel round trip, two different uses.
+async function findBevatelLiveAssignee(
   tenantId: string,
   phone: string
-): Promise<{ id: string; team_id: string | null } | null> {
+): Promise<{ email: string; name: string } | null> {
   const creds = await tenantCreds(tenantId)
   if (!creds) return null
   const digits = phone.replace(/\D/g, '')
@@ -180,24 +183,43 @@ export async function findBevatelAssigneeByPhone(
     if (!assignee) return null
 
     const email = (assignee.email || '').trim().toLowerCase()
-    const name = (assignee.name || assignee.available_name || '').trim().toLowerCase()
+    const name = (assignee.name || assignee.available_name || '').trim()
     if (!email && !name) return null
-
-    const { data: reps } = await adminSupabase()
-      .from('profiles')
-      .select('id, team_id, bevatel_agent_id, suspended')
-      .eq('tenant_id', tenantId)
-      .not('bevatel_agent_id', 'is', null)
-    const rep = (reps || []).find(r => {
-      const ident = (r.bevatel_agent_id || '').trim().toLowerCase()
-      return !!ident && (ident === email || ident === name)
-    })
-    if (!rep || rep.suspended) return null
-    return { id: rep.id, team_id: rep.team_id ?? null }
+    return { email, name }
   } catch (err) {
-    console.error('findBevatelAssigneeByPhone failed', err)
+    console.error('findBevatelLiveAssignee failed', err)
     return null
   }
+}
+
+export async function findBevatelAssigneeByPhone(
+  tenantId: string,
+  phone: string
+): Promise<{ id: string; team_id: string | null } | null> {
+  const assignee = await findBevatelLiveAssignee(tenantId, phone)
+  if (!assignee) return null
+
+  const { data: reps } = await adminSupabase()
+    .from('profiles')
+    .select('id, team_id, bevatel_agent_id, suspended')
+    .eq('tenant_id', tenantId)
+    .not('bevatel_agent_id', 'is', null)
+  const rep = (reps || []).find(r => {
+    const ident = (r.bevatel_agent_id || '').trim().toLowerCase()
+    return !!ident && (ident === assignee.email || ident === assignee.name.toLowerCase())
+  })
+  if (!rep || rep.suspended) return null
+  return { id: rep.id, team_id: rep.team_id ?? null }
+}
+
+// Raw Bevatel-side assignee name for a phone number, with NO requirement
+// that it maps to a known CRM profile — used purely to warn a human at
+// manual-lead-creation time ("this customer is already assigned to X in
+// Bevatel, please contact them") before anything gets created, even if X
+// isn't (yet, or ever) a matched CRM rep.
+export async function findBevatelAssigneeNameByPhone(tenantId: string, phone: string): Promise<string | null> {
+  const assignee = await findBevatelLiveAssignee(tenantId, phone)
+  return assignee?.name || assignee?.email || null
 }
 
 // CRM assignment → set the Bevatel conversation's assignee to the matching agent.

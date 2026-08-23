@@ -2,13 +2,20 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Plus, FileText, Image as ImageIcon, Paperclip } from 'lucide-react'
+import { X, Plus, FileText, Image as ImageIcon, Paperclip, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { KnowledgeFile } from '@/lib/types'
 
 interface Option {
   id: string
   name: string
+}
+
+interface ConflictInfo {
+  conflictSource: 'crm' | 'bevatel'
+  sourceLabel?: string
+  assigneeName: string | null
+  leadId?: string | null
 }
 
 interface Props {
@@ -38,6 +45,7 @@ export default function AddLeadModal({ role, basePath, tenantId, campaigns = [],
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [conflict, setConflict] = useState<ConflictInfo | null>(null)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const imageRef = useRef<HTMLInputElement>(null)
@@ -87,12 +95,18 @@ export default function AddLeadModal({ role, basePath, tenantId, campaigns = [],
       })
       const json = await res.json()
       if (!res.ok) {
-        // Duplicate phone number — the customer already has a lead. Take the
-        // rep straight there instead of just showing an error and leaving
-        // them to go find it themselves.
-        if (res.status === 409 && json.duplicate && json.lead?.id) {
-          onClose()
-          router.push(`${basePath}/${json.lead.id}`)
+        // Phone already belongs to someone — CRM lead or a live Bevatel
+        // conversation. Hard block: nothing gets created, and the form stays
+        // open behind a details popup instead of a generic error, so
+        // whoever's adding this knows exactly who already owns the number.
+        if (res.status === 409 && json.conflict) {
+          setConflict({
+            conflictSource: json.conflictSource,
+            sourceLabel: json.sourceLabel,
+            assigneeName: json.assigneeName ?? null,
+            leadId: json.leadId ?? null,
+          })
+          setSaving(false)
           return
         }
         throw new Error(json.error || 'تعذّر إنشاء العميل')
@@ -103,6 +117,49 @@ export default function AddLeadModal({ role, basePath, tenantId, campaigns = [],
       setError(err instanceof Error ? err.message : 'حدث خطأ')
       setSaving(false)
     }
+  }
+
+  // Hard-block conflict — nothing was created. Replaces the whole form with
+  // the details instead of a generic error, so whoever tried to add this
+  // customer knows exactly who already owns the number before doing
+  // anything else. See manual/route.ts's proactive phone-collision check.
+  if (conflict) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+        <div className="card w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <AlertTriangle size={18} className="text-warning" /> هذا الرقم موجود بالفعل
+            </h3>
+            <button onClick={onClose} className="text-muted2 hover:text-danger"><X size={18} /></button>
+          </div>
+
+          <div className="space-y-2 text-sm bg-warning-soft border border-warning/30 rounded-xl p-4">
+            <p className="text-foreground">
+              {conflict.conflictSource === 'crm'
+                ? 'رقم الهاتف ده مسجل بالفعل كعميل في النظام — لم يتم إنشاء عميل جديد.'
+                : 'رقم الهاتف ده متسند بالفعل لموظف في بيفاتيل — برجاء التواصل معه بدل إنشاء عميل جديد.'}
+            </p>
+            {conflict.conflictSource === 'crm' && conflict.sourceLabel && (
+              <p><span className="text-muted2">المصدر:</span> <span className="font-semibold text-foreground">{conflict.sourceLabel}</span></p>
+            )}
+            <p><span className="text-muted2">مسند إلى:</span> <span className="font-semibold text-foreground">{conflict.assigneeName || 'غير مُسنَد'}</span></p>
+          </div>
+
+          <div className="flex gap-2">
+            {conflict.conflictSource === 'crm' && conflict.leadId && (
+              <button
+                onClick={() => { onClose(); router.push(`${basePath}/${conflict.leadId}`) }}
+                className="btn btn-primary flex-1"
+              >
+                فتح العميل الموجود
+              </button>
+            )}
+            <button onClick={onClose} className="btn btn-outline flex-1">إغلاق</button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
