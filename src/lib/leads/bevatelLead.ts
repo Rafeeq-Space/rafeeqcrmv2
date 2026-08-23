@@ -686,43 +686,43 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
   // the CRM lead (agent changed the status in Bevatel → status in the CRM).
   //
-  // Skipped on the very first event that ever links this lead to a Bevatel
-  // contact — a Bevatel contact is unique per phone number and persists
-  // forever on their side, so its crm_status attribute can be leftover from
-  // a completely unrelated, much older lead for the same phone number.
-  // Confirmed live 2026-08-23: a brand-new manually-created lead's status
-  // flipped straight back to "جديد" seconds after the welcome template
-  // fired, because the customer's Bevatel contact (reused from earlier
-  // testing) still carried "أول استقبال اتصال" from that unrelated old
-  // lead. Pushes our own status onto Bevatel's attribute instead of pulling
-  // theirs on this one event, so the two stay in sync going forward without
-  // trusting stale data neither side actually just set.
+  // Best-effort skipped on the very first event that ever links this lead to
+  // a Bevatel contact — a Bevatel contact is unique per phone number and
+  // persists forever on their side, so its crm_status attribute can be
+  // leftover from a completely unrelated, much older lead for the same
+  // phone number. The real backstop is inside syncStatusFromAttribute
+  // itself (never regress to canonical "new") — contactJustLinked alone was
+  // proven race-prone (see its own comment), so don't rely on it here for
+  // correctness, only to avoid the odd needless pull.
   if (res.leadId && statusLabel && !res.contactJustLinked) {
     await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
-  } else if (res.leadId && res.contactJustLinked && contactId) {
+  }
+
+  // Push our own current status + assignee onto Bevatel's contact/
+  // conversation on EVERY processed event with a known conversation — not
+  // just the "first link" event. Confirmed live 2026-08-23 (twice): gating
+  // this push on contactJustLinked left it silently never firing at all for
+  // some leads (Chatwoot's multiple-events-per-message behavior means the
+  // event that's actually first to see bevatel_contact_id as null is not
+  // reliably the one you'd expect — see the comment on contactJustLinked),
+  // permanently leaving Bevatel's conversation unassigned/wrong despite a
+  // correct CRM assignment. Pushing outward is always safe to repeat — the
+  // CRM is the source of truth in this direction, so re-asserting it on
+  // every event just guarantees eventual consistency instead of gambling on
+  // one race-prone event catching it.
+  if (res.leadId && convId) {
     const { data: linkedLead } = await adminSupabase()
       .from('leads')
       .select('sub_status, assigned_sales_id')
       .eq('id', res.leadId)
       .single()
-    if (linkedLead?.sub_status) {
+    if (linkedLead?.sub_status && contactId) {
       await pushSubStatusToBevatel(
         { tenant_id: tenantId, bevatel_contact_id: contactId } as unknown as Lead,
         linkedLead.sub_status as string
       ).catch(() => {})
     }
-    // Same reasoning as the status push above, but for the ASSIGNEE:
-    // Bevatel's contact/conversation persists per phone number, so on this
-    // first link the conversation Bevatel just attached our message to may
-    // be an old, reused one still carrying a completely different rep as
-    // its assignee (confirmed live 2026-08-23 — a lead assigned to
-    // Abdelrahman Ehab in the CRM showed the welcome-template reply
-    // attributed to Ziad Samer, a leftover assignee from unrelated earlier
-    // testing on the same phone number). Push our already-decided assignee
-    // onto Bevatel's conversation now, so both their dashboard and any
-    // actor-label attribution on later messages read correctly going
-    // forward.
-    if (linkedLead?.assigned_sales_id && convId) {
+    if (linkedLead?.assigned_sales_id) {
       await pushAssigneeToBevatel(
         { id: res.leadId, tenant_id: tenantId, bevatel_conversation_id: convId } as unknown as Lead,
         linkedLead.assigned_sales_id as string
