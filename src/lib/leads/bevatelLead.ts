@@ -661,11 +661,32 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   if (res.leadId && statusLabel && !res.contactJustLinked) {
     await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
   } else if (res.leadId && res.contactJustLinked && contactId) {
-    const { data: linkedLead } = await adminSupabase().from('leads').select('sub_status').eq('id', res.leadId).single()
+    const { data: linkedLead } = await adminSupabase()
+      .from('leads')
+      .select('sub_status, assigned_sales_id')
+      .eq('id', res.leadId)
+      .single()
     if (linkedLead?.sub_status) {
       await pushSubStatusToBevatel(
         { tenant_id: tenantId, bevatel_contact_id: contactId } as unknown as Lead,
         linkedLead.sub_status as string
+      ).catch(() => {})
+    }
+    // Same reasoning as the status push above, but for the ASSIGNEE:
+    // Bevatel's contact/conversation persists per phone number, so on this
+    // first link the conversation Bevatel just attached our message to may
+    // be an old, reused one still carrying a completely different rep as
+    // its assignee (confirmed live 2026-08-23 — a lead assigned to
+    // Abdelrahman Ehab in the CRM showed the welcome-template reply
+    // attributed to Ziad Samer, a leftover assignee from unrelated earlier
+    // testing on the same phone number). Push our already-decided assignee
+    // onto Bevatel's conversation now, so both their dashboard and any
+    // actor-label attribution on later messages read correctly going
+    // forward.
+    if (linkedLead?.assigned_sales_id && convId) {
+      await pushAssigneeToBevatel(
+        { id: res.leadId, tenant_id: tenantId, bevatel_conversation_id: convId } as unknown as Lead,
+        linkedLead.assigned_sales_id as string
       ).catch(() => {})
     }
   }
