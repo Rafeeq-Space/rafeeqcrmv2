@@ -9,7 +9,7 @@ import {
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
   Radio, CheckCircle2, AlertTriangle, Landmark, Pencil, Timer, MessageSquare,
-  Link2, FileDown, Printer,
+  Link2,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
@@ -51,7 +51,6 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [mentionId, setMentionId] = useState('')
   const [showAssign, setShowAssign] = useState(false)
   const [showShare, setShowShare] = useState(false)
-  const [showExportMenu, setShowExportMenu] = useState(false)
   const [shareId, setShareId] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [editName, setEditName] = useState('')
@@ -221,66 +220,18 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
     if (r) { setShowShare(false); setShareId(''); showToast('تمت المشاركة') }
   }
 
-  async function copyLeadLink() {
+  // Shared by "نسخ الرابط" and the phone-number copy icon — same clipboard
+  // call, just a different value and confirmation message.
+  async function copyToClipboard(value: string, confirmMessage: string) {
     try {
-      await navigator.clipboard.writeText(window.location.href)
-      showToast('تم نسخ الرابط — يفتح لأي شخص عنده صلاحية الوصول لهذا العميل')
+      await navigator.clipboard.writeText(value)
+      showToast(confirmMessage)
     } catch {
-      showToast('تعذّر نسخ الرابط')
+      showToast('تعذّر النسخ')
     }
   }
 
-  // Full plain-text transcript of the lead: summary header + every timeline
-  // entry in order, using the exact same wording describeActivity() renders
-  // on screen. Downloaded directly — no server round-trip, everything needed
-  // is already loaded on this page.
-  function buildTranscriptText(): string {
-    const lines: string[] = []
-    lines.push(`العميل: ${name}`)
-    if (phone) lines.push(`الهاتف: ${phone}`)
-    lines.push(`الحالة: ${LEAD_STATUS_LABELS[lead.status]}`)
-    lines.push(`الموظف المسؤول: ${lead.assigned_sales?.full_name || 'غير مُسنَد'}`)
-    lines.push(`الفريق: ${lead.assigned_team?.name || 'غير محدد'}`)
-    lines.push(`تاريخ الإنشاء: ${new Date(lead.created_at).toLocaleString('ar-EG')}`)
-    lines.push('')
-    lines.push('── السجل الزمني ──')
-    lines.push('')
-    for (const a of activities) {
-      const actor = a.actor?.full_name || a.actor_label || 'رفيق'
-      const when = new Date(a.created_at).toLocaleString('ar-EG')
-      const desc = describeActivity(a)
-      lines.push(`[${when}] ${actor}${desc ? ` — ${desc}` : ''}`)
-      if (a.type === 'comment' && a.body) {
-        const mention = a.mentioned?.full_name ? `@${a.mentioned.full_name} ` : ''
-        lines.push(`    ${mention}${a.body}`)
-      }
-    }
-    return lines.join('\n')
-  }
-
-  function exportTranscriptText() {
-    const blob = new Blob([buildTranscriptText()], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${name.replace(/[^\p{L}\p{N}]+/gu, '_') || 'lead'}_سجل_المحادثات.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-    setShowExportMenu(false)
-  }
-
-  // Hands off to the browser's own print dialog rather than generating a PDF
-  // client-side — jsPDF-style libraries have no real Arabic shaping/RTL
-  // support out of the box, so hand-built PDF text would render broken.
-  // The browser already renders this page's Arabic correctly; #lead-print-view
-  // (isolated via the print stylesheet in globals.css) reuses that rendering,
-  // and "Save as PDF" in the print dialog is a real, correctly-shaped PDF.
-  function printTranscript() {
-    setShowExportMenu(false)
-    // Let the menu actually close (and the print-only view, always in the
-    // DOM, reflect the latest data) before the print dialog steals focus.
-    setTimeout(() => window.print(), 50)
-  }
+  const copyLeadLink = () => copyToClipboard(window.location.href, 'تم نسخ الرابط — يفتح لأي شخص عنده صلاحية الوصول لهذا العميل')
 
   async function saveAttachments(next: KnowledgeFile[]) {
     setAttachments(next)
@@ -478,7 +429,14 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
             )}
 
             <div className="space-y-2.5 text-sm border-t border-border pt-4">
-              {phone && <div className="flex items-center gap-2 text-foreground"><Phone size={15} className="text-muted2" /> <span dir="ltr">{phone}</span></div>}
+              {phone && (
+                <div className="flex items-center gap-2 text-foreground">
+                  <Phone size={15} className="text-muted2" /> <span dir="ltr">{phone}</span>
+                  <button onClick={() => copyToClipboard(phone, 'تم نسخ رقم الهاتف')} title="نسخ الرقم" className="text-muted2 hover:text-foreground transition p-0.5">
+                    <Copy size={13} />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2 text-foreground flex-wrap"><Megaphone size={15} className="text-muted2" /> {lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'}{lead.campaigns?.name && lead.source && <span className="badge bg-surface2 text-muted2">{SOURCE_LABELS[lead.source] || lead.source}</span>}</div>
               <div className="flex items-center gap-2 text-foreground"><Calendar size={15} className="text-muted2" /> أُنشئ: {new Date(lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
               <div className="flex items-center gap-2 text-foreground"><Clock size={15} className="text-muted2" /> آخر تحديث: {new Date(lead.updated_at || lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
@@ -527,26 +485,13 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               </div>
             )}
 
-            {/* Copy-link and export are read-only actions on data already
-                visible on this page, so available to anyone who can open it —
-                not gated behind canManage/canHandOff like the actions above. */}
-            <div className="relative flex flex-wrap gap-2 mt-2">
+            {/* Read-only action on data already visible on this page, so
+                available to anyone who can open it — not gated behind
+                canManage/canHandOff like the actions above. */}
+            <div className="flex flex-wrap gap-2 mt-2">
               <button onClick={copyLeadLink} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5">
                 <Link2 size={15} /> نسخ الرابط
               </button>
-              <button onClick={() => setShowExportMenu(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5">
-                <FileDown size={15} /> تصدير المحادثة <ChevronDown size={13} />
-              </button>
-              {showExportMenu && (
-                <div className="absolute top-full end-0 mt-1 z-10 w-48 rounded-xl border border-border bg-surface shadow-lg overflow-hidden">
-                  <button onClick={exportTranscriptText} className="w-full text-start px-3 py-2.5 text-sm text-foreground hover:bg-surface2 flex items-center gap-2">
-                    <FileText size={15} className="text-muted2" /> تصدير كملف نصي
-                  </button>
-                  <button onClick={printTranscript} className="w-full text-start px-3 py-2.5 text-sm text-foreground hover:bg-surface2 flex items-center gap-2 border-t border-border">
-                    <Printer size={15} className="text-muted2" /> طباعة / حفظ كـ PDF
-                  </button>
-                </div>
-              )}
             </div>
             {showAssign && (canManage || canHandOff) && (
               <AssignForm
@@ -736,37 +681,6 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
         />
       )}
 
-      {/* Print-only transcript — hidden on screen (hidden print:block), and
-          isolated from the rest of the page by the #lead-print-view rule in
-          globals.css so "طباعة / حفظ كـ PDF" prints ONLY this, not the whole
-          app shell/sidebar. Arabic renders correctly because this is the
-          browser's own text layout engine, not a hand-built PDF. */}
-      <div id="lead-print-view" className="hidden print:block" dir="rtl">
-        <h1 className="text-xl font-bold mb-1">{name}</h1>
-        <div className="text-sm space-y-0.5 mb-4">
-          {phone && <div>الهاتف: <span dir="ltr">{phone}</span></div>}
-          <div>الحالة: {LEAD_STATUS_LABELS[lead.status]}</div>
-          <div>الموظف المسؤول: {lead.assigned_sales?.full_name || 'غير مُسنَد'}</div>
-          <div>الفريق: {lead.assigned_team?.name || 'غير محدد'}</div>
-          <div>تاريخ الإنشاء: {new Date(lead.created_at).toLocaleString('ar-EG')}</div>
-        </div>
-        <h2 className="text-base font-bold border-t pt-3 mb-2">السجل الزمني</h2>
-        <div className="space-y-2">
-          {activities.map(a => {
-            const actor = a.actor?.full_name || a.actor_label || 'رفيق'
-            const when = new Date(a.created_at).toLocaleString('ar-EG')
-            const desc = describeActivity(a)
-            return (
-              <div key={a.id} className="text-sm break-inside-avoid">
-                <div><span className="font-semibold">{actor}</span>{desc && ` — ${desc}`} <span className="text-xs">· {when}</span></div>
-                {a.type === 'comment' && a.body && (
-                  <div className="ps-3">{a.mentioned?.full_name && `@${a.mentioned.full_name} `}{a.body}</div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
     </div>
   )
 }
