@@ -30,43 +30,36 @@ const navItems = [
   {
     href: '/app/dashboard',
     label: 'لوحة التحكم',
-    desc: 'ملخص أدائك خلال آخر ٣٠ يوماً',
     icon: LayoutDashboard,
   },
   {
     href: '/app/my-leads',
     label: 'مركز العملاء',
-    desc: 'العملاء المُسنَدون إليك ومتابعتهم',
     icon: ClipboardList,
   },
   {
     href: '/app/team',
     label: 'فريق العمل',
-    desc: 'الفِرَق وبيانات الزملاء والتواصل',
     icon: Users,
   },
   {
     href: '/app/targets',
     label: 'التارجت الشهري',
-    desc: 'تارجت المبيعات الشهري وتقدّمك فيه',
     icon: Goal,
   },
   {
     href: '/app/knowledge',
     label: 'قاعدة المعرفة',
-    desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
   },
   {
     href: '/app/notifications',
     label: 'الإشعارات',
-    desc: 'أهم الأحداث المتعلقة بك',
     icon: Bell,
   },
   {
     href: '/app/profile',
     label: 'ملفي الشخصي',
-    desc: 'بياناتك، فريقك، وأداؤك',
     icon: UserCircle,
   },
 ]
@@ -134,7 +127,7 @@ export default function AppNav({ profile }: Props) {
     return (
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {!mini && <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">القائمة الرئيسية</p>}
-        {navItems.map(({ href, label, desc, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           const pending = pendingHref === href
           const badge = href.endsWith('/notifications') ? unread : 0
@@ -163,10 +156,7 @@ export default function AppNav({ profile }: Props) {
                 )}
               </span>
               {!mini && (
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold leading-tight">{label}</span>
-                  <span className="block text-[0.7rem] text-muted2 mt-0.5 leading-tight truncate">{desc}</span>
-                </span>
+                <span className="min-w-0 flex-1 text-sm font-semibold leading-tight truncate">{label}</span>
               )}
             </Link>
           )

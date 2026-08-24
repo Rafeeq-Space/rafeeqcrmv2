@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import { managedTeamIds } from '@/lib/leads/access'
 import TeamsAndEmployeesManager from '@/components/client-admin/TeamsAndEmployeesManager'
 import type { UserRole } from '@/lib/types'
 
@@ -14,8 +15,11 @@ export default async function ClientAdminTeamsPage() {
     .eq('id', user!.id)
     .single()
 
-  // Teams & Employees management is client_admin only.
-  if (profile?.role !== 'client_admin') redirect('/client-admin/dashboard')
+  // Team management: admins see everything; sales managers see only their
+  // own team, scoped below. A regular rep has no access, same as before.
+  if (profile?.role !== 'client_admin' && profile?.role !== 'client_sales_manager') {
+    redirect('/client-admin/dashboard')
+  }
 
   const tenantId = profile?.tenant_id || ''
   const role = (profile?.role || 'client_user') as UserRole
@@ -23,6 +27,11 @@ export default async function ClientAdminTeamsPage() {
 
   // Service role to read all tenant members regardless of RLS.
   const adminSupabase = createAdminSupabase()
+
+  // A manager only ever sees their own team(s) — same definition used
+  // tenant-wide for lead visibility (managedTeamIds: teams they manage, plus
+  // their own team_id as a fallback). Admin gets every team in the tenant.
+  const managerTeamIds = isAdmin ? null : await managedTeamIds({ id: user!.id, role, tenantId, teamId: profile?.team_id ?? null })
 
   // Members = sales managers + sales users. When an admin opens the page we
   // also include their own row so they can view/edit their own profile.
@@ -33,7 +42,7 @@ export default async function ClientAdminTeamsPage() {
   // None of these four depend on each other's results, so they run
   // concurrently instead of one after another — same data, less total wait.
   const [
-    { data: teams },
+    { data: teamsRaw },
     { data: membersRaw },
     { data: authList },
     leads,
@@ -49,18 +58,26 @@ export default async function ClientAdminTeamsPage() {
     adminSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     // Lead counters per team (open = new, pending = in-progress). Paginated —
     // a plain .select() silently under-counted past Supabase's default
-    // 1000-row cap (see fetchAllRows).
+    // 1000-row cap (see fetchAllRows). `assigned_to` is a legacy column that
+    // is never actually written to — every real assignment lives in
+    // assigned_sales_id, so counting by assigned_to always read as zero.
     fetchAllRows(
-      (from, to) => adminSupabase.from('leads').select('assigned_to, assigned_sales_id, status').eq('tenant_id', tenantId).range(from, to)
+      (from, to) => adminSupabase.from('leads').select('assigned_sales_id, status').eq('tenant_id', tenantId).range(from, to)
     ),
   ])
+
+  // Scope teams/members to the manager's own team — admins get everything.
+  const teams = managerTeamIds ? (teamsRaw || []).filter(t => managerTeamIds.includes(t.id)) : (teamsRaw || [])
+  const membersInScope = managerTeamIds
+    ? (membersRaw || []).filter(m => m.team_id && managerTeamIds.includes(m.team_id))
+    : (membersRaw || [])
 
   // A manager's team = the team they manage (by manager_id), or their own team_id.
   const managedTeam = (teams || []).find(t => t.manager_id === user!.id)
   const currentTeamId = managedTeam?.id || profile?.team_id || null
 
   const emailById = new Map((authList?.users || []).map(u => [u.id, u.email || '']))
-  const members = (membersRaw || []).map(m => ({ ...m, email: emailById.get(m.id) || '' }))
+  const members = membersInScope.map(m => ({ ...m, email: emailById.get(m.id) || '' }))
 
   const memberTeam = new Map(members.map(m => [m.id, m.team_id]))
   // Team-card counters: new / contacted / unqualified (lost).
@@ -69,7 +86,7 @@ export default async function ClientAdminTeamsPage() {
   // to show how many open/pending leads would need reassigning.
   const memberLeadStats: Record<string, { open: number; pending: number }> = {}
   for (const lead of leads || []) {
-    const teamId = lead.assigned_to ? memberTeam.get(lead.assigned_to) : null
+    const teamId = lead.assigned_sales_id ? memberTeam.get(lead.assigned_sales_id) : null
     if (teamId) {
       if (!leadStats[teamId]) leadStats[teamId] = { new: 0, contacted: 0, unqualified: 0 }
       if (lead.status === 'new') leadStats[teamId].new++
@@ -83,10 +100,9 @@ export default async function ClientAdminTeamsPage() {
     }
   }
 
-  // Everyone sees all teams + members; management is gated per-role in the component.
   return (
     <TeamsAndEmployeesManager
-      teams={teams || []}
+      teams={teams}
       members={members}
       tenantId={tenantId}
       currentRole={role}

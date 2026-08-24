@@ -31,72 +31,60 @@ const navItems = [
   {
     href: '/client-admin/dashboard',
     label: 'لوحة التحكم',
-    desc: 'إحصائيات وتحليلات الحملات والعملاء',
     icon: LayoutDashboard,
   },
   {
     href: '/client-admin/teams',
     label: 'فريق العمل',
-    desc: 'إدارة الفِرَق والموظفين',
     icon: Users,
-    adminOnly: true,
   },
   {
     href: '/client-admin/campaigns',
     label: 'الحملات والنماذج',
-    desc: 'إدارة الحملات الإعلانية والنماذج',
     icon: Target,
     adminOnly: true,
   },
   {
     href: '/client-admin/leads',
     label: 'مركز العملاء',
-    desc: 'إدارة ومتابعة العملاء المحتملين',
     icon: Contact,
   },
   {
     href: '/client-admin/leads/archive',
     label: 'الأرشيف',
-    desc: 'نسخ محفوظة من قوائم العملاء',
     icon: Archive,
     adminOnly: true,
   },
   {
     href: '/client-admin/targets',
     label: 'التارجت الشهري',
-    desc: 'تارجت المبيعات الشهري للموظفين والفِرَق',
     icon: Goal,
   },
   {
     href: '/client-admin/reports',
     label: 'التقارير',
-    desc: 'تقارير أداء الموظفين والفرق والحملات',
     icon: FileBarChart,
     adminOnly: true,
   },
   {
     href: '/client-admin/notifications',
     label: 'الإشعارات',
-    desc: 'أهم الأحداث المتعلقة بك وبفريقك',
     icon: Bell,
   },
   {
     href: '/client-admin/knowledge',
     label: 'قاعدة المعرفة',
-    desc: 'المنتجات والخدمات والأسئلة الشائعة',
     icon: BookOpen,
   },
   {
     href: '/client-admin/ad-connections',
     label: 'التكاملات',
-    desc: 'المنصات الإعلانية والربط مع بيفاتيل',
     icon: Radio,
     adminOnly: true,
   },
   {
     href: '/client-admin/profile',
     label: 'ملفي الشخصي',
-    desc: 'بياناتك وأداؤك',
     icon: UserCircle,
   },
 ]
@@ -171,7 +159,7 @@ export default function ClientAdminNav({ profile }: Props) {
     return (
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {!mini && <p className="text-[0.68rem] font-bold text-muted2 px-3 pt-2 pb-1 tracking-wide">الإدارة</p>}
-        {visibleNavItems.map(({ href, label, desc, icon: Icon }) => {
+        {visibleNavItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           const pending = pendingHref === href
           const badge = href.endsWith('/notifications') ? unread : 0
@@ -200,10 +188,7 @@ export default function ClientAdminNav({ profile }: Props) {
                 )}
               </span>
               {!mini && (
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold leading-tight">{label}</span>
-                  <span className="block text-[0.7rem] text-muted2 mt-0.5 leading-tight truncate">{desc}</span>
-                </span>
+                <span className="min-w-0 flex-1 text-sm font-semibold leading-tight truncate">{label}</span>
               )}
             </Link>
           )
