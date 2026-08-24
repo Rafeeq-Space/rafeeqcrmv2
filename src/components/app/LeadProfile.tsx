@@ -8,7 +8,7 @@ import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
-  Radio, CheckCircle2, AlertTriangle, Landmark, Pencil, Timer,
+  Radio, CheckCircle2, AlertTriangle, Landmark, Pencil, Timer, MessageSquare,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
@@ -97,6 +97,12 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   // from the timeline already loaded here (no extra query). See
   // leadResponseMs for exactly what counts.
   const responseMs = leadResponseMs(activities)
+  // The customer's own WhatsApp display name, surfaced only when it differs
+  // from the lead's name — when they match, repeating it directly under the
+  // heading is pure noise. Comparison ignores case and surrounding space so a
+  // cosmetic difference doesn't count as a real one.
+  const waName = (lead.wa_profile_name || '').trim()
+  const waNameDiffers = !!waName && waName.toLowerCase() !== (name || '').trim().toLowerCase()
   // Name/phone already have their own dedicated display above (page title,
   // contact card) — surfacing them again here would just duplicate them.
   // Sheets imported from a TikTok Lead Ads export carry a "TikTok Lead ID"/
@@ -413,6 +419,11 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="flex items-center gap-2 text-foreground flex-wrap"><Megaphone size={15} className="text-muted2" /> {lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'}{lead.campaigns?.name && lead.source && <span className="badge bg-surface2 text-muted2">{SOURCE_LABELS[lead.source] || lead.source}</span>}</div>
               <div className="flex items-center gap-2 text-foreground"><Calendar size={15} className="text-muted2" /> أُنشئ: {new Date(lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
               <div className="flex items-center gap-2 text-foreground"><Clock size={15} className="text-muted2" /> آخر تحديث: {new Date(lead.updated_at || lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
+              {waNameDiffers && (
+                <div className="flex items-center gap-2 text-foreground" title="اسم العميل كما يظهر على واتساب — قد يختلف عن الاسم المسجّل، ويساعد في العثور على محادثته">
+                  <MessageSquare size={15} className="text-muted2" /> اسم الواتساب: <span className="font-semibold">{waName}</span>
+                </div>
+              )}
               {responseMs != null && (
                 <div className="flex items-center gap-2 text-foreground" title="متوسط الوقت بين تواصل العميل وأول رد عليه (رسالة أو مكالمة)">
                   <Timer size={15} className="text-muted2" /> معدل سرعة الرد: <span className="font-semibold">{fmtResponseDuration(responseMs)}</span>

@@ -106,6 +106,10 @@ export async function handleRafeeqSocialEvent(
     tenantId,
     phone,
     name: name || undefined,
+    // `first_name` on this payload is the customer's own WhatsApp profile
+    // name, which is exactly what wa_profile_name is for. Only meaningful for
+    // an INCOMING message — an outgoing one carries our own side's naming.
+    profileName: direction === 'in' ? (name || undefined) : undefined,
     source: 'rafeeqsocial',
     activityBody: body,
     activityExternalId: externalId,

@@ -177,6 +177,15 @@ export interface AppendArgs {
   phone: string
   name?: string
   email?: string
+  // The customer's OWN display name on the messaging platform (their WhatsApp
+  // profile name), which is not the lead's name: `name` above is what they
+  // typed into an ad form, this is what they call themselves on WhatsApp.
+  // They differ ~69% of the time in practice. Stored on its own column so a
+  // rep can find the customer's thread on the platform side — never merged
+  // into `data`, where the fuzzy header matching in leadName()/leadPhone()
+  // and compute_lead_phone_key() would mistake it for a name or a phone
+  // number (see supabase/add_lead_wa_profile_name.sql).
+  profileName?: string
   source: 'bevatel_chat' | 'bevatel_call' | 'rafeeqsocial'
   activityBody: string
   activityExternalId?: string
@@ -296,7 +305,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   // owner) can still be handed to whoever actually engages with it below.
   const { data: existing } = await supa
     .from('leads')
-    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, status, sub_status, assigned_sales:profiles!assigned_sales_id(role)')
+    .select('id, data, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, wa_profile_name, status, sub_status, assigned_sales:profiles!assigned_sales_id(role)')
     .eq('tenant_id', tenantId)
     .eq('phone_key', key)
     .order('created_at', { ascending: true })
@@ -316,6 +325,11 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
     const patch: Record<string, string> = {}
     if (conversationId && !existing.bevatel_conversation_id) patch.bevatel_conversation_id = conversationId
     if (contactId && !existing.bevatel_contact_id) patch.bevatel_contact_id = contactId
+    // Kept current rather than write-once: a customer can rename themselves on
+    // WhatsApp at any time, and a stale value is worse than none — it would
+    // send a rep looking for a name the platform no longer shows.
+    const profileName = args.profileName?.trim()
+    if (profileName && profileName !== existing.wa_profile_name) patch.wa_profile_name = profileName
     if (Object.keys(patch).length) await supa.from('leads').update(patch).eq('id', existing.id)
   }
 
@@ -333,6 +347,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
         tenant_id: tenantId,
         data,
         source,
+        wa_profile_name: args.profileName?.trim() || null,
         status: 'new',
         // These arrive as a first inbound *conversation*, not a submitted
         // form, so they get their own opening stage rather than the plain

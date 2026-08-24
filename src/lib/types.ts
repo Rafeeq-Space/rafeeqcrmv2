@@ -355,6 +355,7 @@ export interface Lead {
   sheet_row?: number // row number in the connected Google Sheet (google_sheet leads only)
   bevatel_conversation_id?: string | null // Bevatel/Chatwoot conversation id, for label sync
   bevatel_contact_id?: string | null // Bevatel/Chatwoot contact id, for status-attribute sync
+  wa_profile_name?: string | null // customer's own WhatsApp display name (NOT the lead name) — see supabase/add_lead_wa_profile_name.sql
   created_at: string
   updated_at: string
   campaigns?: Campaign
