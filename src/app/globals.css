@@ -275,3 +275,22 @@ body::before {
 }
 
 .animate-in { animation: pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ── Print isolation for the lead-transcript export ──────────────────────
+   Used by LeadProfile.tsx's "طباعة / حفظ كـ PDF" — hides the app shell
+   (sidebar, nav, buttons) and prints ONLY #lead-print-view. Deliberately a
+   print-time layout, not a client-side PDF library: those have no real
+   Arabic shaping/RTL support, while this reuses the browser's own text
+   rendering (the same Arabic already correct on screen), so the exported
+   PDF/printout is guaranteed to render correctly instead of "hopefully". */
+@media print {
+  body * { visibility: hidden; }
+  #lead-print-view, #lead-print-view * { visibility: visible; }
+  #lead-print-view {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    color: #000;
+    background: #fff;
+  }
+}

@@ -9,6 +9,7 @@ import {
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
   Radio, CheckCircle2, AlertTriangle, Landmark, Pencil, Timer, MessageSquare,
+  Link2, FileDown, Printer,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
@@ -50,6 +51,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [mentionId, setMentionId] = useState('')
   const [showAssign, setShowAssign] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [shareId, setShareId] = useState('')
   const [showEdit, setShowEdit] = useState(false)
   const [editName, setEditName] = useState('')
@@ -217,6 +219,67 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
     if (!shareId) return
     const r = await post(`/api/leads/${lead.id}/share`, { profile_id: shareId })
     if (r) { setShowShare(false); setShareId(''); showToast('تمت المشاركة') }
+  }
+
+  async function copyLeadLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      showToast('تم نسخ الرابط — يفتح لأي شخص عنده صلاحية الوصول لهذا العميل')
+    } catch {
+      showToast('تعذّر نسخ الرابط')
+    }
+  }
+
+  // Full plain-text transcript of the lead: summary header + every timeline
+  // entry in order, using the exact same wording describeActivity() renders
+  // on screen. Downloaded directly — no server round-trip, everything needed
+  // is already loaded on this page.
+  function buildTranscriptText(): string {
+    const lines: string[] = []
+    lines.push(`العميل: ${name}`)
+    if (phone) lines.push(`الهاتف: ${phone}`)
+    lines.push(`الحالة: ${LEAD_STATUS_LABELS[lead.status]}`)
+    lines.push(`الموظف المسؤول: ${lead.assigned_sales?.full_name || 'غير مُسنَد'}`)
+    lines.push(`الفريق: ${lead.assigned_team?.name || 'غير محدد'}`)
+    lines.push(`تاريخ الإنشاء: ${new Date(lead.created_at).toLocaleString('ar-EG')}`)
+    lines.push('')
+    lines.push('── السجل الزمني ──')
+    lines.push('')
+    for (const a of activities) {
+      const actor = a.actor?.full_name || a.actor_label || 'رفيق'
+      const when = new Date(a.created_at).toLocaleString('ar-EG')
+      const desc = describeActivity(a)
+      lines.push(`[${when}] ${actor}${desc ? ` — ${desc}` : ''}`)
+      if (a.type === 'comment' && a.body) {
+        const mention = a.mentioned?.full_name ? `@${a.mentioned.full_name} ` : ''
+        lines.push(`    ${mention}${a.body}`)
+      }
+    }
+    return lines.join('\n')
+  }
+
+  function exportTranscriptText() {
+    const blob = new Blob([buildTranscriptText()], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${name.replace(/[^\p{L}\p{N}]+/gu, '_') || 'lead'}_سجل_المحادثات.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+    setShowExportMenu(false)
+  }
+
+  // Hands off to the browser's own print dialog rather than generating a PDF
+  // client-side — jsPDF-style libraries have no real Arabic shaping/RTL
+  // support out of the box, so hand-built PDF text would render broken.
+  // The browser already renders this page's Arabic correctly; #lead-print-view
+  // (isolated via the print stylesheet in globals.css) reuses that rendering,
+  // and "Save as PDF" in the print dialog is a real, correctly-shaped PDF.
+  function printTranscript() {
+    setShowExportMenu(false)
+    // Let the menu actually close (and the print-only view, always in the
+    // DOM, reflect the latest data) before the print dialog steals focus.
+    setTimeout(() => window.print(), 50)
   }
 
   async function saveAttachments(next: KnowledgeFile[]) {
@@ -463,6 +526,28 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                 )}
               </div>
             )}
+
+            {/* Copy-link and export are read-only actions on data already
+                visible on this page, so available to anyone who can open it —
+                not gated behind canManage/canHandOff like the actions above. */}
+            <div className="relative flex flex-wrap gap-2 mt-2">
+              <button onClick={copyLeadLink} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5">
+                <Link2 size={15} /> نسخ الرابط
+              </button>
+              <button onClick={() => setShowExportMenu(v => !v)} className="btn btn-outline text-xs !py-1.5 !px-3 flex items-center gap-1.5">
+                <FileDown size={15} /> تصدير المحادثة <ChevronDown size={13} />
+              </button>
+              {showExportMenu && (
+                <div className="absolute top-full end-0 mt-1 z-10 w-48 rounded-xl border border-border bg-surface shadow-lg overflow-hidden">
+                  <button onClick={exportTranscriptText} className="w-full text-start px-3 py-2.5 text-sm text-foreground hover:bg-surface2 flex items-center gap-2">
+                    <FileText size={15} className="text-muted2" /> تصدير كملف نصي
+                  </button>
+                  <button onClick={printTranscript} className="w-full text-start px-3 py-2.5 text-sm text-foreground hover:bg-surface2 flex items-center gap-2 border-t border-border">
+                    <Printer size={15} className="text-muted2" /> طباعة / حفظ كـ PDF
+                  </button>
+                </div>
+              )}
+            </div>
             {showAssign && (canManage || canHandOff) && (
               <AssignForm
                 members={canManage ? members : shareMembers}
@@ -650,6 +735,38 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
           onSave={saveFinancingRequest}
         />
       )}
+
+      {/* Print-only transcript — hidden on screen (hidden print:block), and
+          isolated from the rest of the page by the #lead-print-view rule in
+          globals.css so "طباعة / حفظ كـ PDF" prints ONLY this, not the whole
+          app shell/sidebar. Arabic renders correctly because this is the
+          browser's own text layout engine, not a hand-built PDF. */}
+      <div id="lead-print-view" className="hidden print:block" dir="rtl">
+        <h1 className="text-xl font-bold mb-1">{name}</h1>
+        <div className="text-sm space-y-0.5 mb-4">
+          {phone && <div>الهاتف: <span dir="ltr">{phone}</span></div>}
+          <div>الحالة: {LEAD_STATUS_LABELS[lead.status]}</div>
+          <div>الموظف المسؤول: {lead.assigned_sales?.full_name || 'غير مُسنَد'}</div>
+          <div>الفريق: {lead.assigned_team?.name || 'غير محدد'}</div>
+          <div>تاريخ الإنشاء: {new Date(lead.created_at).toLocaleString('ar-EG')}</div>
+        </div>
+        <h2 className="text-base font-bold border-t pt-3 mb-2">السجل الزمني</h2>
+        <div className="space-y-2">
+          {activities.map(a => {
+            const actor = a.actor?.full_name || a.actor_label || 'رفيق'
+            const when = new Date(a.created_at).toLocaleString('ar-EG')
+            const desc = describeActivity(a)
+            return (
+              <div key={a.id} className="text-sm break-inside-avoid">
+                <div><span className="font-semibold">{actor}</span>{desc && ` — ${desc}`} <span className="text-xs">· {when}</span></div>
+                {a.type === 'comment' && a.body && (
+                  <div className="ps-3">{a.mentioned?.full_name && `@${a.mentioned.full_name} `}{a.body}</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -761,20 +878,27 @@ function StatusPicker({ currentKey, busy, onPick }: { currentKey: string | null;
   )
 }
 
-function TimelineItem({ activity: a }: { activity: LeadActivity }) {
-  const actor = a.actor?.full_name || a.actor_label || 'رفيق'
-  const when = new Date(a.created_at).toLocaleString('ar-EG')
-  let text = ''
-  if (a.type === 'created') text = 'تم إنشاء العميل المحتمل'
+// Same wording the on-screen timeline shows for an activity — shared with the
+// text/print export so a share, a status change, etc. never reads differently
+// there than it does here.
+function describeActivity(a: LeadActivity): string {
+  if (a.type === 'created') return 'تم إنشاء العميل المحتمل'
   // Newer rows carry the precise sub-status wording in body (see the API
   // route) — a same-bucket sub-status change resolves to identical
   // from/to_status labels otherwise, which reads as a no-op change. Older
   // rows have no body for this type, so they fall back to the canonical
   // status labels exactly as before.
-  else if (a.type === 'status_change') text = a.body || `غيّر الحالة من "${LEAD_STATUS_LABELS[a.from_status || ''] || a.from_status || '—'}" إلى "${LEAD_STATUS_LABELS[a.to_status || ''] || a.to_status}"`
-  else if (a.type === 'call') text = a.call_result === 'answered' ? 'أجرى مكالمة — تم الرد' : 'أجرى مكالمة — لم يتم الرد'
-  else if (a.type === 'assignment') text = a.mentioned?.full_name ? `أسند العميل إلى ${a.mentioned.full_name}` : 'حدّث الإسناد'
-  else if (a.type === 'share') text = a.mentioned?.full_name ? `شارك العميل مع ${a.mentioned.full_name}` : 'شارك العميل'
+  if (a.type === 'status_change') return a.body || `غيّر الحالة من "${LEAD_STATUS_LABELS[a.from_status || ''] || a.from_status || '—'}" إلى "${LEAD_STATUS_LABELS[a.to_status || ''] || a.to_status}"`
+  if (a.type === 'call') return a.call_result === 'answered' ? 'أجرى مكالمة — تم الرد' : 'أجرى مكالمة — لم يتم الرد'
+  if (a.type === 'assignment') return a.mentioned?.full_name ? `أسند العميل إلى ${a.mentioned.full_name}` : 'حدّث الإسناد'
+  if (a.type === 'share') return a.mentioned?.full_name ? `شارك العميل مع ${a.mentioned.full_name}` : 'شارك العميل'
+  return ''
+}
+
+function TimelineItem({ activity: a }: { activity: LeadActivity }) {
+  const actor = a.actor?.full_name || a.actor_label || 'رفيق'
+  const when = new Date(a.created_at).toLocaleString('ar-EG')
+  const text = describeActivity(a)
 
   return (
     <div>
