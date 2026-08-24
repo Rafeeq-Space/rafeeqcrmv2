@@ -255,6 +255,12 @@ function StatusCell({ currentKey, currentStatus, saving, onPick }: {
 // per-status keys — 'in_progress' mirrors LeadStats.inProgress (contacted +
 // qualified combined), matching the "قيد المتابعة" stat card on the profile
 // page, which has no single matching `leads.status` value of its own.
+// Sentinel values for the employee/team filters meaning "nobody owns this
+// lead" / "this lead sits in no team". Neither is a real id, so they can
+// never collide with a profile or team id.
+const UNASSIGNED = '__unassigned__'
+const NO_TEAM = '__no_team__'
+
 const VALID_STATUS_PARAMS = new Set(['all', 'new', 'contacted', 'pending', 'qualified', 'converted', 'lost', 'in_progress'])
 const VALID_PERIOD_PARAMS = new Set(['all', 'day', 'week', 'month', 'thisMonth'])
 
@@ -417,6 +423,13 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   // members. If members carry no team_id (e.g. legacy data), fall back to all.
   const visibleMembers = useMemo(() => {
     if (team === 'all') return members
+    // "بدون فريق" scopes the employee list to staff who belong to no team
+    // (e.g. the tenant's own admin account) — the people who can actually own
+    // one of these leads.
+    if (team === NO_TEAM) {
+      const teamless = members.filter(m => !m.team_id)
+      return teamless.length ? teamless : members
+    }
     const scopedToTeam = members.filter(m => m.team_id === team)
     return scopedToTeam.length ? scopedToTeam : members
   }, [members, team])
@@ -424,6 +437,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   // If the currently-selected employee isn't in the chosen team, clear it so the
   // employee filter never contradicts the team filter.
   useEffect(() => {
+    if (member === UNASSIGNED) return
     if (member !== 'all' && !visibleMembers.some(m => m.id === member)) setMember('all')
   }, [visibleMembers, member])
 
@@ -497,8 +511,19 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
 
     return leads.filter(l => {
       if (campaign !== 'all' && l.campaign_id !== campaign) return false
-      if (team !== 'all' && l.assigned_team_id !== team) return false
-      if (member !== 'all' && l.assigned_sales_id !== member) return false
+      // UNASSIGNED is a sentinel, not a real id — a lead nobody owns has a
+      // null assigned_sales_id, so it matched no employee AND no team and
+      // silently fell out of every filtered view. Confirmed live on سيارتي
+      // كار: its two team filters showed 6 + 6 new leads while "الكل" showed
+      // 21, because the other 9 had no owner (or belonged to the tenant's own
+      // admin account, which sits in no team) and were therefore invisible
+      // everywhere except the unfiltered list.
+      if (member === UNASSIGNED) {
+        if (l.assigned_sales_id) return false
+      } else if (member !== 'all' && l.assigned_sales_id !== member) return false
+      if (team === NO_TEAM) {
+        if (l.assigned_team_id) return false
+      } else if (team !== 'all' && l.assigned_team_id !== team) return false
       if (source !== 'all' && (l.source || 'direct') !== source) return false
       if (assignedToMe && currentUserId && l.assigned_sales_id !== currentUserId) return false
       if (sharedWithMeOnly && !sharedWithMeSet.has(l.id)) return false
@@ -685,12 +710,14 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
         {isAdmin && teams.length > 0 && (
           <select className="input !w-auto" value={team} onChange={e => setTeam(e.target.value)}>
             <option value="all">كل الفِرَق</option>
+            <option value={NO_TEAM}>بدون فريق</option>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         )}
         {(isAdmin || isManager) && members.length > 0 && (
           <select className="input !w-auto" value={member} onChange={e => setMember(e.target.value)}>
             <option value="all">كل الموظفين</option>
+            <option value={UNASSIGNED}>غير مسند</option>
             {visibleMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
