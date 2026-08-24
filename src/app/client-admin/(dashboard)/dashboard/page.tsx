@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase, fetchVisibleLeads, managedTeamIds, type Viewer } from '@/lib/leads/access'
-import { avgResponseGapMs } from '@/lib/leads/stats'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import DashboardView from '@/components/app/DashboardView'
 
@@ -45,7 +44,6 @@ export default async function ClientAdminDashboardPage() {
     { data: teamRows },
     { data: memberRows },
     leads,
-    acts,
     managerTeamIds,
   ] = await Promise.all([
     supa.from('campaigns').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
@@ -58,9 +56,6 @@ export default async function ClientAdminDashboardPage() {
           (from, to) => supa.from('leads').select('*, campaigns(name, source), employees(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).range(from, to)
         )
       : fetchVisibleLeads(viewer),
-    fetchAllRows(
-      (from, to) => supa.from('lead_activities').select('lead_id, created_at').eq('tenant_id', tenantId).range(from, to)
-    ),
     isManager ? managedTeamIds(viewer) : Promise.resolve([] as string[]),
   ])
 
@@ -79,22 +74,10 @@ export default async function ClientAdminDashboardPage() {
     .filter(m => isAdmin || (m.team_id && managerTeamIds.includes(m.team_id)))
     .map(m => ({ id: m.id, name: m.full_name }))
 
-  // Average gap between timeline updates across the visible leads. `acts` was
-  // already fetched tenant-wide above; narrowed to the visible lead ids here
-  // — unchanged from before, just no longer gating whether the fetch itself
-  // happens (see the Promise.all comment).
-  let avgResponseMs: number | null = null
-  const leadIds = leads.map(l => l.id)
-  if (leadIds.length) {
-    const leadIdSet = new Set(leadIds)
-    avgResponseMs = avgResponseGapMs(acts.filter(a => leadIdSet.has(a.lead_id)))
-  }
-
   return (
     <DashboardView
       campaigns={campaigns || []}
       leads={leads}
-      avgResponseMs={avgResponseMs}
       forms={forms || []}
       employees={employees || []}
       teams={teams}

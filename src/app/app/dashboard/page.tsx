@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { adminSupabase, fetchVisibleLeads, type Viewer } from '@/lib/leads/access'
-import { avgResponseGapMs } from '@/lib/leads/stats'
-import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import { fetchVisibleLeads, type Viewer } from '@/lib/leads/access'
 import SalesDashboard from '@/components/app/SalesDashboard'
 
 export default async function DashboardPage() {
@@ -36,26 +34,12 @@ export default async function DashboardPage() {
   // leads there). A manager's visible-lead count could plausibly cross that
   // too. Fetching by tenant_id and filtering to the visible lead ids in JS
   // avoids the URL limit regardless of size.
-  const [leads, acts] = await Promise.all([
-    fetchVisibleLeads(viewer),
-    fetchAllRows(
-      (from, to) => adminSupabase().from('lead_activities').select('lead_id, created_at').eq('tenant_id', profile.tenant_id).range(from, to)
-    ),
-  ])
-
-  // Average gap between timeline updates across the visible leads.
-  let avgResponseMs: number | null = null
-  const leadIds = leads.map(l => l.id)
-  if (leadIds.length) {
-    const leadIdSet = new Set(leadIds)
-    avgResponseMs = avgResponseGapMs(acts.filter(a => leadIdSet.has(a.lead_id)))
-  }
+  const leads = await fetchVisibleLeads(viewer)
 
   return (
     <SalesDashboard
       leads={leads}
       fullName={profile.full_name || 'موظف'}
-      avgResponseMs={avgResponseMs}
     />
   )
 }

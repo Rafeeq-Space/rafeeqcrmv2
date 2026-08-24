@@ -9,12 +9,11 @@ import LeadStatCards from '@/components/app/LeadStatCards'
 interface Props {
   leads: Lead[]
   fullName: string
-  avgResponseMs?: number | null
 }
 
 const ARABIC_WEEKS = ['الأسبوع 1', 'الأسبوع 2', 'الأسبوع 3', 'الأسبوع 4']
 
-export default function SalesDashboard({ leads, fullName, avgResponseMs = null }: Props) {
+export default function SalesDashboard({ leads, fullName }: Props) {
   // Filter leads from the last 30 days
   const now = new Date()
   const thirtyDaysAgo = new Date(now)
@@ -69,7 +68,7 @@ export default function SalesDashboard({ leads, fullName, avgResponseMs = null }
       </div>
 
       {/* Stats Cards */}
-      <LeadStatCards leads={leads} avgResponseMs={avgResponseMs} href="/app/my-leads" />
+      <LeadStatCards leads={leads} href="/app/my-leads" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Weekly Chart */}

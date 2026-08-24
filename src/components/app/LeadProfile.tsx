@@ -8,11 +8,12 @@ import {
   Phone, MessageCircle, User, Users2, Megaphone, FileText, ArrowRight,
   Clock, Send, Check, PhoneOff, UserPlus, Share2, X, StickyNote,
   Paperclip, ImageIcon, ExternalLink, Calendar, ChevronDown, Tag, Loader2, Copy,
-  Radio, CheckCircle2, AlertTriangle, Landmark, Pencil,
+  Radio, CheckCircle2, AlertTriangle, Landmark, Pencil, Timer,
 } from 'lucide-react'
 import type { Lead, LeadActivity, KnowledgeFile, LeadEvent, FinancingRequest } from '@/lib/types'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey, STATUS_DOT } from '@/lib/leads/subStatus'
+import { leadResponseMs, fmtResponseDuration } from '@/lib/leads/stats'
 import { FINANCING_STATUSES, FINANCING_STATUS_COLORS, type FinancingStatus } from '@/lib/leads/financingStatus'
 import { useToast } from '@/components/ToastProvider'
 
@@ -92,6 +93,10 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)
   const phone = leadPhone(lead.data)
+  // Average wait this customer actually experienced on this lead — computed
+  // from the timeline already loaded here (no extra query). See
+  // leadResponseMs for exactly what counts.
+  const responseMs = leadResponseMs(activities)
   // Name/phone already have their own dedicated display above (page title,
   // contact card) — surfacing them again here would just duplicate them.
   // Sheets imported from a TikTok Lead Ads export carry a "TikTok Lead ID"/
@@ -408,6 +413,11 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               <div className="flex items-center gap-2 text-foreground flex-wrap"><Megaphone size={15} className="text-muted2" /> {lead.campaigns?.name || SOURCE_LABELS[lead.source || ''] || 'مباشر'}{lead.campaigns?.name && lead.source && <span className="badge bg-surface2 text-muted2">{SOURCE_LABELS[lead.source] || lead.source}</span>}</div>
               <div className="flex items-center gap-2 text-foreground"><Calendar size={15} className="text-muted2" /> أُنشئ: {new Date(lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
               <div className="flex items-center gap-2 text-foreground"><Clock size={15} className="text-muted2" /> آخر تحديث: {new Date(lead.updated_at || lead.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}</div>
+              {responseMs != null && (
+                <div className="flex items-center gap-2 text-foreground" title="متوسط الوقت بين تواصل العميل وأول رد عليه (رسالة أو مكالمة)">
+                  <Timer size={15} className="text-muted2" /> معدل سرعة الرد: <span className="font-semibold">{fmtResponseDuration(responseMs)}</span>
+                </div>
+              )}
             </div>
 
             {/* TikTok Lead ID / Status, when this sheet was imported from TikTok */}

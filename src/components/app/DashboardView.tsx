@@ -34,7 +34,6 @@ interface Props {
   employeesCount?: number
   adConnections?: AdConnection[]
   campaignConnectionMap?: Record<string, string[]>
-  avgResponseMs?: number | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -124,7 +123,7 @@ function buildTrend(items: Lead[], start: Date | null, end: Date | null): { day:
 export default function DashboardView({
   campaigns, leads, forms, employees, tenantId, defaultTab = 'overview', allowedTabs,
   isAdmin = true, role = 'client_admin', teams = [], members = [], teamsCount, employeesCount,
-  adConnections = [], campaignConnectionMap = {}, avgResponseMs = null,
+  adConnections = [], campaignConnectionMap = {},
 }: Props) {
   const visibleTabs = allowedTabs ? TABS.filter(t => allowedTabs.includes(t.key)) : TABS
   const campaignsOnly = allowedTabs?.length === 1 && allowedTabs[0] === 'campaigns'
@@ -316,7 +315,6 @@ export default function DashboardView({
               starting a visually separate section below with a gap. */}
           <LeadStatCards
             leads={filteredLeads}
-            avgResponseMs={avgResponseMs}
             href="/client-admin/leads"
             extraCards={cards.map(({ label, value, icon, color, href }) => ({
               label, value, icon, href,

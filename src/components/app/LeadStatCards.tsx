@@ -1,6 +1,6 @@
 'use client'
 
-import { Users, UserPlus, MessageCircle, Hourglass, UserCheck, CheckCircle2, UserX, TrendingUp, Timer } from 'lucide-react'
+import { Users, UserPlus, MessageCircle, Hourglass, UserCheck, CheckCircle2, UserX, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Lead } from '@/lib/types'
 import { displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS } from '@/lib/leads/subStatus'
@@ -16,7 +16,6 @@ export interface ExtraStatCard {
 
 interface Props {
   leads: Pick<Lead, 'status' | 'sub_status' | 'created_at'>[]
-  avgResponseMs: number | null
   // Optional link the count cards navigate to (e.g. the leads center).
   href?: string
   // Extra cards appended into this SAME grid, right after the built-in
@@ -26,18 +25,7 @@ interface Props {
   extraCards?: ExtraStatCard[]
 }
 
-// Human-readable Arabic duration from milliseconds.
-function fmtDuration(ms: number | null): string {
-  if (ms == null) return '—'
-  const min = ms / 60000
-  if (min < 1) return 'أقل من دقيقة'
-  if (min < 60) return `${Math.round(min)} دقيقة`
-  const hours = min / 60
-  if (hours < 24) return `${Math.round(hours)} ساعة`
-  return `${Math.round(hours / 24)} يوم`
-}
-
-export default function LeadStatCards({ leads, avgResponseMs, href, extraCards = [] }: Props) {
+export default function LeadStatCards({ leads, href, extraCards = [] }: Props) {
   const count = (s: string) => leads.filter(l => l.status === s).length
   // 'contacted' split display-only into "جاري التواصل" (actively worked) vs
   // "معلق" (stalled) — see displayBucketForLead in subStatus.ts. The real
@@ -64,7 +52,6 @@ export default function LeadStatCards({ leads, avgResponseMs, href, extraCards =
     { label: 'عميل غير مؤهل', value: count('lost'), icon: UserX, color: DISPLAY_BUCKET_COLORS.lost, soft: 'var(--danger-soft)', statusParam: 'lost' },
     { label: 'إجمالي عدد العملاء', value: leads.length, icon: Users, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: 'all' },
     { label: 'نسبة الإكمال هذا الشهر', value: `${completionRate}%`, icon: TrendingUp, color: 'var(--success)', soft: 'var(--success-soft)', statusParam: null },
-    { label: 'معدل سرعة الرد', value: fmtDuration(avgResponseMs), icon: Timer, color: 'var(--primary)', soft: 'var(--primary-soft)', statusParam: null },
   ]
 
   return (

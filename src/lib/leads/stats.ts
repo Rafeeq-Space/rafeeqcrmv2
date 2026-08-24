@@ -12,29 +12,83 @@ export interface LeadStats {
   last30: number // created in the last 30 days
 }
 
-// Average gap (in ms) between consecutive timeline updates, across all leads
-// that have at least two activities. Returns null when there's nothing to
-// measure. Used for the "معدل سرعة الرد" dashboard card.
-export function avgResponseGapMs(activities: { lead_id: string; created_at: string }[]): number | null {
-  const byLead = new Map<string, number[]>()
-  for (const a of activities) {
-    const t = new Date(a.created_at).getTime()
-    if (!Number.isFinite(t)) continue
-    const arr = byLead.get(a.lead_id)
-    if (arr) arr.push(t)
-    else byLead.set(a.lead_id, [t])
-  }
-  let totalGap = 0
-  let gaps = 0
-  for (const times of byLead.values()) {
-    if (times.length < 2) continue
-    times.sort((x, y) => x - y)
-    for (let i = 1; i < times.length; i++) {
-      totalGap += times[i] - times[i - 1]
-      gaps++
+// ── Response speed for ONE lead ───────────────────────────────────────────
+//
+// Replaces an earlier tenant-wide "average gap between consecutive timeline
+// updates" metric that was genuinely meaningless: it averaged the gap
+// between ANY two activities, so a status change followed by another status
+// change, or two outgoing replies in a row, counted as "response time", and
+// it had no notion of who was talking to whom. Deliberately per-lead only
+// now (shown on the lead page) — a per-employee/per-tenant roll-up was
+// dropped on purpose to avoid mixing unrelated conversations into one number.
+//
+// What it measures: the wait the CUSTOMER actually experienced. Walk the
+// timeline oldest-first; every time the customer reaches out, start the
+// clock, and stop it at the rep's next reply — by message OR by call, since
+// a rep who phones back has genuinely responded.
+//
+// Rules that matter:
+//   - Several customer messages in a row before any reply count as ONE wait,
+//     timed from the FIRST of them (that is the real elapsed wait).
+//   - A customer message still awaiting a reply is not counted at all —
+//     it would otherwise silently inflate as time passes.
+//   - Status changes, assignments, internal comments and lead creation are
+//     not interactions with the customer, so they're ignored entirely.
+//   - Full elapsed time, deliberately NOT adjusted for working hours
+//     (explicit product decision).
+//
+// Direction comes from the activity body, which is how both integrations
+// write it (see bevatelLead.ts / rafeeqSocialLead.ts): "رسالة واردة" /
+// "مكالمة واردة" are the customer, "رد صادر" / "مكالمة صادرة" are the rep.
+export type InteractionSide = 'customer' | 'rep' | null
+
+export function interactionSide(body?: string | null): InteractionSide {
+  const b = body || ''
+  // Checked before the plain "مكالمة واردة" test below: an unanswered
+  // inbound call is the customer reaching out (it is NOT a rep response),
+  // and its wording contains "مكالمة واردة" too.
+  if (b.includes('مكالمة واردة لم يتم الرد')) return 'customer'
+  if (b.includes('رسالة واردة') || b.includes('مكالمة واردة')) return 'customer'
+  if (b.includes('رد صادر') || b.includes('مكالمة صادرة')) return 'rep'
+  return null
+}
+
+// Average of every completed customer-wait on this one lead's timeline.
+// Null when the customer never reached out, or never got a reply yet.
+export function leadResponseMs(
+  activities: { body?: string | null; created_at: string }[]
+): number | null {
+  const events = activities
+    .map(a => ({ side: interactionSide(a.body), t: new Date(a.created_at).getTime() }))
+    .filter((e): e is { side: 'customer' | 'rep'; t: number } => !!e.side && Number.isFinite(e.t))
+    .sort((a, b) => a.t - b.t)
+
+  let waitingSince: number | null = null
+  let total = 0
+  let count = 0
+  for (const e of events) {
+    if (e.side === 'customer') {
+      // Only the FIRST of a run of customer messages starts the clock.
+      if (waitingSince == null) waitingSince = e.t
+    } else if (waitingSince != null) {
+      total += e.t - waitingSince
+      count++
+      waitingSince = null
     }
   }
-  return gaps > 0 ? Math.round(totalGap / gaps) : null
+  return count > 0 ? Math.round(total / count) : null
+}
+
+// Human-readable Arabic duration — shared with the lead page so the same
+// value never renders two different ways.
+export function fmtResponseDuration(ms: number | null): string {
+  if (ms == null) return '—'
+  const min = ms / 60000
+  if (min < 1) return 'أقل من دقيقة'
+  if (min < 60) return `${Math.round(min)} دقيقة`
+  const hours = min / 60
+  if (hours < 24) return `${Math.round(hours)} ساعة`
+  return `${Math.round(hours / 24)} يوم`
 }
 
 type StatusLead = Pick<Lead, 'status' | 'created_at'>
