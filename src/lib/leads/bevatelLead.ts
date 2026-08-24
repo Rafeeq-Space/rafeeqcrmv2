@@ -46,18 +46,42 @@ export function phoneKey(raw?: string | null): string {
   return digits.length >= 9 ? digits.slice(-9) : digits
 }
 
-// Bevatel occasionally reports a Saudi caller's number in local format —
-// "0551198553" (a leading 0, no country code) — instead of the full
-// international "966551198553" (confirmed live). Fine for phoneKey-based
-// matching (it only looks at the last 9 digits either way), but every
-// Rafeeq Social API call downstream (assign-to-team-member, the missed-call
-// workflow trigger, direct message sends) needs the real international
-// number — sending it the bare local form silently fails to reach the
-// right subscriber. Normalized once, right where the number comes off the
-// call payload, so everything downstream gets the correct form.
+// Bevatel reports a Saudi caller's number in several different shapes, not
+// one — measured against أوتو باور's own live call logs (2026-08-24): of 300
+// consecutive call events, 178 arrived as local "05XXXXXXXX" and 122 as a
+// bare "5XXXXXXXX" (9 digits, no country code AND no leading zero).
+//
+// All shapes are equivalent for phoneKey-based lead matching (it only ever
+// compares the last 9 digits), but every Rafeeq Social API call downstream
+// — assign-to-team-member, the missed-call workflow trigger, direct message
+// sends — needs the real international number, and the failure when it
+// doesn't get one is silent AND misleading: Rafeeq Social happily creates a
+// subscriber under whatever string it's handed, so a bare 9-digit number
+// produces a real-looking subscriber whose chat_id is not a routable
+// WhatsApp number. The template is never delivered to the actual customer,
+// and searching Rafeeq Social by their real number finds nothing — the only
+// record is the unreachable phantom. Confirmed live 2026-08-24 against real
+// missed calls: `565782513` and `582935555` each exist over there as
+// subscribers keyed by the broken form, while `966565782513` /
+// `966582935555` return "Subscriber not found".
+//
+// Only converts numbers that actually look Saudi; anything else (an Egyptian
+// 01XXXXXXXXX / 20XXXXXXXXXX, a short internal extension, an unrecognised
+// shape) is returned digits-only and untouched, exactly as before.
 export function normalizeSaudiPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
-  return /^05\d{8}$/.test(digits) ? `966${digits.slice(1)}` : digits
+  // 00966… → 966…
+  const noTrunk = digits.replace(/^00(?=966)/, '')
+  // 9660 5XXXXXXXX → 966 5XXXXXXXX (redundant domestic 0 kept after the
+  // country code — the same duplication phoneVariants() works around on the
+  // Rafeeq Social side, see rafeeqSocialSubscriber.ts).
+  const noRedundantZero = noTrunk.replace(/^9660(?=5\d{8}$)/, '966')
+  if (/^9665\d{8}$/.test(noRedundantZero)) return noRedundantZero
+  // 05XXXXXXXX (local, 10) → 9665XXXXXXXX
+  if (/^05\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero.slice(1)}`
+  // 5XXXXXXXX (bare, 9) → 9665XXXXXXXX
+  if (/^5\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero}`
+  return noRedundantZero
 }
 
 // Arabic label (with emoji) for a WhatsApp media attachment's type — shared by
@@ -511,6 +535,16 @@ async function syncStatusFromAttribute(tenantId: string, leadId: string, label: 
     .from('leads')
     .update({ status: sub.status, sub_status: sub.key, updated_at: new Date().toISOString() })
     .eq('id', leadId)
+
+  // `from_status`/`to_status` only carry the canonical bucket (new/contacted/
+  // qualified/converted/lost) — several sub-statuses share one bucket (e.g.
+  // "تم إرسال رسالة", "جارى المتابعة" and "تواصل لاحق" are all "تم
+  // التواصل"), so a real, deliberate change from one to another inside that
+  // same bucket rendered as "غيّر الحالة من تم التواصل إلى تم التواصل" —
+  // looking like a no-op even though the agent genuinely changed something in
+  // Bevatel. Confirmed live 2026-08-23. The body spells out the actual
+  // sub-status labels, same fix already applied to markLeadMessageSentIfNew.
+  const fromLabel = subStatusByKey(lead.sub_status)?.label || LEAD_STATUS_LABELS[lead.status] || lead.status
   await supa.from('lead_activities').insert({
     tenant_id: tenantId,
     lead_id: leadId,
