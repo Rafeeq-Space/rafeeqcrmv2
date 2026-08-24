@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy, FilterX, ChevronDown, Check } from 'lucide-react'
 import type { Lead, LeadStatus } from '@/lib/types'
@@ -212,6 +213,18 @@ function ContactButtons({ lead, phone, bevatel, rafeeqSocialBotId }: {
 // of a full-width button so it drops into the card/table layout unchanged.
 // Clicking it must not trigger the row/card navigation, same reasoning as
 // ContactButtons above.
+//
+// The menu itself is rendered through a portal into document.body with
+// `position: fixed`, computed from the trigger's own getBoundingClientRect —
+// NOT a plain `absolute` child of the trigger. Confirmed live: the table
+// wrapper below only sets `overflow-x-auto`, but per the CSS overflow spec
+// setting either axis to a non-`visible` value forces the OTHER axis to
+// `auto` too if it was `visible` — so the wrapper clips vertically as well,
+// whether that was intended or not. With many rows this went unnoticed (the
+// table is tall enough that the clip boundary sits well below whatever
+// dropdown was open); with a single row the wrapper is barely taller than
+// one badge, so the menu was cut down to almost nothing. A portal escapes
+// that ancestor's overflow entirely, so the row count can never affect it.
 function StatusCell({ currentKey, currentStatus, saving, onPick }: {
   currentKey: string | null
   currentStatus: LeadStatus
@@ -219,20 +232,52 @@ function StatusCell({ currentKey, currentStatus, saving, onPick }: {
   onPick: (key: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const current = subStatusByKey(currentKey || undefined)
   const label = current ? current.label : LEAD_STATUS_LABELS[currentStatus]
 
+  const MENU_WIDTH = 224 // w-56
+
+  function openMenu() {
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (rect) {
+      // Clamp horizontally so the menu never runs off either edge of the
+      // viewport — the badge can sit anywhere in a wide, scrollable table.
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - MENU_WIDTH - 8)
+      setPos({ top: rect.bottom + 4, left })
+    }
+    setOpen(true)
+  }
+
+  // A fixed-position menu goes stale the instant the page scrolls (its
+  // coordinates no longer point at the trigger) — closing on scroll is
+  // simpler and less surprising than re-tracking position on every frame.
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
   return (
-    <div className="relative inline-block" onClick={e => e.stopPropagation()}>
-      <button type="button" disabled={saving} onClick={() => setOpen(v => !v)}
+    <div className="inline-block" onClick={e => e.stopPropagation()}>
+      <button ref={btnRef} type="button" disabled={saving} onClick={() => (open ? setOpen(false) : openMenu())}
         className={`badge ${LEAD_STATUS_COLORS[currentStatus]} flex items-center gap-1 disabled:opacity-60`}>
         {label}
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
+      {open && pos && createPortal(
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute z-30 mt-1 w-56 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg p-1 text-start">
+          <div
+            className="fixed z-30 w-56 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg p-1 text-start"
+            style={{ top: pos.top, left: pos.left }}
+          >
             {SUB_STATUSES.map(s => {
               const active = s.key === currentKey
               return (
@@ -245,7 +290,8 @@ function StatusCell({ currentKey, currentStatus, saving, onPick }: {
               )
             })}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
