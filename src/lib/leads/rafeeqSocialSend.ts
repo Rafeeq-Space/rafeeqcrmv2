@@ -1,5 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { phoneVariants, fetchRafeeqSocialSubscriberAnyVariant } from '@/lib/leads/rafeeqSocialSubscriber'
+import { markLeadMessageSentIfNew } from '@/lib/leads/bevatelTemplateSend'
 
 // ── Rafeeq Social (BotSailor) WhatsApp send API ───────────────────────────────
 //
@@ -234,7 +235,8 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
   tenantId: string,
   phone: string,
   name: string,
-  assignedSalesId?: string | null
+  assignedSalesId?: string | null,
+  leadId?: string | null
 ): Promise<void> {
   if (!phone) return
   const { data } = await adminSupabase()
@@ -271,8 +273,9 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
     console.error('pushAssignmentCore (new-lead workflow, pre-push) failed', err)
   }
 
+  let sent = false
   try {
-    await fetch(workflowUrl, {
+    const res = await fetch(workflowUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -280,8 +283,23 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
         name: name || '',
       }),
     })
+    sent = res.ok
   } catch (err) {
     console.error('rafeeqsocial new-lead workflow trigger failed', err)
+  }
+
+  // A real WhatsApp message just reached the customer, so the lead is no
+  // longer un-contacted — same transition the Bevatel template path has done
+  // all along (markLeadMessageSentIfNew). It was missing here entirely,
+  // which is why a Rafeeq-Social-only tenant's leads sat at "جديد"
+  // indefinitely even after their welcome message went out (confirmed live
+  // 2026-08-23: 188 of أوتو باور's leads still "جديد" that day). The helper
+  // only moves a lead that is still at canonical "new", so a lead a rep has
+  // already progressed is never dragged backwards.
+  if (sent && leadId) {
+    await markLeadMessageSentIfNew(tenantId, leadId).catch(err =>
+      console.error('markLeadMessageSentIfNew (rafeeqsocial new lead) failed', err)
+    )
   }
 
   // The pre-push above already returned true (and this becomes a no-op via

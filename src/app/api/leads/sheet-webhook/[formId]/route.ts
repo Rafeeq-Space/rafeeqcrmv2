@@ -166,7 +166,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
       after(() => syncLeadEvent({ leadId: lead.id, status: 'new' }).catch(console.error))
       const rawPhone = leadPhone(normalizedRow)
       if (rawPhone) {
-        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow), assigned_sales_id).catch(console.error))
+        after(() => triggerRafeeqSocialNewLeadWorkflow(form.tenant_id, rawPhone, leadName(normalizedRow), assigned_sales_id, lead.id).catch(console.error))
         after(() => sendBevatelNewLeadTemplate(form.tenant_id, rawPhone, lead.id, assigned_sales_id, leadName(normalizedRow)).catch(console.error))
       }
       if (assigned_sales_id) {

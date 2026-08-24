@@ -4,6 +4,7 @@ import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee, pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
 import { pushAssignmentCore, pushAssignmentWhenSubscriberExists } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelMissedCallTemplate } from '@/lib/leads/bevatelMissedCallTemplate'
+import { markLeadMessageSentIfNew } from '@/lib/leads/bevatelTemplateSend'
 import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
@@ -1090,6 +1091,15 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
           console.error('pushAssignmentWhenSubscriberExists (missed call) failed', err)
         )
       }
+
+      // A real WhatsApp follow-up just reached the customer, so the lead is
+      // no longer un-contacted — the Bevatel template path below has always
+      // done this (via markLeadMessageSentIfNew) but the Rafeeq Social
+      // workflow path never did, leaving a Rafeeq-Social-only tenant's
+      // missed-call leads stuck at "جديد".
+      await markLeadMessageSentIfNew(tenantId, res.leadId).catch(err =>
+        console.error('markLeadMessageSentIfNew (rafeeqsocial missed call) failed', err)
+      )
     }
 
     // Missed-call WhatsApp follow-up via Bevatel's own dedicated

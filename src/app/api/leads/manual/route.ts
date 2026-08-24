@@ -195,7 +195,7 @@ export async function POST(request: Request) {
     leadId: lead.id,
   })
 
-  after(() => triggerRafeeqSocialNewLeadWorkflow(viewer.tenantId, phone, name, assignedSalesId).catch(console.error))
+  after(() => triggerRafeeqSocialNewLeadWorkflow(viewer.tenantId, phone, name, assignedSalesId, lead.id).catch(console.error))
   after(() => sendBevatelNewLeadTemplate(viewer.tenantId, phone, lead.id, assignedSalesId, name).catch(console.error))
 
   return NextResponse.json({ success: true, lead }, { status: 201 })
