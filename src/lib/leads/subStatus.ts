@@ -44,6 +44,20 @@ export const SUB_STATUSES: SubStatus[] = [
   // does change which ad-platform conversion event a lead in this sub-status
   // reports as, see syncEvent.ts), not just a display tweak — deliberate.
   { key: 'car_unavailable', label: 'سيارة غير متوفرة', status: 'contacted' },
+  // Moved here from "خسارة" (2026-08-24, explicit decision): none of these
+  // five means the customer is unreachable or uninterested — they're all
+  // blockers that can clear (obligations paid down, services restored,
+  // violations settled, a SIMAH default resolved, a customer who eventually
+  // answers). Treating them as lost wrote off leads that are still worth
+  // chasing, so they now roll up to 'contacted' and show under "معلق"
+  // alongside the other stalled-but-live stages. Same kind of real canonical
+  // change as car_unavailable above — it does change which ad-platform
+  // conversion event these report as (see syncEvent.ts) from here on.
+  { key: 'no_final_answer', label: 'لا رد نهائى', status: 'contacted' },
+  { key: 'services_suspended', label: 'إيقاف خدمات', status: 'contacted' },
+  { key: 'high_obligations', label: 'التزامات مرتفعة', status: 'contacted' },
+  { key: 'has_violations', label: 'يوجد مخالفات', status: 'contacted' },
+  { key: 'simah_default', label: 'تعثر بسمة', status: 'contacted' },
   // مؤهل
   { key: 'interested', label: 'عميل مهتم', status: 'qualified' },
   { key: 'car_selected', label: 'تحديد سيارة', status: 'qualified' },
@@ -54,14 +68,14 @@ export const SUB_STATUSES: SubStatus[] = [
   { key: 'will_visit_company', label: 'هيزور الشركة', status: 'qualified' },
   // تم التحويل
   { key: 'sold', label: 'تم البيع', status: 'converted' },
-  // خسارة
-  { key: 'no_final_answer', label: 'لا رد نهائى', status: 'lost' },
-  { key: 'services_suspended', label: 'إيقاف خدمات', status: 'lost' },
-  { key: 'high_obligations', label: 'التزامات مرتفعة', status: 'lost' },
+  // خسارة — deliberately only the four a rep can never work around: the
+  // customer is ineligible (social security, or outside the financeable age
+  // range) or has said no. Everything else that used to sit here is a
+  // temporary blocker and now lives under "معلق" above.
   { key: 'social_security', label: 'ضمان اجتماعى', status: 'lost' },
-  { key: 'has_violations', label: 'يوجد مخالفات', status: 'lost' },
-  { key: 'simah_default', label: 'تعثر بسمة', status: 'lost' },
   { key: 'not_interested', label: 'غير مهتم', status: 'lost' },
+  { key: 'over_age', label: 'فوق السن', status: 'lost' },
+  { key: 'under_age', label: 'تحت السن', status: 'lost' },
 ]
 
 // Light Arabic normalisation so a label coming back from Bevatel still matches
@@ -106,7 +120,11 @@ export const statusForSubStatus = (key?: string | null): LeadStatus | null =>
 // matters even though `tsc --noEmit` has no way to catch it.
 export type DisplayBucket = 'new' | 'in_progress' | 'pending' | 'qualified' | 'converted' | 'lost'
 
-const PENDING_SUB_STATUS_KEYS = new Set(['no_answer_1', 'no_answer_2', 'contact_later', 'employment_period', 'car_unavailable'])
+const PENDING_SUB_STATUS_KEYS = new Set([
+  'no_answer_1', 'no_answer_2', 'contact_later', 'employment_period', 'car_unavailable',
+  // Moved out of "خسارة" on 2026-08-24 — see the SUB_STATUSES comment above.
+  'no_final_answer', 'services_suspended', 'high_obligations', 'has_violations', 'simah_default',
+])
 
 // A 'contacted' lead with no sub-status yet (or one somehow outside the set
 // above) defaults to "جاري التواصل" — assume it's still being actively worked
