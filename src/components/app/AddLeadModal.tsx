@@ -12,7 +12,7 @@ interface Option {
 }
 
 interface ConflictInfo {
-  conflictSource: 'crm' | 'bevatel'
+  conflictSource: 'crm' | 'bevatel' | 'rafeeqsocial'
   sourceLabel?: string
   assigneeName: string | null
   leadId?: string | null
@@ -138,7 +138,9 @@ export default function AddLeadModal({ role, basePath, tenantId, campaigns = [],
             <p className="text-foreground">
               {conflict.conflictSource === 'crm'
                 ? 'رقم الهاتف ده مسجل بالفعل كعميل في النظام — لم يتم إنشاء عميل جديد.'
-                : 'رقم الهاتف ده متسند بالفعل لموظف في بيفاتيل — برجاء التواصل معه بدل إنشاء عميل جديد.'}
+                : conflict.conflictSource === 'bevatel'
+                  ? 'رقم الهاتف ده متسند بالفعل لموظف في بيفاتيل — برجاء التواصل معه بدل إنشاء عميل جديد.'
+                  : 'رقم الهاتف ده متسند بالفعل لموظف في رفيق سوشيال — برجاء التواصل معه بدل إنشاء عميل جديد.'}
             </p>
             {conflict.conflictSource === 'crm' && conflict.sourceLabel && (
               <p><span className="text-muted2">المصدر:</span> <span className="font-semibold text-foreground">{conflict.sourceLabel}</span></p>

@@ -161,7 +161,7 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
 // guaranteed to miss: it runs before the subscriber exists, silently fails,
 // and nothing retries. Polls until the assignment lands (or the window is
 // exhausted) instead. Runs inside the caller's after() so nobody waits on it.
-async function pushAssignmentWhenSubscriberExists(tenantId: string, phone: string, salesId: string): Promise<void> {
+export async function pushAssignmentWhenSubscriberExists(tenantId: string, phone: string, salesId: string): Promise<void> {
   const DELAYS_MS = [1500, 2000, 3000, 4000]
   for (let attempt = 0; attempt <= DELAYS_MS.length; attempt++) {
     if (await pushAssignmentCore(tenantId, phone, salesId)) return
@@ -170,6 +170,47 @@ async function pushAssignmentWhenSubscriberExists(tenantId: string, phone: strin
     await new Promise(resolve => setTimeout(resolve, delay))
   }
   console.error(`pushAssignmentWhenSubscriberExists: gave up for phone *${phone.slice(-4)} (subscriber never appeared)`)
+}
+
+// Reads whoever Rafeeq Social currently has assigned to this phone number and
+// resolves them to a CRM profile — the mirror of bevatelSync's
+// findBevatelAssigneeByPhone, and used the same way: consulted BEFORE a new
+// lead from any other source (sheet/form/ads/manual) goes to round-robin, so
+// a customer already mid-conversation with a rep over there isn't handed to
+// somebody else at random.
+//
+// Deliberately uses the plain Subscriber Get lookup (one field,
+// `assigned_agent_id`) rather than rafeeqSocialAssign.ts's message-scanning
+// resolver: that heavier scan exists to prove a real human ownership signal
+// before overriding things, which matters when there IS an existing decision
+// to protect. Here there is none yet — the lead doesn't exist — so the cheap
+// direct read is both sufficient and much faster. Variant-safe via
+// fetchRafeeqSocialSubscriberAnyVariant (see phoneVariants).
+//
+// Returns null for any tenant without Rafeeq Social configured, an unknown
+// number, an unassigned subscriber, or an agent with no matching (active)
+// CRM profile — so callers can always treat null as "carry on as normal".
+export async function findRafeeqSocialAssigneeByPhone(
+  tenantId: string,
+  phone: string
+): Promise<{ id: string; team_id: string | null; fullName: string | null } | null> {
+  const creds = await tenantRafeeqSocialCreds(tenantId)
+  if (!creds) return null
+
+  const subscriber = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
+  const agentId = subscriber?.assignedAgentId
+  if (!agentId) return null
+
+  const { data: profiles } = await adminSupabase()
+    .from('profiles')
+    .select('id, team_id, full_name, rafeeqsocial_team_member_id, suspended')
+    .eq('tenant_id', tenantId)
+    .not('rafeeqsocial_team_member_id', 'is', null)
+  const rep = (profiles || []).find(
+    p => (p.rafeeqsocial_team_member_id || '').trim() === agentId.trim()
+  )
+  if (!rep || rep.suspended) return null
+  return { id: rep.id, team_id: rep.team_id ?? null, fullName: (rep.full_name as string) ?? null }
 }
 
 // Fires the tenant's configured "new lead" Workflow trigger (a WhatsApp

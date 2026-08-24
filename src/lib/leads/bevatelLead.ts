@@ -2,7 +2,7 @@ import { adminSupabase } from '@/lib/supabase/admin'
 import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee, pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
-import { pushAssignmentCore } from '@/lib/leads/rafeeqSocialSend'
+import { pushAssignmentCore, pushAssignmentWhenSubscriberExists } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelMissedCallTemplate } from '@/lib/leads/bevatelMissedCallTemplate'
 import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
@@ -1075,6 +1075,20 @@ export async function handleBevatelCall(tenantId: string, payload: Record<string
         })
       } catch (err) {
         console.error('rafeeqsocial missed-call workflow trigger failed', err)
+      }
+
+      // The pre-push above only lands when a subscriber for this number
+      // already exists over there. A first-time caller has none until the
+      // workflow message above creates one — and Rafeeq Social rejects an
+      // assign for a subscriber that doesn't exist yet
+      // (`{"status":"0","message":"Subscriber not found"}`, confirmed live
+      // 2026-08-23), so without this the missed call's own assignment never
+      // reached them at all. Same fix, same helper, as the new-lead workflow
+      // path in rafeeqSocialSend.ts.
+      if (finalAssigneeId) {
+        await pushAssignmentWhenSubscriberExists(tenantId, phone, finalAssigneeId).catch(err =>
+          console.error('pushAssignmentWhenSubscriberExists (missed call) failed', err)
+        )
       }
     }
 

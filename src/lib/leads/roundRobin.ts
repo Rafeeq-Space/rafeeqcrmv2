@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { findBevatelAssigneeByPhone } from '@/lib/leads/bevatelSync'
+import { findRafeeqSocialAssigneeByPhone } from '@/lib/leads/rafeeqSocialSend'
 
 // Round-robin distribution: if the form has an assignee pool, hand the lead
 // to the next member in order and advance the form's rotating counter.
@@ -37,6 +38,8 @@ export async function assignRoundRobin(
   if (phone) {
     const bevatelRep = await findBevatelAssigneeByPhone(form.tenant_id, phone)
     if (bevatelRep) return { assigned_sales_id: bevatelRep.id, assigned_team_id: bevatelRep.team_id }
+    const rsRep = await findRafeeqSocialAssigneeByPhone(form.tenant_id, phone)
+    if (rsRep) return { assigned_sales_id: rsRep.id, assigned_team_id: rsRep.team_id }
   }
 
   type Member = { id: string; team_id: string | null }
@@ -104,6 +107,8 @@ export async function assignRoundRobinTenantWide(
   if (phone) {
     const bevatelRep = await findBevatelAssigneeByPhone(tenantId, phone)
     if (bevatelRep) return { assigned_sales_id: bevatelRep.id, assigned_team_id: bevatelRep.team_id }
+    const rsRep = await findRafeeqSocialAssigneeByPhone(tenantId, phone)
+    if (rsRep) return { assigned_sales_id: rsRep.id, assigned_team_id: rsRep.team_id }
   }
 
   const { data: repsRaw } = await supabase

@@ -5,6 +5,7 @@ import { createNotification } from '@/lib/notifications/create'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 import { findBevatelAssigneeNameByPhone } from '@/lib/leads/bevatelSync'
+import { findRafeeqSocialAssigneeByPhone } from '@/lib/leads/rafeeqSocialSend'
 import { SOURCE_LABELS } from '@/lib/utils'
 import type { KnowledgeFile } from '@/lib/types'
 
@@ -84,6 +85,21 @@ export async function POST(request: Request) {
       conflict: true,
       conflictSource: 'bevatel' as const,
       assigneeName: bevatelAssigneeName,
+    }, { status: 409 })
+  }
+
+  // 3) Same check against Rafeeq Social — a live subscriber over there
+  // already assigned to a rep. Deliberately the same hard block as Bevatel
+  // above (explicit product decision 2026-08-23): whoever is adding this
+  // customer should go find the rep already handling them rather than
+  // create a second, competing record.
+  const rsRep = await findRafeeqSocialAssigneeByPhone(viewer.tenantId, phone)
+  if (rsRep) {
+    return NextResponse.json({
+      error: 'هذا الرقم مسنّد بالفعل لموظف آخر في رفيق سوشيال',
+      conflict: true,
+      conflictSource: 'rafeeqsocial' as const,
+      assigneeName: rsRep.fullName,
     }, { status: 409 })
   }
 
