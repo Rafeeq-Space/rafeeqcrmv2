@@ -233,6 +233,25 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
 
   const copyLeadLink = () => copyToClipboard(window.location.href, 'تم نسخ الرابط — يفتح لأي شخص عنده صلاحية الوصول لهذا العميل')
 
+  // Bevatel Chat's own search box matches a bare local-style number ("5XXXXXXXX")
+  // reliably; a rep pasting the full "966XXXXXXXXX" the number is normally
+  // stored as has to manually delete the "966" first every time — confirmed
+  // live 2026-08-24. Only stripped for a tenant that actually uses Bevatel
+  // Chat (the `bevatel` prop, resolved server-side from tenants.bevatel_
+  // account_id) — a tenant on Rafeeq Social instead has no reason to expect
+  // this shape, so their copy stays exactly as stored.
+  function bevatelChatDigits(raw: string): string {
+    const digits = raw.replace(/\D/g, '')
+    const noTrunk = digits.replace(/^00(?=966)/, '')
+    const m = noTrunk.match(/^9660?(5\d{8})$/) || noTrunk.match(/^0(5\d{8})$/)
+    return m ? m[1] : noTrunk
+  }
+
+  function copyPhoneNumber() {
+    const toCopy = bevatel ? bevatelChatDigits(phone) : phone
+    copyToClipboard(toCopy, 'تم نسخ رقم الهاتف')
+  }
+
   async function saveAttachments(next: KnowledgeFile[]) {
     setAttachments(next)
     await fetch(`/api/leads/${lead.id}/attachments`, {
@@ -432,7 +451,7 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
               {phone && (
                 <div className="flex items-center gap-2 text-foreground">
                   <Phone size={15} className="text-muted2" /> <span dir="ltr">{phone}</span>
-                  <button onClick={() => copyToClipboard(phone, 'تم نسخ رقم الهاتف')} title="نسخ الرقم" className="text-muted2 hover:text-foreground transition p-0.5">
+                  <button onClick={copyPhoneNumber} title="نسخ الرقم" className="text-muted2 hover:text-foreground transition p-0.5">
                     <Copy size={13} />
                   </button>
                 </div>
