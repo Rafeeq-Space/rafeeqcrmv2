@@ -193,15 +193,27 @@ async function resolveInitialRafeeqSocialAssignee(
 // Rafeeq Social — only the exact phone number stored on the lead (never the
 // other variant, never a passive bot-reply). Returns null if nothing
 // resolves (including "no creds"), which the caller treats as "leave it".
+//
+// Confirmed live (2026-08-24, تنفيذ أوتو باور): a conversation manually
+// created in Rafeeq Social under a mistyped phone number (one digit off from
+// the real customer's) still resolved to the same CRM lead — phone_key
+// matches on the last 9 digits, which happily tolerates exactly this kind of
+// garbled prefix — and its own "assigned to <Name>" system message got
+// honored as if it were a real reassignment of the actual conversation,
+// silently stealing the lead from its correct owner. `phone` here used to be
+// whatever raw number the triggering event carried, never checked against
+// the lead's own stored number — `storedPhone` closes that gap by requiring
+// an exact digit-for-digit match before ever asking Rafeeq Social anything.
 async function resolveRafeeqSocialReassignment(
   tenantId: string,
-  phone: string
+  phone: string,
+  storedPhone: string
 ): Promise<{ id: string; team_id: string | null } | null> {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits || digits !== storedPhone.replace(/\D/g, '')) return null
+
   const creds = await tenantRafeeqSocialCreds(tenantId)
   if (!creds) return null
-
-  const digits = phone.replace(/\D/g, '')
-  if (!digits) return null
 
   const messages = await fetchConversationMessagesOne(creds, digits)
   const name = latestExplicitReassignment(messages)
@@ -272,11 +284,16 @@ export type RafeeqSocialAssignOutcome =
 // a completely different employee on a pooled phone variant, is ignored.
 export async function syncRafeeqSocialAssignment(tenantId: string, leadId: string, phone: string): Promise<RafeeqSocialAssignOutcome> {
   const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('assigned_sales_id').eq('id', leadId).single()
+  const { data: lead } = await supa.from('leads').select('assigned_sales_id, data').eq('id', leadId).single()
   if (!lead) return 'unchanged'
 
   if (lead.assigned_sales_id) {
-    const reassigned = await resolveRafeeqSocialReassignment(tenantId, phone)
+    // The lead's own stored phone, not the raw phone this particular event
+    // carried — see resolveRafeeqSocialReassignment for why the two can
+    // legitimately differ.
+    const storedPhone = leadPhone((lead.data as Record<string, string>) || undefined)
+    if (!storedPhone) return 'unchanged'
+    const reassigned = await resolveRafeeqSocialReassignment(tenantId, phone, storedPhone)
     if (!reassigned || reassigned.id === lead.assigned_sales_id) return 'unchanged'
     await applyAssignment(tenantId, leadId, reassigned)
     return 'matched'
