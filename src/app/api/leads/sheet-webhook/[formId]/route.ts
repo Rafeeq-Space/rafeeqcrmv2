@@ -2,7 +2,7 @@ import { NextResponse, after } from 'next/server'
 import { assignRoundRobin } from '@/lib/leads/roundRobin'
 import { createNotification } from '@/lib/notifications/create'
 import { syncLeadEvent } from '@/lib/leads/syncEvent'
-import { leadPhone, leadEmail, leadName, normalizeRowPhone } from '@/lib/utils'
+import { leadPhone, leadEmail, leadName, normalizeRowPhone, isIdentityKey } from '@/lib/utils'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { triggerRafeeqSocialNewLeadWorkflow } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
@@ -11,6 +11,49 @@ import { sendBevatelNewLeadTemplate } from '@/lib/leads/bevatelNewLeadTemplate'
 // (with spaces/dashes) are recognized as the same number.
 function digitsOnly(s: string): string {
   return (s || '').replace(/\D/g, '').replace(/^00/, '').replace(/^966/, '').replace(/^0/, '')
+}
+
+// A repeat row for a customer who is already a lead used to be dropped whole,
+// which quietly lost whatever the sheet knew that the lead did not — a TikTok
+// row carries things like "مبالغ خطاب" / "تحويل قسط شهري" that a lead created
+// from a Bevatel conversation never had. 110 leads had already lost data this
+// way by 2026-08-25.
+//
+// Now the row is merged in instead: any column the lead has no value for is
+// added, and anything it already has is left exactly as it is. Old wins on
+// conflict on purpose — a rep may have corrected the lead by hand, and the
+// lead may already be linked to a Bevatel/Rafeeq Social conversation keyed on
+// those values.
+//
+// Identity columns (name/phone/email) are never merged at all, even when the
+// lead is missing them — see isIdentityKey. Returns the headers actually
+// added, for the timeline note.
+async function mergeSheetRowIntoLead(
+  supabase: ReturnType<typeof adminSupabase>,
+  leadId: string,
+  existingData: Record<string, string>,
+  row: Record<string, string>,
+): Promise<string[]> {
+  const next = { ...existingData }
+  const added: string[] = []
+  for (const [key, raw] of Object.entries(row)) {
+    const value = String(raw ?? '').trim()
+    if (!value) continue
+    if (isIdentityKey(key)) continue
+    if (String(next[key] ?? '').trim()) continue
+    next[key] = value
+    added.push(key)
+  }
+  if (added.length) await supabase.from('leads').update({ data: next }).eq('id', leadId)
+  return added
+}
+
+// Wording shared by both duplicate paths below, so the timeline reads the same
+// whether the repeat came from the same sheet or from another source entirely.
+function mergeNote(added: string[]): string {
+  return added.length
+    ? `🔁 وصل صف جديد لنفس هذا العميل من Google Sheet — تمت إضافة ${added.length} حقل: ${added.join('، ')}`
+    : '🔁 وصل صف جديد لنفس هذا العميل من Google Sheet — لا يحمل بيانات جديدة، تم الاحتفاظ بهذا الليد'
 }
 
 // Receives one row at a time from a Google Apps Script trigger bound to a
@@ -75,17 +118,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         return false
       })
       if (dup) {
-        // Leave a trace on the existing lead's timeline — otherwise a repeat
-        // row for a customer who's already in the CRM leaves zero evidence
-        // they ever came in again, even though no duplicate lead was created.
+        // Merge whatever this row knows that the lead doesn't, then leave a
+        // trace naming exactly what was added — a repeat row otherwise left
+        // zero evidence the customer came in again, and (until 2026-08-25)
+        // threw away every extra column it carried.
+        const added = await mergeSheetRowIntoLead(
+          supabase, dup.id, (dup.data as Record<string, string>) || {}, normalizedRow,
+        )
         await supabase.from('lead_activities').insert({
           tenant_id: form.tenant_id,
           lead_id: dup.id,
           actor_id: null,
           type: 'comment',
-          body: '🔁 وصل صف جديد لنفس هذا العميل من Google Sheet — تم تجاهله والاحتفاظ بهذا الليد',
+          body: mergeNote(added),
         })
-        return NextResponse.json({ success: true, skipped: true, reason: 'duplicate' })
+        return NextResponse.json({ success: true, skipped: true, reason: 'duplicate', merged: added.length })
       }
     }
 
@@ -136,17 +183,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ for
         if (keyRow) {
           const { data: existingLead } = await supabase
             .from('leads')
-            .select('id')
+            .select('id, data')
             .eq('tenant_id', form.tenant_id)
             .eq('phone_key', keyRow as string)
             .maybeSingle()
           if (existingLead) {
+            // Same merge as the same-sheet path above. This branch matters
+            // more, not less: the existing lead here came from a different
+            // source entirely (typically a Bevatel conversation, which only
+            // ever carries a name and a phone), so the sheet row is usually
+            // the only place the ad-form answers exist at all.
+            const added = await mergeSheetRowIntoLead(
+              supabase, existingLead.id, (existingLead.data as Record<string, string>) || {}, normalizedRow,
+            )
             await supabase.from('lead_activities').insert({
               tenant_id: form.tenant_id,
               lead_id: existingLead.id,
               actor_id: null,
               type: 'comment',
-              body: '🔁 وصل ليد جديد لنفس هذا العميل من Google Sheet — تم تجاهله والاحتفاظ بهذا الليد',
+              body: mergeNote(added),
             })
           }
         }

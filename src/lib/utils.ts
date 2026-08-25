@@ -117,6 +117,28 @@ function pick(data: Record<string, string> | undefined, keys: string[]): string 
   return ''
 }
 
+// True when a column header would be read as the customer's own identity —
+// their name, phone, or email — by leadName/leadPhone/leadEmail above.
+//
+// Used to protect those fields when merging a repeat Google Sheet row into an
+// existing lead (see the sheet webhook): everything else on the row is safe to
+// add, but identity must never be overwritten from a later row. The phone in
+// particular is load-bearing — `leads.phone_key` is recomputed from `data` by
+// a database trigger, and it is what dedupe and the Bevatel/Rafeeq Social
+// conversation links all match on, so a changed phone silently breaks them.
+//
+// Deliberately matched with the SAME loose comparison pick() uses, so a header
+// that would be picked up as a phone can never slip past this as "some other
+// field". A blank header counts as identity too — pick() treats '' as matching
+// everything, so merging one in could hijack name/phone.
+export function isIdentityKey(key: string): boolean {
+  const nk = norm(key)
+  if (!nk) return true
+  return [...NAME_KEYS, ...PHONE_KEYS, ...EMAIL_KEYS]
+    .map(norm)
+    .some(k => nk === k || nk.includes(k) || k.includes(nk))
+}
+
 export const leadName = (data?: Record<string, string>) => pick(data, NAME_KEYS) || 'عميل بدون اسم'
 export const leadPhone = (data?: Record<string, string>) => pick(data, PHONE_KEYS)
 export const leadEmail = (data?: Record<string, string>) => pick(data, EMAIL_KEYS)
