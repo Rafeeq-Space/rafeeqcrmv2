@@ -313,7 +313,7 @@ export default function ProfileView({ profile, team, leadStats, monthlyConverted
                 )}
                 {profile.bevatel_agent_id && (
                   <div className="flex items-center justify-between">
-                    <span className="text-muted2 flex items-center gap-1"><MessageCircle size={13} /> تعريف بيفاتيل شات</span>
+                    <span className="text-muted2 flex items-center gap-1"><MessageCircle size={13} /> معرّفات بيفاتيل</span>
                     <span dir="ltr" className="font-mono font-semibold text-foreground text-xs">{profile.bevatel_agent_id}</span>
                   </div>
                 )}

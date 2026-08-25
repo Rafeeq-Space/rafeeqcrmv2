@@ -339,7 +339,7 @@ function MemberModal({
                   if (!e.target.checked) setForm(f => ({ ...f, bevatel_agent_id: '' }))
                 }}
               />
-              <span className="label !mb-0">معرّف الموظف في بيفاتيل (الشات)</span>
+              <span className="label !mb-0">معرّفات الموظف في بيفاتيل (الشات + مركز الاتصال)</span>
             </label>
             {showBevatelId && (
               <>
@@ -348,11 +348,17 @@ function MemberModal({
                   className="input text-start mt-1.5"
                   value={form.bevatel_agent_id}
                   onChange={e => setForm({ ...form, bevatel_agent_id: e.target.value })}
-                  placeholder="ahmed@email.com"
+                  placeholder="ahmed@email.com، طاهر عطيه"
                   autoFocus
                 />
                 <p className="text-xs text-muted2 mt-1">
-                  لربط ليدز الشات القادمة من بيفاتيل بهذا الموظف تلقائياً — اكتب إيميله في بيفاتيل بيزنس شات كما يظهر بالضبط.
+                  لربط رسائل الشات <b>ومكالمات مركز الاتصال</b> بهذا الموظف تلقائياً. اكتب أي معرّف يظهر به في
+                  بيفاتيل — إيميله في بيزنس شات، و/أو <b>اسمه كما يظهر في تقارير مركز الاتصال</b> لو مختلف عن
+                  اسمه هنا. تقدر تكتب أكثر من قيمة مفصولة بفاصلة.
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--warning)' }}>
+                  مهم: مركز الاتصال يرسل <b>اسم الموظف فقط</b>، فأي اختلاف بسيط في كتابة الاسم (مسافة، ه/ة،
+                  واو زائدة) يمنع ربط مكالماته. لو اسمه في بيفاتيل مختلف عن اسمه هنا، أضِفه في هذه الخانة.
                 </p>
               </>
             )}
@@ -381,7 +387,11 @@ function MemberModal({
                   autoFocus
                 />
                 <p className="text-xs text-muted2 mt-1">
-                  لربط المكالمات القادمة من مركز الاتصال بهذا الموظف — رقم مختلف عن الإيميل، تلاقيه في إعدادات حسابه هناك.
+                  رقم الموظف الداخلي في مركز الاتصال — تلاقيه في إعدادات حسابه هناك.
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--warning)' }}>
+                  ملاحظة: بيفاتيل لا يُرسل رقم الإكستنشن مع أحداث المكالمات حالياً، لذلك لا يُستخدم هذا الرقم
+                  في ربط المكالمات بالموظف — الربط يتم بالاسم عبر الخانة السابقة.
                 </p>
               </>
             )}
