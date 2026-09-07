@@ -222,12 +222,42 @@ async function resolveRafeeqSocialReassignment(
   return matchEmployeeByName(tenantId, name)
 }
 
-async function applyAssignment(tenantId: string, leadId: string, match: { id: string; team_id: string | null }): Promise<void> {
+// `onlyIfUnassigned` makes the write conditional on the lead STILL having no
+// owner at the moment it lands, and reports whether it actually claimed it.
+//
+// Confirmed live (tenant أوتو باور, 73 incidents through 2026-09-06): one
+// customer sending several WhatsApp messages in a row produces that many
+// parallel webhook deliveries, and each one independently reads the lead,
+// sees no owner yet (its sibling has not written yet), and resolves an owner
+// of its own — round-robin hands each a DIFFERENT rep, since the rotation
+// counter advances per call. Last write won at random, so a lead's owner
+// flipped two or three times within a single second and the rep who saw it
+// first watched it vanish from their list. Making the claim conditional lets
+// exactly one delivery win; the losers exit silently instead of overwriting
+// it, logging a phantom assignment activity, and pushing the wrong rep to
+// Rafeeq Social. Same guard bevatelLead.ts has carried since 2026-08-23.
+//
+// Deliberately opt-in rather than always-on: a genuine reassignment (a
+// manager moving the lead, or an explicit "assigned to <Name>" message)
+// targets a lead that DOES have an owner, and the guard would silently break
+// it.
+async function applyAssignment(
+  tenantId: string,
+  leadId: string,
+  match: { id: string; team_id: string | null },
+  onlyIfUnassigned = false,
+): Promise<boolean> {
   const supa = adminSupabase()
-  await supa
+  let update = supa
     .from('leads')
     .update({ assigned_sales_id: match.id, assigned_team_id: match.team_id, updated_at: new Date().toISOString() })
     .eq('id', leadId)
+  if (onlyIfUnassigned) update = update.is('assigned_sales_id', null)
+  const { data: claimed } = await update.select('id')
+  // Nothing updated → a sibling delivery claimed it first. Leave its
+  // assignment alone, and log nothing, so the timeline gets one line.
+  if (onlyIfUnassigned && !claimed?.length) return false
+
   await supa.from('lead_activities').insert({
     tenant_id: tenantId,
     lead_id: leadId,
@@ -235,6 +265,7 @@ async function applyAssignment(tenantId: string, leadId: string, match: { id: st
     type: 'assignment',
     mentioned_id: match.id,
   })
+  return true
 }
 
 // Distributes a lead round-robin across every active rep in the tenant.
@@ -299,15 +330,19 @@ export async function syncRafeeqSocialAssignment(tenantId: string, leadId: strin
     return 'matched'
   }
 
+  // Both paths below establish a FIRST owner, so both claim conditionally —
+  // see applyAssignment. A delivery that loses the race reports 'unchanged'
+  // rather than claiming an outcome it did not actually apply.
   const match = await resolveInitialRafeeqSocialAssignee(tenantId, phone)
   if (match) {
-    await applyAssignment(tenantId, leadId, match)
-    return 'matched'
+    return (await applyAssignment(tenantId, leadId, match, true)) ? 'matched' : 'unchanged'
   }
 
   const rr = await assignRafeeqSocialRoundRobin(tenantId)
   if (!rr) return 'no_reps'
-  await applyAssignment(tenantId, leadId, rr)
+  if (!(await applyAssignment(tenantId, leadId, rr, true))) return 'unchanged'
+  // Only pushed once the claim actually landed — pushing a rep that lost the
+  // race would tell Rafeeq Social an owner the CRM never recorded.
   await pushAssignmentCore(tenantId, phone, rr.id)
   return 'round_robin'
 }
