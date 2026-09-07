@@ -88,7 +88,7 @@ export async function sendBevatelNewLeadTemplate(
   const host = (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com'
 
   try {
-    const { ok: sent, body: sendBody } = await sendBevatelTemplateMessage({
+    const { ok: sent, body: sendBody, contactId, conversationId } = await sendBevatelTemplateMessage({
       host,
       accountId: tenant.bevatel_account_id as string,
       apiToken: tenant.bevatel_api_token as string,
@@ -116,6 +116,22 @@ export async function sendBevatelNewLeadTemplate(
       // un-contacted. See markLeadMessageSentIfNew for why this is
       // conditional, not a blind overwrite.
       await markLeadMessageSentIfNew(tenantId, leadId)
+
+      // This send is often the ONLY Bevatel touch the lead ever gets — link
+      // it now, or pushAssigneeToBevatel (and every future sub-status push)
+      // silently no-ops for this lead forever since it has no conversation
+      // id to target. Only fills a currently-empty column, never overwrites.
+      if (contactId || conversationId) {
+        const { data: current } = await supa
+          .from('leads')
+          .select('bevatel_contact_id, bevatel_conversation_id')
+          .eq('id', leadId)
+          .single()
+        const patch: Record<string, string> = {}
+        if (contactId && !current?.bevatel_contact_id) patch.bevatel_contact_id = contactId
+        if (conversationId && !current?.bevatel_conversation_id) patch.bevatel_conversation_id = conversationId
+        if (Object.keys(patch).length) await supa.from('leads').update(patch).eq('id', leadId)
+      }
     } else {
       console.error('sendBevatelNewLeadTemplate: Bevatel send failed', sendBody)
     }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
+import { bevatelAgentIdents } from '@/lib/leads/bevatelSync'
 
 // Assign existing unassigned leads, tenant-wide, in two passes:
 //  1. Bevatel-sourced leads (bevatel_chat/bevatel_call) — matched to the CRM
@@ -60,7 +61,11 @@ export async function POST() {
   const byName = new Map<string, { id: string; team_id: string | null }>()
   for (const p of profiles || []) {
     const rec = { id: p.id, team_id: p.team_id ?? null }
-    if (p.bevatel_agent_id) byAgentId.set(normEmail(p.bevatel_agent_id), rec)
+    // bevatel_agent_id can hold more than one identifier, comma/semicolon-
+    // separated (an employee's Business Chat email and Call Center display
+    // name are often different values) — index every one of them, not the
+    // raw un-split field, or an employee like this never matches here.
+    for (const ident of bevatelAgentIdents(p.bevatel_agent_id)) byAgentId.set(ident, rec)
     if (p.full_name) byName.set(normName(p.full_name), rec)
   }
 

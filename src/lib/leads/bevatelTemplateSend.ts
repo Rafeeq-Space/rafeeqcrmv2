@@ -28,7 +28,7 @@ export async function sendBevatelTemplateMessage(opts: {
   // already know the value of is a real gap regardless of the exact
   // fallback Bevatel shows for it.
   name?: string
-}): Promise<{ ok: boolean; body: unknown }> {
+}): Promise<{ ok: boolean; body: unknown; contactId?: string; conversationId?: string }> {
   const host = opts.host.replace(/\/+$/, '')
 
   const inboxRes = await fetch(`${host}/api/v1/accounts/${opts.accountId}/inboxes`, {
@@ -63,15 +63,26 @@ export async function sendBevatelTemplateMessage(opts: {
   const sendBody = await sendRes.json().catch(() => null)
   const ok = sendRes.ok
 
-  // Confirmed live 2026-08-23: the send call above creates a brand-new
-  // contact as a bare "New Contact" regardless of any name passed inside
-  // its own `contact` object — that field is silently ignored at creation
-  // time. The only way to actually set it is a separate follow-up update,
-  // done here right after a successful send. Only overwrites an obviously
-  // placeholder/blank name — never a real one Bevatel already has (e.g.
-  // the customer's own WhatsApp profile name from earlier organic activity
-  // on a reused contact).
-  if (ok && opts.name) {
+  // A successful send creates (or reuses) a real Bevatel contact + conversation
+  // — always look it up so the caller can link the lead to it, otherwise the
+  // lead never learns bevatel_conversation_id exists at all and every future
+  // assignment push (pushAssigneeToBevatel) silently no-ops for it forever.
+  // Confirmed live (سيارتي, several leads found 2026-09-07): this send path
+  // was the only Bevatel touch a lead ever got, yet nothing captured the
+  // resulting ids — Bevatel showed the conversation with no/wrong assignee
+  // and the CRM had no way to know a conversation existed to correct.
+  //
+  // Also still does the 2026-08-23 name fix-up: the send call creates a
+  // brand-new contact as a bare "New Contact" regardless of any name passed
+  // inside its own `contact` object — that field is silently ignored at
+  // creation time. The only way to actually set it is a separate follow-up
+  // update, done here right after a successful send. Only overwrites an
+  // obviously placeholder/blank name — never a real one Bevatel already has
+  // (e.g. the customer's own WhatsApp profile name from earlier organic
+  // activity on a reused contact).
+  let contactId: string | undefined
+  let conversationId: string | undefined
+  if (ok) {
     try {
       const last9 = opts.phoneDigits.slice(-9)
       const searchRes = await fetch(
@@ -82,21 +93,35 @@ export async function sendBevatelTemplateMessage(opts: {
         const searchData = await searchRes.json()
         const contacts = (searchData?.payload || []) as Array<{ id: number; name?: string; phone_number?: string }>
         const contact = contacts.find(c => (c.phone_number || '').replace(/\D/g, '').endsWith(last9))
-        const placeholder = !contact?.name || contact.name.trim() === '' || contact.name.trim() === 'New Contact'
-        if (contact && placeholder) {
-          await fetch(`${host}/api/v1/accounts/${opts.accountId}/contacts/${contact.id}`, {
-            method: 'PUT',
-            headers: { api_access_token: opts.apiToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: opts.name }),
-          })
+        if (contact) {
+          contactId = String(contact.id)
+
+          const placeholder = !contact.name || contact.name.trim() === '' || contact.name.trim() === 'New Contact'
+          if (opts.name && placeholder) {
+            await fetch(`${host}/api/v1/accounts/${opts.accountId}/contacts/${contact.id}`, {
+              method: 'PUT',
+              headers: { api_access_token: opts.apiToken, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: opts.name }),
+            })
+          }
+
+          const convRes = await fetch(
+            `${host}/api/v1/accounts/${opts.accountId}/contacts/${contact.id}/conversations`,
+            { headers: { api_access_token: opts.apiToken } },
+          )
+          if (convRes.ok) {
+            const convData = await convRes.json()
+            const conversations = (convData?.payload || []) as Array<{ id: number }>
+            if (conversations[0]?.id != null) conversationId = String(conversations[0].id)
+          }
         }
       }
     } catch (err) {
-      console.error('sendBevatelTemplateMessage: contact name fix-up failed', err)
+      console.error('sendBevatelTemplateMessage: contact/conversation lookup failed', err)
     }
   }
 
-  return { ok, body: sendBody }
+  return { ok, body: sendBody, contactId, conversationId }
 }
 
 // A lead sitting at the canonical "new" status (whichever sub-status put it

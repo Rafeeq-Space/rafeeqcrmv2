@@ -53,7 +53,7 @@ export async function sendBevatelMissedCallTemplate(
   const host = (tenant.bevatel_api_host as string) || 'https://chat.bevatel.com'
 
   try {
-    const { ok: sent, body: sendBody } = await sendBevatelTemplateMessage({
+    const { ok: sent, body: sendBody, contactId, conversationId } = await sendBevatelTemplateMessage({
       host,
       accountId: tenant.bevatel_account_id as string,
       apiToken: tenant.bevatel_api_token as string,
@@ -73,6 +73,22 @@ export async function sendBevatelMissedCallTemplate(
     })
     if (sent) {
       await markLeadMessageSentIfNew(tenantId, leadId)
+
+      // Same reasoning as bevatelNewLeadTemplate.ts: this send is often the
+      // only Bevatel touch this lead ever gets — link it now, or
+      // pushAssigneeToBevatel silently no-ops for it forever. Only fills a
+      // currently-empty column, never overwrites.
+      if (contactId || conversationId) {
+        const { data: current } = await supa
+          .from('leads')
+          .select('bevatel_contact_id, bevatel_conversation_id')
+          .eq('id', leadId)
+          .single()
+        const patch: Record<string, string> = {}
+        if (contactId && !current?.bevatel_contact_id) patch.bevatel_contact_id = contactId
+        if (conversationId && !current?.bevatel_conversation_id) patch.bevatel_conversation_id = conversationId
+        if (Object.keys(patch).length) await supa.from('leads').update(patch).eq('id', leadId)
+      }
     } else {
       console.error('sendBevatelMissedCallTemplate: Bevatel send failed', sendBody)
     }

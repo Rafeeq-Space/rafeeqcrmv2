@@ -26,6 +26,20 @@ async function tenantCreds(tenantId: string): Promise<BevatelCreds | null> {
   return { token: data.bevatel_api_token, host, accountId: String(data.bevatel_account_id) }
 }
 
+// profiles.bevatel_agent_id can hold more than one identifier, comma/
+// semicolon-separated — an employee's Business Chat email and their Call
+// Center display name are often different values (see matchAgent in
+// bevatelLead.ts, which already splits on this same convention for the
+// read direction). Every OTHER place that reads this field for matching
+// must split it the same way, or an employee with more than one identifier
+// silently fails to match here even though matchAgent finds them fine.
+// Confirmed live 2026-08-31 (طارق الدروي, سيارتي): pushAssigneeToBevatel
+// comparing the raw un-split field meant his assignment could never reach
+// Bevatel at all.
+export function bevatelAgentIdents(raw?: string | null): string[] {
+  return (raw || '').split(/[,;]/).map(s => s.trim().toLowerCase()).filter(Boolean)
+}
+
 // CRM sub-status change → set the matching label on the Bevatel contact's
 // crm_status attribute. Fire-and-forget: never blocks the CRM-side change.
 export async function pushSubStatusToBevatel(lead: Lead, subStatusKey: string): Promise<void> {
@@ -205,8 +219,8 @@ export async function findBevatelAssigneeByPhone(
     .eq('tenant_id', tenantId)
     .not('bevatel_agent_id', 'is', null)
   const rep = (reps || []).find(r => {
-    const ident = (r.bevatel_agent_id || '').trim().toLowerCase()
-    return !!ident && (ident === assignee.email || ident === assignee.name.toLowerCase())
+    const idents = bevatelAgentIdents(r.bevatel_agent_id)
+    return idents.includes(assignee.email) || idents.includes(assignee.name.toLowerCase())
   })
   if (!rep || rep.suspended) return null
   return { id: rep.id, team_id: rep.team_id ?? null }
@@ -236,8 +250,8 @@ export async function pushAssigneeToBevatel(lead: Lead, salesId: string | null):
     .select('bevatel_agent_id, full_name')
     .eq('id', salesId)
     .single()
-  const ident = (profile?.bevatel_agent_id || '').trim().toLowerCase()
-  if (!ident) return
+  const idents = bevatelAgentIdents(profile?.bevatel_agent_id)
+  if (!idents.length) return
 
   const headers = { api_access_token: creds.token, 'Content-Type': 'application/json' }
   const acct = `${creds.host}/api/v1/accounts/${creds.accountId}`
@@ -246,7 +260,7 @@ export async function pushAssigneeToBevatel(lead: Lead, salesId: string | null):
     if (!res.ok) return
     const agents: Array<{ id: number; email?: string; name?: string }> = await res.json()
     const agent = agents.find(
-      a => a.email?.toLowerCase() === ident || a.name?.toLowerCase() === ident
+      a => idents.includes((a.email || '').toLowerCase()) || idents.includes((a.name || '').toLowerCase())
     )
     if (!agent) return
 
