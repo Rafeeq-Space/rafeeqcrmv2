@@ -1,7 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { normName } from '@/lib/leads/bevatelLead'
-import { tenantRafeeqSocialCreds, pushAssignmentCore, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
+import { tenantRafeeqSocialCreds, pushAssignmentCore, rafeeqSocialFetch, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
 import { fetchRafeeqSocialSubscriberAnyVariant, phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 import type { Lead } from '@/lib/types'
 
@@ -68,7 +68,7 @@ async function fetchConversationMessagesOne(creds: RafeeqSocialCreds, phone: str
   })
   let res: Response
   try {
-    res = await fetch(CONVERSATION_URL, {
+    res = await rafeeqSocialFetch(CONVERSATION_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,

@@ -1,7 +1,7 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { leadPhone } from '@/lib/utils'
 import { SUB_STATUSES, subStatusByKey, subStatusByLabel } from '@/lib/leads/subStatus'
-import { tenantRafeeqSocialCreds, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
+import { tenantRafeeqSocialCreds, rafeeqSocialFetch, type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
 import { fetchRafeeqSocialSubscriberAnyVariant, phoneVariants } from '@/lib/leads/rafeeqSocialSubscriber'
 import type { Lead } from '@/lib/types'
 
@@ -36,7 +36,7 @@ interface RafeeqLabel {
 async function fetchLabelList(creds: RafeeqSocialCreds): Promise<RafeeqLabel[]> {
   const body = new URLSearchParams({ apiToken: creds.apiToken, phone_number_id: creds.phoneNumberId })
   try {
-    const res = await fetch(LABEL_LIST_URL, {
+    const res = await rafeeqSocialFetch(LABEL_LIST_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
@@ -63,7 +63,7 @@ async function callLabelsEndpoint(url: string, creds: RafeeqSocialCreds, phone: 
       label_ids: ids.join(','),
     })
     try {
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+      await rafeeqSocialFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
     } catch (err) {
       console.error(`rafeeqsocial ${url} failed`, err)
     }
@@ -80,7 +80,7 @@ async function findOrCreateLabelId(creds: RafeeqSocialCreds, labelName: string):
 
   const body = new URLSearchParams({ apiToken: creds.apiToken, phone_number_id: creds.phoneNumberId, label_name: labelName })
   try {
-    await fetch(LABEL_CREATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+    await rafeeqSocialFetch(LABEL_CREATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   } catch (err) {
     console.error('rafeeqsocial label create failed', err)
     return null

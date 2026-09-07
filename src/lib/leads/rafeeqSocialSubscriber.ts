@@ -1,4 +1,4 @@
-import { type RafeeqSocialCreds } from '@/lib/leads/rafeeqSocialSend'
+import { type RafeeqSocialCreds, rafeeqSocialFetch } from '@/lib/leads/rafeeqSocialSend'
 
 // Rafeeq Social's Subscriber Get API — one call surfaces both the current
 // owner (`assigned_agent_id`, a numeric team-member id) and the current
@@ -39,7 +39,7 @@ async function fetchOne(creds: RafeeqSocialCreds, phone: string): Promise<Rafeeq
   })
   let res: Response
   try {
-    res = await fetch(SUBSCRIBER_URL, {
+    res = await rafeeqSocialFetch(SUBSCRIBER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,

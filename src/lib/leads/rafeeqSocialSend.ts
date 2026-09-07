@@ -19,6 +19,23 @@ import { markLeadMessageSentIfNew } from '@/lib/leads/bevatelTemplateSend'
 
 const SEND_URL = 'https://rafeeq.social/api/v1/whatsapp/send'
 
+// Every Rafeeq Social call goes through this rather than bare fetch, because
+// none of them used to carry a deadline at all. Confirmed live (lead
+// +966566338455, 2026-09-06): the new-lead welcome template never reached a
+// customer whose rep was correctly configured and whose three other leads
+// the same day went out fine. The send is the LAST step of
+// triggerRafeeqSocialNewLeadWorkflow — the assignment pre-push in front of
+// it (deliberately first, see that function) issues several sequential
+// requests, and with no deadline a single slow one is enough for the
+// platform to kill the whole background task before the send is ever
+// reached. A timed-out request now fails fast and lets the steps after it
+// run, instead of taking the message down with it.
+export const RAFEEQSOCIAL_TIMEOUT_MS = 8000
+
+export async function rafeeqSocialFetch(url: string, init: RequestInit): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(RAFEEQSOCIAL_TIMEOUT_MS) })
+}
+
 export interface RafeeqSocialCreds {
   apiToken: string
   phoneNumberId: string
@@ -127,6 +144,17 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
   const current = await fetchRafeeqSocialSubscriberAnyVariant(creds, phone)
   if (current?.assignedAgentId === teamMemberId) return true
 
+  // No subscriber under ANY variant means there is nothing over there to
+  // assign yet, and Rafeeq Social answers "Subscriber not found" for every
+  // variant we'd try — so the loop below is guaranteed to fail. Skipping it
+  // halves the requests this makes on the brand-new-number path, where it
+  // sits in front of the new-lead template send (see
+  // triggerRafeeqSocialNewLeadWorkflow): the fewer doomed calls ahead of
+  // that send, the less chance of the task being killed before it runs.
+  // pushAssignmentWhenSubscriberExists is what actually covers this case,
+  // once the subscriber exists.
+  if (!current) return false
+
   let anySucceeded = false
   for (const variant of phoneVariants(phone)) {
     const body = new URLSearchParams({
@@ -136,7 +164,7 @@ export async function pushAssignmentCore(tenantId: string, phone: string, salesI
       team_member_id: teamMemberId,
     })
     try {
-      const res = await fetch(ASSIGN_URL, {
+      const res = await rafeeqSocialFetch(ASSIGN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
@@ -247,14 +275,39 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
   const workflowUrl = data?.rafeeqsocial_new_lead_workflow_url as string | null
   if (!workflowUrl) return
 
+  // Both skips below are deliberate — a "we'll be in touch" message from an
+  // account the assigned rep cannot actually reply on sets an expectation
+  // nobody can honour — but they used to be completely silent, which is a
+  // different problem: a rep with no Rafeeq Social account still receives
+  // Google-Sheet leads through the normal round-robin, and every one of
+  // their customers got no welcome message with nothing anywhere to say so.
+  // Confirmed live (tenant أوتو باور, 2026-09-05..07): 8 of 58 sheet leads,
+  // across three reps who have no Rafeeq Social account at all, sat at
+  // "جديد" for exactly this reason. Whether those reps should be given
+  // accounts, or excluded from this tenant's distribution, is a decision for
+  // an admin — but it cannot be made while the skip is invisible.
   if (assignedSalesId) {
     const { data: rep } = await adminSupabase()
       .from('profiles')
       .select('rafeeqsocial_team_member_id')
       .eq('id', assignedSalesId)
       .single()
-    if (!rep?.rafeeqsocial_team_member_id) return
+    if (!rep?.rafeeqsocial_team_member_id) {
+      if (leadId) {
+        await adminSupabase().from('lead_activities').insert({
+          tenant_id: tenantId, lead_id: leadId, actor_id: null, type: 'comment',
+          body: '⏭️ لم تُرسل رسالة الترحيب التلقائية — الموظف المعيَّن ليس له حساب في رفيق سوشيال',
+        })
+      }
+      return
+    }
   } else {
+    if (leadId) {
+      await adminSupabase().from('lead_activities').insert({
+        tenant_id: tenantId, lead_id: leadId, actor_id: null, type: 'comment',
+        body: '⏭️ لم تُرسل رسالة الترحيب التلقائية — لا يوجد مندوب معيَّن لهذا الليد',
+      })
+    }
     return
   }
 
@@ -274,8 +327,9 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
   }
 
   let sent = false
+  let failure = 'unknown error'
   try {
-    const res = await fetch(workflowUrl, {
+    const res = await rafeeqSocialFetch(workflowUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -284,8 +338,29 @@ export async function triggerRafeeqSocialNewLeadWorkflow(
       }),
     })
     sent = res.ok
+    if (!sent) failure = `HTTP ${res.status}`
   } catch (err) {
+    failure = err instanceof Error ? err.message : String(err)
     console.error('rafeeqsocial new-lead workflow trigger failed', err)
+  }
+
+  // Recorded on the lead's own timeline either way — the Bevatel template
+  // path has always done this, and this one never did at all, which is
+  // exactly why a silent failure here was invisible: a lead whose welcome
+  // message never went out looked identical to one created before the
+  // feature existed. Confirmed live (lead +966566338455, 2026-09-06) — the
+  // send failed with nothing anywhere to say so, and the cause had to be
+  // reconstructed by elimination days later.
+  if (leadId) {
+    await adminSupabase().from('lead_activities').insert({
+      tenant_id: tenantId,
+      lead_id: leadId,
+      actor_id: null,
+      type: 'comment',
+      body: sent
+        ? '📩 تم إرسال رسالة واتساب ترحيبية تلقائية للعميل (رفيق سوشيال)'
+        : `⚠️ فشل إرسال رسالة الترحيب التلقائية (رفيق سوشيال) — ${failure}`,
+    })
   }
 
   // A real WhatsApp message just reached the customer, so the lead is no
@@ -332,7 +407,7 @@ export async function sendRafeeqSocialMessage(tenantId: string, phone: string, m
 
   let res: Response
   try {
-    res = await fetch(SEND_URL, {
+    res = await rafeeqSocialFetch(SEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
