@@ -380,7 +380,7 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
       // duplicate, then fall through to the assignment logic below.
       const { data: dupe } = await supa
         .from('leads')
-        .select('id, assigned_sales_id, assigned_sales:profiles!assigned_sales_id(role)')
+        .select('id, assigned_sales_id, bevatel_conversation_id, bevatel_contact_id, wa_profile_name, assigned_sales:profiles!assigned_sales_id(role)')
         .eq('tenant_id', tenantId)
         .eq('phone_key', key)
         .limit(1)
@@ -389,6 +389,24 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
       leadId = dupe.id
       existingAssignedId = dupe.assigned_sales_id ?? null
       existingAssignedIsAdmin = (dupe.assigned_sales as { role?: string } | null)?.role === 'client_admin'
+
+      // Same backfill the `if (existing)` branch above does — this event
+      // lost the create race (its own read saw no lead yet), so it never got
+      // a chance to run that backfill against the lead its own insert would
+      // have become. Confirmed live (Mohamed Arab / سيارتي, 2026-08-31):
+      // Chatwoot fires contact_created/contact_updated (no conversation info
+      // at all) and conversation_created/message_created (the ones that
+      // actually carry it) within milliseconds of each other for one new
+      // conversation — whichever loses this race had the real
+      // conversation/contact id in hand and dropped it here, permanently
+      // leaving the lead's bevatel_conversation_id null (so pushAssigneeToBevatel
+      // can never run for it) even though the webhook stream genuinely had it.
+      const dupePatch: Record<string, string> = {}
+      if (conversationId && !dupe.bevatel_conversation_id) dupePatch.bevatel_conversation_id = conversationId
+      if (contactId && !dupe.bevatel_contact_id) dupePatch.bevatel_contact_id = contactId
+      const dupeProfileName = args.profileName?.trim()
+      if (dupeProfileName && dupeProfileName !== dupe.wa_profile_name) dupePatch.wa_profile_name = dupeProfileName
+      if (Object.keys(dupePatch).length) await supa.from('leads').update(dupePatch).eq('id', leadId)
     } else {
       return { leadId: null, created: false, assigned: false, agentMatched: !!agent, activityLogged: false, contactJustLinked: false }
     }
