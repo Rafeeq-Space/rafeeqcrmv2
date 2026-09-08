@@ -84,12 +84,14 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   // A rep can hand their own lead to a colleague without going through a
   // manager. Only their own, and only *to* someone — the server enforces both.
   const canHandOff = !canManage && lead.assigned_sales_id === viewerId
-  // Editing the customer's own name/phone is deliberately narrower than
-  // viewing — explicit product decision (2026-08-23): only whoever this
-  // lead is CURRENTLY assigned to may edit it, regardless of role, so an
-  // admin/manager who can merely see it still can't rewrite someone else's
-  // customer data. Same condition the server itself enforces.
-  const canEdit = lead.assigned_sales_id === viewerId
+  // The assigned rep, plus managers. Originally assignee-only (2026-08-23,
+  // to stop a manager rewriting a colleague's customer data); widened on
+  // 2026-09-07 per explicit request — a wrong phone number is exactly what a
+  // rep needs a manager's help to fix. Every edit is recorded on the
+  // timeline below with who made it and when, so the audit trail is what
+  // keeps this honest rather than the restriction. Same condition the server
+  // enforces, where a manager is additionally bounded by canAccessLead.
+  const canEdit = canManage || lead.assigned_sales_id === viewerId
   // You can't share a lead with yourself.
   const shareMembers = members.filter(m => m.id !== viewerId)
   const name = leadName(lead.data)

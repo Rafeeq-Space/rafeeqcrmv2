@@ -1,16 +1,25 @@
 import { NextResponse } from 'next/server'
 import { requireTenantUser } from '@/lib/auth/requireTenantUser'
-import { adminSupabase } from '@/lib/leads/access'
+import { adminSupabase, canAccessLead } from '@/lib/leads/access'
 import { leadName, leadPhone, setLeadName, setLeadPhone, phoneDigits } from '@/lib/utils'
+import type { Lead } from '@/lib/types'
 
 // Lets a rep correct their own lead's name/phone — the only two fields this
 // route touches, both stored inside the free-form `data` JSONB (there's no
-// fixed `name`/`phone` column — see leadName/leadPhone). Deliberately NOT
-// gated behind canAccessLead/isManager the way other lead actions are:
-// explicit product decision (2026-08-23) that edit access is narrower than
-// view access — only the rep a lead is CURRENTLY assigned to may edit it,
-// regardless of role, so a manager who can merely see a whole team's leads
-// still can't rewrite a colleague's customer data.
+// fixed `name`/`phone` column — see leadName/leadPhone).
+//
+// Who may edit: the rep the lead is CURRENTLY assigned to, plus managers
+// (client_admin / client_sales_manager). Originally assignee-only — a
+// 2026-08-23 decision that edit access should be narrower than view access,
+// so a manager seeing a whole team's leads couldn't rewrite a colleague's
+// customer data. Widened to managers on 2026-09-07 per explicit request: in
+// practice a wrong phone number is exactly the thing a rep needs a manager
+// to fix (they cannot reach the customer to confirm it themselves), and
+// every edit already lands on the lead's own timeline naming who made it
+// and when, so the audit trail — not the lock — is what keeps it honest.
+//
+// A manager's reach is still bounded by canAccessLead, so a sales manager
+// cannot edit a lead belonging to a team they can't even see.
 const ROLE_LABELS: Record<string, string> = {
   client_admin: 'مدير الحساب',
   client_sales_manager: 'مدير المبيعات',
@@ -24,11 +33,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id: leadId } = await params
   const supa = adminSupabase()
 
-  const { data: lead } = await supa.from('leads').select('id, tenant_id, data, assigned_sales_id').eq('id', leadId).single()
+  // assigned_team_id is needed by canAccessLead below — a sales manager's
+  // reach is defined by the teams they manage, not just direct assignment.
+  const { data: lead } = await supa
+    .from('leads')
+    .select('id, tenant_id, data, assigned_sales_id, assigned_team_id')
+    .eq('id', leadId)
+    .single()
   if (!lead || lead.tenant_id !== viewer.tenantId) {
     return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
   }
-  if (lead.assigned_sales_id !== viewer.id) {
+  const isManager = viewer.role === 'client_admin' || viewer.role === 'client_sales_manager'
+  if (isManager) {
+    if (!(await canAccessLead(viewer, lead as Lead))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  } else if (lead.assigned_sales_id !== viewer.id) {
     return NextResponse.json({ error: 'يمكنك تعديل عملائك فقط' }, { status: 403 })
   }
 
