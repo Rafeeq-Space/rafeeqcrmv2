@@ -1,6 +1,6 @@
 import { adminSupabase } from '@/lib/supabase/admin'
 import { subStatusByKey } from '@/lib/leads/subStatus'
-import { LEAD_STATUS_LABELS } from '@/lib/utils'
+import { LEAD_STATUS_LABELS, normalizeSaudiPhone } from '@/lib/utils'
 
 // ── Shared low-level "send one Bevatel WhatsApp template" call ────────────
 //
@@ -31,6 +31,22 @@ export async function sendBevatelTemplateMessage(opts: {
 }): Promise<{ ok: boolean; body: unknown; contactId?: string; conversationId?: string }> {
   const host = opts.host.replace(/\/+$/, '')
 
+  // Normalized here, at the one place both templates funnel through, rather
+  // than at each of the seven call sites. Most of them hand over the lead's
+  // raw stored phone, which is whatever its source wrote — often the local
+  // "05XXXXXXXX" form. Bevatel's send endpoint takes the number as `+` plus
+  // these digits and rejects anything that isn't E.164: `+0544225215` comes
+  // back as "Phone number should be in e164 format". Confirmed live
+  // 2026-09-10 — 20 welcome templates (7 سيارتي, 13 أوتو باور) failed for
+  // exactly this, and every affected path was one passing an un-normalized
+  // number (sheet, capture form, manual entry, manual re-assign, ad
+  // webhooks); the call paths, which normalize on intake, were unaffected.
+  //
+  // Also used for the contact search/name fix-up below, where the
+  // international form is the better query anyway — `last9` is identical
+  // either way, so the existing matching is unchanged.
+  const phoneDigits = normalizeSaudiPhone(opts.phoneDigits)
+
   const inboxRes = await fetch(`${host}/api/v1/accounts/${opts.accountId}/inboxes`, {
     headers: { api_access_token: opts.apiToken },
   })
@@ -56,7 +72,7 @@ export async function sendBevatelTemplateMessage(opts: {
     },
     body: JSON.stringify({
       inbox_id: inbox.id,
-      contact: { phone_number: `+${opts.phoneDigits}` },
+      contact: { phone_number: `+${phoneDigits}` },
       message: { template: { name: opts.templateName, language: template.language || 'ar' } },
     }),
   })
@@ -84,9 +100,9 @@ export async function sendBevatelTemplateMessage(opts: {
   let conversationId: string | undefined
   if (ok) {
     try {
-      const last9 = opts.phoneDigits.slice(-9)
+      const last9 = phoneDigits.slice(-9)
       const searchRes = await fetch(
-        `${host}/api/v1/accounts/${opts.accountId}/contacts/search?q=${opts.phoneDigits}`,
+        `${host}/api/v1/accounts/${opts.accountId}/contacts/search?q=${phoneDigits}`,
         { headers: { api_access_token: opts.apiToken } },
       )
       if (searchRes.ok) {

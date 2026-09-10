@@ -5,7 +5,7 @@ import { pushAssigneeToBevatel, fetchConversationAssignee, pushSubStatusToBevate
 import { pushAssignmentCore, pushAssignmentWhenSubscriberExists } from '@/lib/leads/rafeeqSocialSend'
 import { sendBevatelMissedCallTemplate } from '@/lib/leads/bevatelMissedCallTemplate'
 import { markLeadMessageSentIfNew } from '@/lib/leads/bevatelTemplateSend'
-import { LEAD_STATUS_LABELS, leadName } from '@/lib/utils'
+import { LEAD_STATUS_LABELS, leadName, normalizeSaudiPhone } from '@/lib/utils'
 import type { Lead } from '@/lib/types'
 
 // ── Bevatel (Business Chat + Call Center) integration ─────────────────────────
@@ -44,44 +44,6 @@ export function phoneKey(raw?: string | null): string {
   if (!raw) return ''
   const digits = String(raw).replace(/\D/g, '')
   return digits.length >= 9 ? digits.slice(-9) : digits
-}
-
-// Bevatel reports a Saudi caller's number in several different shapes, not
-// one — measured against أوتو باور's own live call logs (2026-08-24): of 300
-// consecutive call events, 178 arrived as local "05XXXXXXXX" and 122 as a
-// bare "5XXXXXXXX" (9 digits, no country code AND no leading zero).
-//
-// All shapes are equivalent for phoneKey-based lead matching (it only ever
-// compares the last 9 digits), but every Rafeeq Social API call downstream
-// — assign-to-team-member, the missed-call workflow trigger, direct message
-// sends — needs the real international number, and the failure when it
-// doesn't get one is silent AND misleading: Rafeeq Social happily creates a
-// subscriber under whatever string it's handed, so a bare 9-digit number
-// produces a real-looking subscriber whose chat_id is not a routable
-// WhatsApp number. The template is never delivered to the actual customer,
-// and searching Rafeeq Social by their real number finds nothing — the only
-// record is the unreachable phantom. Confirmed live 2026-08-24 against real
-// missed calls: `565782513` and `582935555` each exist over there as
-// subscribers keyed by the broken form, while `966565782513` /
-// `966582935555` return "Subscriber not found".
-//
-// Only converts numbers that actually look Saudi; anything else (an Egyptian
-// 01XXXXXXXXX / 20XXXXXXXXXX, a short internal extension, an unrecognised
-// shape) is returned digits-only and untouched, exactly as before.
-export function normalizeSaudiPhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '')
-  // 00966… → 966…
-  const noTrunk = digits.replace(/^00(?=966)/, '')
-  // 9660 5XXXXXXXX → 966 5XXXXXXXX (redundant domestic 0 kept after the
-  // country code — the same duplication phoneVariants() works around on the
-  // Rafeeq Social side, see rafeeqSocialSubscriber.ts).
-  const noRedundantZero = noTrunk.replace(/^9660(?=5\d{8}$)/, '966')
-  if (/^9665\d{8}$/.test(noRedundantZero)) return noRedundantZero
-  // 05XXXXXXXX (local, 10) → 9665XXXXXXXX
-  if (/^05\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero.slice(1)}`
-  // 5XXXXXXXX (bare, 9) → 9665XXXXXXXX
-  if (/^5\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero}`
-  return noRedundantZero
 }
 
 // Arabic label (with emoji) for a WhatsApp media attachment's type — shared by

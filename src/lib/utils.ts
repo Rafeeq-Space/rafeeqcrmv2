@@ -158,6 +158,54 @@ export function phoneDigits(raw?: string | null): string {
     .replace(/\D/g, '')
 }
 
+// A Saudi number arrives in several different shapes depending on where it
+// came from — measured against أوتو باور's own live call logs (2026-08-24):
+// of 300 consecutive call events, 178 arrived as local "05XXXXXXXX" and 122
+// as a bare "5XXXXXXXX" (9 digits, no country code AND no leading zero). A
+// lead's stored `data` holds whatever the source wrote, local form included.
+//
+// All shapes are equivalent for phoneKey-based lead matching (it only ever
+// compares the last 9 digits), but every outbound API call needs the real
+// international number:
+//
+//   * Rafeeq Social (assign-to-team-member, workflow triggers, sends) will
+//     happily create a subscriber under whatever string it is handed, so a
+//     bare 9-digit number produces a real-looking subscriber whose chat_id
+//     is not a routable WhatsApp number — the template never reaches the
+//     customer, and searching by their real number finds nothing. Confirmed
+//     live 2026-08-24: `565782513` / `582935555` exist over there keyed by
+//     the broken form while `966565782513` / `966582935555` return
+//     "Subscriber not found".
+//   * Bevatel's template-send endpoint is stricter and rejects it outright —
+//     `+0544225215` comes back as "Phone number should be in e164 format".
+//     Confirmed live 2026-09-10: 20 welcome templates (7 سيارتي, 13 أوتو
+//     باور) failed for exactly this reason, on every intake path that passes
+//     the lead's raw stored phone (sheet, capture form, manual entry, manual
+//     re-assign, ad webhooks) rather than a normalized one.
+//
+// Lives here, in a leaf module, rather than beside its first caller in
+// bevatelLead.ts: bevatelLead imports the template senders, so those cannot
+// import back from it without a cycle.
+//
+// Only converts numbers that actually look Saudi; anything else (an Egyptian
+// 01XXXXXXXXX / 20XXXXXXXXXX, a short internal extension, an unrecognised
+// shape) is returned digits-only and untouched.
+export function normalizeSaudiPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  // 00966… → 966…
+  const noTrunk = digits.replace(/^00(?=966)/, '')
+  // 9660 5XXXXXXXX → 966 5XXXXXXXX (redundant domestic 0 kept after the
+  // country code — the same duplication phoneVariants() works around on the
+  // Rafeeq Social side, see rafeeqSocialSubscriber.ts).
+  const noRedundantZero = noTrunk.replace(/^9660(?=5\d{8}$)/, '966')
+  if (/^9665\d{8}$/.test(noRedundantZero)) return noRedundantZero
+  // 05XXXXXXXX (local, 10) → 9665XXXXXXXX
+  if (/^05\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero.slice(1)}`
+  // 5XXXXXXXX (bare, 9) → 9665XXXXXXXX
+  if (/^5\d{8}$/.test(noRedundantZero)) return `966${noRedundantZero}`
+  return noRedundantZero
+}
+
 // True when `query` refers to the same number as `stored`, ignoring formatting
 // and country-code style.
 //
