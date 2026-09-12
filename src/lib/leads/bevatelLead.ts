@@ -1,5 +1,5 @@
 import { adminSupabase } from '@/lib/supabase/admin'
-import { BEVATEL_STATUS_ATTRIBUTE, subStatusByLabel, subStatusByKey } from '@/lib/leads/subStatus'
+import { subStatusByKey } from '@/lib/leads/subStatus'
 import { createNotification } from '@/lib/notifications/create'
 import { pushAssigneeToBevatel, fetchConversationAssignee, pushSubStatusToBevatel } from '@/lib/leads/bevatelSync'
 import { pushAssignmentCore, pushAssignmentWhenSubscriberExists } from '@/lib/leads/rafeeqSocialSend'
@@ -193,10 +193,14 @@ export interface AppendResult {
   // event). A Bevatel contact is unique per phone number and persists
   // forever on their side, across however many separate CRM leads that same
   // real phone number has had over time — so the very first webhook after
-  // linking can carry a `crm_status` custom attribute left over from a
-  // completely unrelated past lead. Callers that reverse-sync status off
-  // that attribute (syncStatusFromAttribute) must not trust it on this one
-  // event — see the 2026-08-23 comment at that call site.
+  // linking can carry contact-level fields left over from a completely
+  // unrelated past lead.
+  //
+  // Its original consumer was the reverse status sync, which no longer
+  // exists (see the note where it used to be called, in handleBevatelChat).
+  // Kept because the same "this contact's data may predate this lead"
+  // caveat applies to anything else that ever reads contact-level state on
+  // a first link.
   contactJustLinked: boolean
 }
 
@@ -500,56 +504,6 @@ export async function appendToLead(args: AppendArgs): Promise<AppendResult> {
   return { leadId, created, assigned, agentMatched: !!agent, activityLogged: logged, contactJustLinked }
 }
 
-// Reverse sync: the Bevatel contact's crm_status attribute → CRM lead status.
-// The attribute holds the Arabic label; we resolve it to a stable sub-status
-// key + its canonical status, and only write (and log a status_change) when the
-// sub-status actually changed.
-async function syncStatusFromAttribute(tenantId: string, leadId: string, label: string) {
-  const sub = subStatusByLabel(label)
-  if (!sub) return
-
-  // This function only ever runs from inside a real message/conversation
-  // event (handleBevatelChat) — a live Bevatel conversation already existing
-  // means real contact happened, so a reverse-sync landing on canonical
-  // "new" is never trustworthy here. Confirmed live 2026-08-23: Chatwoot
-  // fires several events per single message (created, then repeated
-  // updated deliveries — see the comment on isNewMessage above), each an
-  // independent, unsynchronized request; contactJustLinked's best-effort
-  // guard against a stale/leftover contact attribute (see its own comment)
-  // can still lose that race under concurrent delivery, so this is the
-  // actual backstop: never let this path regress an already-more-advanced
-  // lead back down to "new", no matter which attribute value or timing
-  // produced it.
-  if (sub.status === 'new') return
-
-  const supa = adminSupabase()
-  const { data: lead } = await supa.from('leads').select('status, sub_status').eq('id', leadId).single()
-  if (!lead || lead.sub_status === sub.key) return
-
-  await supa
-    .from('leads')
-    .update({ status: sub.status, sub_status: sub.key, updated_at: new Date().toISOString() })
-    .eq('id', leadId)
-
-  // `from_status`/`to_status` only carry the canonical bucket (new/contacted/
-  // qualified/converted/lost) — several sub-statuses share one bucket (e.g.
-  // "تم إرسال رسالة", "جارى المتابعة" and "تواصل لاحق" are all "تم
-  // التواصل"), so a real, deliberate change from one to another inside that
-  // same bucket rendered as "غيّر الحالة من تم التواصل إلى تم التواصل" —
-  // looking like a no-op even though the agent genuinely changed something in
-  // Bevatel. Confirmed live 2026-08-23. The body spells out the actual
-  // sub-status labels, same fix already applied to markLeadMessageSentIfNew.
-  const fromLabel = subStatusByKey(lead.sub_status)?.label || LEAD_STATUS_LABELS[lead.status] || lead.status
-  await supa.from('lead_activities').insert({
-    tenant_id: tenantId,
-    lead_id: leadId,
-    actor_id: null,
-    type: 'status_change',
-    from_status: lead.status,
-    to_status: sub.status,
-  })
-}
-
 // ── Chat (Bevatel Business Chat — Chatwoot-shaped payload) ────────────────────
 
 // Distributes a chat lead round-robin across every active rep in the tenant —
@@ -678,11 +632,6 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
   // crm_status attribute when the status changes on our side.
   const contactId = contact.id != null ? String(contact.id) : undefined
 
-  // The contact's crm_status attribute (Arabic label) — used to mirror a
-  // status change made in Bevatel back onto the CRM lead.
-  const attrs = (contact.custom_attributes as Record<string, unknown>) || {}
-  const statusLabel = (attrs[BEVATEL_STATUS_ATTRIBUTE] as string) || ''
-
   // Who is the responsible agent?
   //  - Incoming (customer → us): the top-level sender IS the customer, never the
   //    agent, so only the conversation assignee can identify the rep.
@@ -713,20 +662,39 @@ export async function handleBevatelChat(tenantId: string, payload: Record<string
     agent,
   })
 
-  // Reverse sync: if the contact carries a crm_status attribute, mirror it onto
-  // the CRM lead (agent changed the status in Bevatel → status in the CRM).
+  // The reverse status sync (Bevatel's crm_status attribute → CRM lead
+  // status) used to run here. Removed 2026-09-12 — deliberately, not as an
+  // oversight, so please read this before reinstating it.
   //
-  // Best-effort skipped on the very first event that ever links this lead to
-  // a Bevatel contact — a Bevatel contact is unique per phone number and
-  // persists forever on their side, so its crm_status attribute can be
-  // leftover from a completely unrelated, much older lead for the same
-  // phone number. The real backstop is inside syncStatusFromAttribute
-  // itself (never regress to canonical "new") — contactJustLinked alone was
-  // proven race-prone (see its own comment), so don't rely on it here for
-  // correctness, only to avoid the odd needless pull.
-  if (res.leadId && statusLabel && !res.contactJustLinked) {
-    await syncStatusFromAttribute(tenantId, res.leadId, statusLabel)
-  }
+  // Bevatel fires several deliveries per message and each carries its own
+  // snapshot of the contact, taken at a different moment and arriving out of
+  // order. Mirroring every one of them meant a single status change flapped
+  // repeatedly within seconds. Confirmed live:
+  //
+  //   * lead e303fa8e (2026-09-11): a rep set "لا يوجد رد أول" at 14:33:23;
+  //     six deliveries over the next 22s alternated between that and the
+  //     previous "جارى المتابعة", and the CRM applied all six.
+  //   * lead e9589c88 (2026-09-12): five changes in 1.1s flipping
+  //     contacted → lost → contacted → lost → contacted, with no human
+  //     involved at all — the deliveries simply disagreed with each other.
+  //     A lead landed in, and out of, "lost" three times in one second.
+  //
+  // A cooldown keyed on "a human changed this recently" was considered and
+  // rejected: 26 of the 67 reverse-sync writes in the week to 2026-09-12 had
+  // no human change anywhere near them, so it would have missed a third of
+  // the damage, e9589c88 included.
+  //
+  // The deciding factor is a product one: this tenant's reps change status
+  // ONLY in the CRM, never in Bevatel's own contact panel (confirmed with
+  // the account owner, 2026-09-12). So this direction never carried new
+  // information — every value it read was an echo of something the CRM had
+  // pushed, sometimes a stale one. All risk, no benefit.
+  //
+  // The WRITE direction is untouched and still runs below: the CRM remains
+  // the source of truth and keeps pushing its status onto the Bevatel
+  // contact. If a tenant ever does need reps to set status on Bevatel's
+  // side, this needs rebuilding around something that can order or
+  // de-duplicate those deliveries — not a plain "apply whatever arrived".
 
   // Push our own current status + assignee onto Bevatel's contact/
   // conversation on EVERY processed event with a known conversation — not
