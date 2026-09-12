@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
+import { useExternalLinkProps } from '@/lib/hooks/useIsStandalonePwa'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -45,6 +46,10 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
   const [attachments, setAttachments] = useState<KnowledgeFile[]>(initialLead.attachments || [])
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
+  // See useIsStandalonePwa.ts: WhatsApp/Bevatel/Rafeeq Social all need to
+  // leave the CRM entirely — target="_blank" does that in a browser tab, but
+  // traps the destination inside an installed PWA's single window instead.
+  const externalLinkProps = useExternalLinkProps()
   const [callPrompt, setCallPrompt] = useState(false)
   const [contactMenu, setContactMenu] = useState<'call' | 'wa' | null>(null)
   const [comment, setComment] = useState('')
@@ -387,18 +392,18 @@ export default function LeadProfile({ lead: initialLead, activities: initialActi
                           </>
                         ) : (
                           <>
-                            <a href={`https://wa.me/${digits(phone)}`} target="_blank" rel="noopener noreferrer" onClick={close}
+                            <a href={`https://wa.me/${digits(phone)}`} {...externalLinkProps} onClick={close}
                               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                               <MessageCircle size={15} /> واتساب
                             </a>
                             {chatUrl && (
-                              <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={() => { close(); copyForChat() }}
+                              <a href={chatUrl} {...externalLinkProps} onClick={() => { close(); copyForChat() }}
                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                                 <ExternalLink size={15} /> شات بيفاتيل
                               </a>
                             )}
                             {rafeeqSocialChatUrl && (
-                              <a href={rafeeqSocialChatUrl} target="_blank" rel="noopener noreferrer" onClick={close}
+                              <a href={rafeeqSocialChatUrl} {...externalLinkProps} onClick={close}
                                 className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                                 <ExternalLink size={15} /> رفيق سوشيال
                               </a>

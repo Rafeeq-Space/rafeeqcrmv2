@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Phone, MessageCircle, Calendar, Clock, User, Megaphone, LayoutGrid, Table as TableIcon, Plus, Search, ChevronRight, ChevronLeft, ExternalLink, Share2, Copy, FilterX, ChevronDown, Check } from 'lucide-react'
 import type { Lead, LeadStatus } from '@/lib/types'
 import { usePollWhenVisible } from '@/lib/hooks/usePollWhenVisible'
+import { useExternalLinkProps } from '@/lib/hooks/useIsStandalonePwa'
 import { LEAD_STATUS_LABELS, LEAD_STATUS_COLORS, SOURCE_LABELS, leadName, leadPhone, phoneDigits, phoneMatches } from '@/lib/utils'
 import { SUB_STATUS_GROUPS, SUB_STATUSES, subStatusByKey, STATUS_DOT, displayBucketForLead, DISPLAY_BUCKET_LABELS, DISPLAY_BUCKET_COLORS } from '@/lib/leads/subStatus'
 import { useLeadSelection } from '@/components/client-admin/LeadSelectionContext'
@@ -114,6 +115,10 @@ function ContactButtons({ lead, phone, bevatel, rafeeqSocialBotId }: {
 }) {
   const [menu, setMenu] = useState<'call' | 'wa' | null>(null)
   const { showToast } = useToast()
+  // See useIsStandalonePwa.ts: WhatsApp/Bevatel/Rafeeq Social all need to
+  // leave the CRM entirely — target="_blank" does that in a browser tab, but
+  // traps the destination inside an installed PWA's single window instead.
+  const externalLinkProps = useExternalLinkProps()
   if (!phone) return null
   const d = digits(phone)
   const cls = 'btn text-xs !py-1.5 !px-2.5 flex items-center gap-1.5'
@@ -185,16 +190,16 @@ function ContactButtons({ lead, phone, bevatel, rafeeqSocialBotId }: {
               </>
             ) : (
               <>
-                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                <a href={`https://wa.me/${d}`} {...externalLinkProps} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                   <MessageCircle size={15} /> واتساب
                 </a>
                 {chatUrl && (
-                  <a href={chatUrl} target="_blank" rel="noopener noreferrer" onClick={e => { close(e); copyForChat() }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <a href={chatUrl} {...externalLinkProps} onClick={e => { close(e); copyForChat() }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                     <ExternalLink size={15} /> شات بيفاتيل
                   </a>
                 )}
                 {rafeeqSocialUrl && (
-                  <a href={rafeeqSocialUrl} target="_blank" rel="noopener noreferrer" onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
+                  <a href={rafeeqSocialUrl} {...externalLinkProps} onClick={close} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted hover:bg-surface2 hover:text-foreground transition">
                     <ExternalLink size={15} /> رفيق سوشيال
                   </a>
                 )}
