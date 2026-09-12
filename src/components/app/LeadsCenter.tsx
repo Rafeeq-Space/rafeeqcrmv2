@@ -531,7 +531,26 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
   // member). The overview cards and the status filter both derive from this, so
   // the whole page — including the 6 cards up top — reacts to the period/search
   // filters, while the cards still show a per-status breakdown to pick from.
-  const scoped = useMemo(() => {
+  //
+  // Two sets come out of one pass, differing ONLY in how the period applies:
+  //
+  //   scoped        — leads CREATED inside the window. Feeds the cards, which
+  //                   answer "how many leads arrived today".
+  //   scopedForList — leads created OR last touched inside it. Feeds the list.
+  //
+  // They were one set until 2026-09-12, and a customer messaging again after
+  // days of silence exposed why they cannot be: their lead was created outside
+  // the window, so the default "اليوم" view dropped it entirely — the message
+  // landed on the timeline while the lead itself was nowhere on screen.
+  // Verified at the time that nothing else was at fault: updated_at is bumped
+  // on every incoming message (21/21 leads checked across both tenants) and
+  // the list is already ordered by it, so the row was never merely late.
+  //
+  // Kept separate rather than just widening the shared set, so the card
+  // numbers keep meaning "arrived", not "was active". One consequence to know:
+  // with a period active, the list can legitimately hold more rows than the
+  // "الكل" card counts — the extra rows are exactly these re-engaged leads.
+  const { scoped, scopedForList } = useMemo(() => {
     // Date bounds for the selected period (null = unbounded on that side).
     const now = Date.now()
     let minTime: number | null = null
@@ -555,8 +574,11 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
     const q = search.trim().toLowerCase()
     const qDigits = phoneDigits(q)
 
-    return leads.filter(l => {
-      if (campaign !== 'all' && l.campaign_id !== campaign) return false
+    const byCreated: Lead[] = []
+    const byActivity: Lead[] = []
+
+    for (const l of leads) {
+      if (campaign !== 'all' && l.campaign_id !== campaign) continue
       // UNASSIGNED is a sentinel, not a real id — a lead nobody owns has a
       // null assigned_sales_id, so it matched no employee AND no team and
       // silently fell out of every filtered view. Confirmed live on سيارتي
@@ -565,31 +587,39 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
       // admin account, which sits in no team) and were therefore invisible
       // everywhere except the unfiltered list.
       if (member === UNASSIGNED) {
-        if (l.assigned_sales_id) return false
-      } else if (member !== 'all' && l.assigned_sales_id !== member) return false
+        if (l.assigned_sales_id) continue
+      } else if (member !== 'all' && l.assigned_sales_id !== member) continue
       if (team === NO_TEAM) {
-        if (l.assigned_team_id) return false
-      } else if (team !== 'all' && l.assigned_team_id !== team) return false
-      if (source !== 'all' && (l.source || 'direct') !== source) return false
-      if (assignedToMe && currentUserId && l.assigned_sales_id !== currentUserId) return false
-      if (sharedWithMeOnly && !sharedWithMeSet.has(l.id)) return false
-      const t = new Date(l.created_at).getTime()
-      if (minTime !== null && t < minTime) return false
-      if (maxTime !== null && t > maxTime) return false
+        if (l.assigned_team_id) continue
+      } else if (team !== 'all' && l.assigned_team_id !== team) continue
+      if (source !== 'all' && (l.source || 'direct') !== source) continue
+      if (assignedToMe && currentUserId && l.assigned_sales_id !== currentUserId) continue
+      if (sharedWithMeOnly && !sharedWithMeSet.has(l.id)) continue
       if (q) {
         // A phone query is matched on digits, not text: the same number is
         // stored formatted differently by different sources ("+966505845214"
         // vs "+966 50 5845214"), and one copied out of an Arabic interface
         // carries invisible bidi marks — a substring match finds neither.
         const byPhone = qDigits.length >= 4 && phoneMatches(leadPhone(l.data), q)
-        if (!byPhone && !leadName(l.data).toLowerCase().includes(q)) return false
+        if (!byPhone && !leadName(l.data).toLowerCase().includes(q)) continue
       }
-      return true
-    })
+
+      // The only place the two sets diverge. `leads` arrives ordered by
+      // updated_at from the server, and pushing in that order keeps both in it.
+      const inWindow = (t: number) =>
+        (minTime === null || t >= minTime) && (maxTime === null || t <= maxTime)
+      const createdIn = inWindow(new Date(l.created_at).getTime())
+      const touchedIn = inWindow(new Date(l.updated_at || l.created_at).getTime())
+
+      if (createdIn) byCreated.push(l)
+      if (createdIn || touchedIn) byActivity.push(l)
+    }
+
+    return { scoped: byCreated, scopedForList: byActivity }
   }, [leads, campaign, team, member, source, assignedToMe, sharedWithMeOnly, currentUserId, sharedWithMeSet, period, customFrom, customTo, search])
 
   const filtered = useMemo(
-    () => scoped.filter(l => {
+    () => scopedForList.filter(l => {
       // 'contacted' and 'pending' are both display-only splits of the same
       // canonical 'contacted' status (see displayBucketForLead) — never a
       // second `l.status === status` match, since that column only ever
@@ -614,7 +644,7 @@ function LeadsCenterInner({ leads, role, basePath, tenantId, campaigns = [], tea
         l.sub_status === subStatus
       return statusMatches && subStatusMatches
     }),
-    [scoped, status, subStatus],
+    [scopedForList, status, subStatus],
   )
 
   // "Select all" toggles every lead matching the CURRENT filters (not just
