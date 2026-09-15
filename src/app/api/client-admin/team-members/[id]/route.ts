@@ -37,15 +37,18 @@ async function reassignSuspendedMembersLeads(
   // Who a lead can land on — built once, reused for every lead below.
   let targets: { id: string; team_id: string | null }[]
   if (reassign.mode === 'round_robin') {
-    const { data: reps } = await supabase
+    // Same pool convention every other round-robin in this codebase uses
+    // (assignRoundRobin and its Bevatel/Rafeeq Social siblings) — excluded_
+    // from_distribution means "don't hand this person new leads
+    // automatically" just as much here as it does for a live incoming lead.
+    const { data: repsRaw } = await supabase
       .from('profiles')
-      .select('id, team_id')
+      .select('id, team_id, suspended, excluded_from_distribution')
       .eq('tenant_id', tenantId)
       .neq('id', suspendedId)
-      .eq('suspended', false)
       .in('role', ['client_sales_manager', 'client_user'])
       .order('full_name')
-    targets = reps || []
+    targets = (repsRaw || []).filter(r => !r.suspended && !r.excluded_from_distribution)
   } else if (reassign.reassign_to) {
     const { data: rep } = await supabase
       .from('profiles')

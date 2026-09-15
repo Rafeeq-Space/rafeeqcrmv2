@@ -8,7 +8,7 @@ import CreateArchiveButton from './CreateArchiveButton'
 
 interface Props {
   leadCount: number
-  members?: { id: string; name: string }[]
+  members?: { id: string; name: string; eligibleForRoundRobin?: boolean }[]
 }
 
 const CONFIRM_PHRASE = 'حذف'
@@ -41,26 +41,41 @@ export default function LeadsAdminActions({ leadCount, members = [] }: Props) {
   // Bulk assign — the whole point is not opening 40 leads one at a time, so it
   // reuses the same per-lead endpoint (which logs who assigned what to whom,
   // notifies the new owner, and mirrors the change onto Bevatel/Rafeeq Social)
-  // rather than a bulk UPDATE that would skip all of that.
+  // rather than a bulk UPDATE that would skip all of that — one call per
+  // lead, sequential (not parallel), same reasoning as the suspend-time
+  // reassignment bug fixed 2026-09-15: a burst of hundreds of parallel
+  // requests can outrun the platform's own time budget, and a sequential
+  // loop with a running "N من M" counter is both safe at any volume and
+  // visibly makes progress instead of looking hung.
   const [assignOpen, setAssignOpen] = useState(false)
+  const [assignMode, setAssignMode] = useState<'single' | 'round_robin'>('single')
   const [assignTo, setAssignTo] = useState('')
   const [assigning, setAssigning] = useState(false)
   const [assignDone, setAssignDone] = useState(0)
   const [assignError, setAssignError] = useState('')
 
+  const roundRobinPool = members.filter(m => m.eligibleForRoundRobin !== false)
+
   async function runAssign() {
-    if (!selection || !assignTo) return
+    if (!selection) return
+    if (assignMode === 'single' && !assignTo) return
+    if (assignMode === 'round_robin' && !roundRobinPool.length) return
+
     const ids = [...selection.selected]
     setAssigning(true)
     setAssignError('')
     setAssignDone(0)
     let failed = 0
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      // Decided once per lead, up front — a plain round-robin split
+      // (lead i → pool[i % pool.length]), not the live rotation counter
+      // real-time incoming leads use, which doesn't fit a one-off bulk move.
+      const target = assignMode === 'round_robin' ? roundRobinPool[i % roundRobinPool.length].id : assignTo
       try {
-        const res = await fetch(`/api/leads/${id}/assign`, {
+        const res = await fetch(`/api/leads/${ids[i]}/assign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assigned_sales_id: assignTo }),
+          body: JSON.stringify({ assigned_sales_id: target }),
         })
         if (!res.ok) failed++
       } catch {
@@ -77,6 +92,7 @@ export default function LeadsAdminActions({ leadCount, members = [] }: Props) {
     }
     setAssignOpen(false)
     setAssignTo('')
+    setAssignMode('single')
     selection.clear()
     router.refresh()
   }
@@ -177,13 +193,26 @@ export default function LeadsAdminActions({ leadCount, members = [] }: Props) {
             </div>
 
             <p className="text-sm text-muted">
-              سيتم إسناد كل العملاء المحددين إلى الموظف الذي تختاره، ويُسجَّل ذلك في السجل الزمني لكل عميل.
+              يُسجَّل الإسناد الجديد في السجل الزمني لكل عميل، ويُمرَّر لبيفاتيل/رفيق سوشيال تلقائيًا.
             </p>
 
-            <select className="input" value={assignTo} onChange={e => setAssignTo(e.target.value)} disabled={assigning}>
-              <option value="">اختر الموظف</option>
-              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="radio" name="bulk-assign-mode" checked={assignMode === 'single'} disabled={assigning} onChange={() => setAssignMode('single')} />
+                <span className="text-foreground">إسنادهم كلهم لموظف واحد بعينه</span>
+              </label>
+              <label className={`flex items-center gap-2 text-sm ${roundRobinPool.length ? 'cursor-pointer' : 'opacity-50'}`}>
+                <input type="radio" name="bulk-assign-mode" checked={assignMode === 'round_robin'} disabled={assigning || !roundRobinPool.length} onChange={() => setAssignMode('round_robin')} />
+                <span className="text-foreground">توزيعهم بالتساوي (دور) على كل الموظفين النشطين</span>
+              </label>
+            </div>
+
+            {assignMode === 'single' && (
+              <select className="input" value={assignTo} onChange={e => setAssignTo(e.target.value)} disabled={assigning}>
+                <option value="">اختر الموظف</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            )}
 
             {assigning && (
               <p className="text-sm text-muted">جارٍ الإسناد… {assignDone} من {selectedCount}</p>
@@ -192,7 +221,7 @@ export default function LeadsAdminActions({ leadCount, members = [] }: Props) {
 
             <div className="flex gap-3">
               <button onClick={() => setAssignOpen(false)} disabled={assigning} className="btn btn-outline flex-1 !py-2">إلغاء</button>
-              <button onClick={runAssign} disabled={assigning || !assignTo} className="btn btn-primary flex-1 !py-2 gap-1.5">
+              <button onClick={runAssign} disabled={assigning || (assignMode === 'single' ? !assignTo : !roundRobinPool.length)} className="btn btn-primary flex-1 !py-2 gap-1.5">
                 {assigning ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
                 {assigning ? 'جارٍ الإسناد...' : 'إسناد'}
               </button>

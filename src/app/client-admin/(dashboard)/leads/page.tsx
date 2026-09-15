@@ -21,15 +21,18 @@ export default async function ClientAdminLeadsPage() {
   ])
 
   // Members shown in filters/assign: admin sees all reps; manager sees their team members.
+  // suspended/excluded_from_distribution ride along only for the round-robin
+  // bulk-assign pool in LeadsAdminActions — the single-target dropdown still
+  // lists everyone, unfiltered, same as before.
   let membersQuery = supa
     .from('profiles')
-    .select('id, full_name, team_id')
+    .select('id, full_name, team_id, suspended, excluded_from_distribution')
     .eq('tenant_id', viewer.tenantId)
     .in('role', ['client_sales_manager', 'client_user'])
   if (viewer.role === 'client_sales_manager') {
     const teamIds = await managedTeamIds(viewer)
     membersQuery = teamIds.length
-      ? supa.from('profiles').select('id, full_name, team_id').eq('tenant_id', viewer.tenantId).in('team_id', teamIds)
+      ? supa.from('profiles').select('id, full_name, team_id, suspended, excluded_from_distribution').eq('tenant_id', viewer.tenantId).in('team_id', teamIds)
       : membersQuery.eq('id', viewer.id)
   }
   const { data: members } = await membersQuery
@@ -57,7 +60,10 @@ export default async function ClientAdminLeadsPage() {
           {viewer.role === 'client_admin' && (
             <LeadsAdminActions
               leadCount={leads.length}
-              members={(members || []).map(m => ({ id: m.id, name: m.full_name }))}
+              members={(members || []).map(m => ({
+                id: m.id, name: m.full_name,
+                eligibleForRoundRobin: !m.suspended && !m.excluded_from_distribution,
+              }))}
             />
           )}
           <div className="hidden lg:block"><DateTimePrayer variant="bar" /></div>
