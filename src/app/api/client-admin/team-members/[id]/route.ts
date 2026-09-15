@@ -67,16 +67,33 @@ async function reassignSuspendedMembersLeads(
   // move like this.
   const plan = leads.map((lead, i) => ({ lead, target: targets[i % targets.length] }))
 
-  await Promise.all(plan.map(({ lead, target }) =>
-    Promise.all([
+  // One request PER TARGET (an update + an insert), not one pair per lead.
+  // Confirmed live 2026-09-15 (786 leads, Abdelrahman Ehab's suspension):
+  // the original per-lead version fired ~1572 parallel requests and the
+  // function was killed partway through — 499 leads moved, the remaining
+  // 287 left silently untouched with no error surfaced anywhere. Grouping by
+  // target turns "leads × 2" requests into "targets × 2" (here, ~15-20
+  // total instead of ~1572) — comfortably inside any reasonable time budget
+  // regardless of how many leads a single suspension is moving.
+  const byTarget = new Map<string, { target: { id: string; team_id: string | null }; leadIds: string[] }>()
+  for (const { lead, target } of plan) {
+    const entry = byTarget.get(target.id) ?? { target, leadIds: [] }
+    entry.leadIds.push(lead.id)
+    byTarget.set(target.id, entry)
+  }
+
+  await Promise.all(
+    [...byTarget.values()].map(({ target, leadIds }) =>
       supabase.from('leads')
         .update({ assigned_sales_id: target.id, assigned_team_id: target.team_id, updated_at: new Date().toISOString() })
-        .eq('id', lead.id),
-      supabase.from('lead_activities').insert({
-        tenant_id: tenantId, lead_id: lead.id, actor_id: actorId, type: 'assignment', mentioned_id: target.id,
-      }),
-    ])
-  ))
+        .in('id', leadIds)
+    )
+  )
+  await supabase.from('lead_activities').insert(
+    plan.map(({ lead, target }) => ({
+      tenant_id: tenantId, lead_id: lead.id, actor_id: actorId, type: 'assignment', mentioned_id: target.id,
+    }))
+  )
 
   // Mirror the new owner onto Bevatel/Rafeeq Social same as a manual
   // reassign does (see /api/leads/[id]/assign) — after the response, so a
