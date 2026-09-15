@@ -465,7 +465,7 @@ function MemberModal({
 
 // ─── Team detail modal ────────────────────────────────────────────
 function TeamDetailModal({
-  team, members, canManageTeam, canEditMember, canRemoveMember, canFullyManage, onEditMember, onDeleteMember, onClose, onChanged,
+  team, members, canManageTeam, canEditMember, canRemoveMember, canFullyManage, onEditMember, onDeleteMember, onSuspendMember, onClose, onChanged,
 }: {
   team: Team
   members: TeamMember[]
@@ -475,6 +475,7 @@ function TeamDetailModal({
   canFullyManage: boolean                         // admin only: suspend / delete account
   onEditMember: (m: TeamMember) => void           // open edit form for a member
   onDeleteMember: (m: TeamMember) => void         // open the delete-with-reassign flow
+  onSuspendMember: (m: TeamMember) => void        // open the suspend-with-reassign flow
   onClose: () => void
   onChanged: () => void
 }) {
@@ -784,7 +785,7 @@ function TeamDetailModal({
                           {canFullyManage && (
                             <>
                               <ResetPasswordButton endpoint={`/api/client-admin/team-members/${m.id}`} name={m.full_name} />
-                              <button onClick={() => toggleSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
+                              <button onClick={() => m.suspended ? toggleSuspendMember(m) : onSuspendMember(m)} className="text-muted2 hover:text-warning transition p-1" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                 {m.suspended ? <PlayCircle size={15} /> : <PauseCircle size={15} />}
                               </button>
                               <button onClick={() => onDeleteMember(m)} className="text-muted2 hover:text-danger transition p-1" title="حذف الحساب نهائياً">
@@ -933,6 +934,143 @@ function DeleteMemberModal({
   )
 }
 
+// ─── Suspend Member Modal ───────────────────────────────────────────
+// Mirrors DeleteMemberModal's reassign flow, plus a second distribution
+// mode: round-robin across every other active rep, instead of dumping the
+// whole book on one named person (per explicit request — a manager
+// suspending someone shouldn't have to hand-pick who inherits everything).
+function SuspendMemberModal({
+  member, members, stats, onClose, onSuspended,
+}: {
+  member: TeamMember
+  members: TeamMember[]
+  stats: TeamLeadStats
+  onClose: () => void
+  onSuspended: () => void
+}) {
+  const others = members.filter(m => m.id !== member.id && !m.suspended && m.role !== 'client_admin')
+  const hasLeads = stats.open > 0 || stats.pending > 0
+  const [mode, setMode] = useState<'none' | 'round_robin' | 'single'>('none')
+  const [reassignTo, setReassignTo] = useState('')
+  const [moveOpen, setMoveOpen] = useState(stats.open > 0)
+  const [movePending, setMovePending] = useState(stats.pending > 0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSuspend() {
+    setLoading(true)
+    setError('')
+
+    const statuses: string[] = []
+    if (moveOpen) statuses.push('new')
+    if (movePending) statuses.push('contacted', 'qualified')
+
+    const reassign =
+      mode === 'round_robin' && statuses.length ? { mode: 'round_robin', statuses } :
+      mode === 'single' && statuses.length ? { mode: 'single', reassign_to: reassignTo, statuses } :
+      undefined
+
+    try {
+      const res = await fetch(`/api/client-admin/team-members/${member.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: true, ...(reassign ? { reassign } : {}) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'خطأ')
+      onSuspended()
+      onClose()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'خطأ')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="overlay items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="modal p-6 w-full max-w-md my-8" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">تعليق الموظف</h3>
+          <button onClick={onClose} className="text-muted2 hover:text-foreground"><X size={20} /></button>
+        </div>
+
+        <p className="text-sm text-muted mb-4">
+          سيتم تعليق حساب <span className="font-semibold text-foreground">{member.full_name}</span> — لن يستطيع الدخول للنظام حتى يُلغى تعليقه.
+        </p>
+
+        {hasLeads ? (
+          <div className="space-y-4">
+            <div className="bg-surface2 rounded-xl p-4 border border-border">
+              <p className="text-sm font-semibold text-foreground mb-1">لدى هذا الموظف عملاء محتملون:</p>
+              <div className="flex gap-3 text-sm">
+                <span style={{ color: 'var(--primary)' }}>مفتوحة: {stats.open}</span>
+                <span style={{ color: 'var(--warning)' }}>معلّقة: {stats.pending}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">ماذا يحدث لليدزه؟</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="suspend-mode" checked={mode === 'none'} onChange={() => setMode('none')} />
+                  <span className="text-foreground">لا شيء — تبقى معه كما هي</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="suspend-mode" checked={mode === 'round_robin'} onChange={() => setMode('round_robin')} />
+                  <span className="text-foreground">توزيعها بالتساوي (دور) على كل الموظفين النشطين</span>
+                </label>
+                <label className={`flex items-center gap-2 text-sm ${others.length ? 'cursor-pointer' : 'opacity-50'}`}>
+                  <input type="radio" name="suspend-mode" checked={mode === 'single'} disabled={!others.length} onChange={() => setMode('single')} />
+                  <span className="text-foreground">إسنادها كلها لموظف واحد بعينه</span>
+                </label>
+              </div>
+            </div>
+
+            {mode === 'single' && (
+              <div>
+                <label className="label">الموظف المستلم</label>
+                <select className="input" value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+                  <option value="">-- اختر --</option>
+                  {others.map(m => <option key={m.id} value={m.id}>{m.full_name}{m.job_title ? ` (${m.job_title})` : ''}</option>)}
+                </select>
+              </div>
+            )}
+
+            {mode !== 'none' && (
+              <div>
+                <label className="label">أي الليدز تُنقل؟</label>
+                <div className="space-y-2">
+                  <label className={`flex items-center gap-2 text-sm ${stats.open === 0 ? 'opacity-50' : 'cursor-pointer'}`}>
+                    <input type="checkbox" checked={moveOpen} disabled={stats.open === 0} onChange={e => setMoveOpen(e.target.checked)} />
+                    <span className="text-foreground">الليدز المفتوحة ({stats.open})</span>
+                  </label>
+                  <label className={`flex items-center gap-2 text-sm ${stats.pending === 0 ? 'opacity-50' : 'cursor-pointer'}`}>
+                    <input type="checkbox" checked={movePending} disabled={stats.pending === 0} onChange={e => setMovePending(e.target.checked)} />
+                    <span className="text-foreground">الليدز المعلّقة ({stats.pending})</span>
+                  </label>
+                </div>
+                <p className="text-xs text-muted2 mt-2">الليدز غير المختارة تبقى معه كما هي.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted2 mb-2">لا يوجد لدى هذا الموظف عملاء محتملون بحاجة لإعادة إسناد.</p>
+        )}
+
+        {error && <p className="text-sm mt-3" style={{ color: 'var(--danger)' }}>{error}</p>}
+
+        <div className="flex gap-3 pt-5">
+          <button type="button" onClick={onClose} className="btn btn-outline flex-1">إلغاء</button>
+          <button type="button" onClick={handleSuspend} disabled={loading || (mode === 'single' && !reassignTo)} className="btn btn-primary flex-1 gap-2">
+            <PauseCircle size={15} /> {loading ? 'جارٍ التعليق...' : 'تعليق الحساب'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Add Team Modal ───────────────────────────────────────────────
 function AddTeamModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ name: '', description: '', monthly_target: '' })
@@ -999,6 +1137,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
   const [showAddMember, setShowAddMember] = useState(false)
   const [editMember, setEditMember] = useState<TeamMember | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null)
+  const [suspendTarget, setSuspendTarget] = useState<TeamMember | null>(null)
   const [openTeam, setOpenTeam] = useState<Team | null>(null)
   const router = useRouter()
 
@@ -1147,7 +1286,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
                             {isAdmin && (
                               <>
                                 <ResetPasswordButton endpoint={`/api/client-admin/team-members/${m.id}`} name={m.full_name} />
-                                <button onClick={() => toggleSuspend(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
+                                <button onClick={() => m.suspended ? toggleSuspend(m) : setSuspendTarget(m)} className="text-muted2 hover:text-warning transition p-1.5 rounded-lg" title={m.suspended ? 'إلغاء التعليق' : 'تعليق'}>
                                   {m.suspended ? <PlayCircle size={16} /> : <PauseCircle size={16} />}
                                 </button>
                                 <button onClick={() => setDeleteTarget(m)} className="text-muted2 hover:text-danger transition p-1.5 rounded-lg" title="حذف نهائي">
@@ -1194,6 +1333,7 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           canFullyManage={isAdmin}
           onEditMember={(m) => { setOpenTeam(null); setEditMember(m); setShowAddMember(true) }}
           onDeleteMember={(m) => { setOpenTeam(null); setDeleteTarget(m) }}
+          onSuspendMember={(m) => { setOpenTeam(null); setSuspendTarget(m) }}
           onClose={() => setOpenTeam(null)}
           onChanged={refresh}
         />
@@ -1205,6 +1345,15 @@ export default function TeamsAndEmployeesManager({ teams, members, tenantId, cur
           stats={memberLeadStats[deleteTarget.id] || { open: 0, pending: 0 }}
           onClose={() => setDeleteTarget(null)}
           onDeleted={refresh}
+        />
+      )}
+      {suspendTarget && (
+        <SuspendMemberModal
+          member={suspendTarget}
+          members={members}
+          stats={memberLeadStats[suspendTarget.id] || { open: 0, pending: 0 }}
+          onClose={() => setSuspendTarget(null)}
+          onSuspended={refresh}
         />
       )}
     </div>

@@ -1,7 +1,97 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { adminSupabase as createAdminSupabase } from '@/lib/supabase/admin'
 import { requireTeamManager } from '@/lib/auth/requireTeamManager'
 import { clearMfaFactors } from '@/lib/auth/mfa'
+import { pushAssigneeToBevatel } from '@/lib/leads/bevatelSync'
+import { pushAssigneeToRafeeqSocial } from '@/lib/leads/rafeeqSocialAssign'
+import type { Lead } from '@/lib/types'
+
+const REASSIGN_STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const
+
+// Suspending someone can optionally move their open leads elsewhere in the
+// same request — either to one named rep (mirrors the DELETE route's own
+// reassign_to below), or round-robin across every other still-active rep, so
+// one suspension doesn't just dump a whole book of leads onto whoever the
+// admin happens to pick. Returns the number of leads moved, or null if there
+// was nothing to reassign (no body, or an empty pool/status selection).
+async function reassignSuspendedMembersLeads(
+  supabase: ReturnType<typeof createAdminSupabase>,
+  tenantId: string,
+  actorId: string,
+  suspendedId: string,
+  reassign: { mode?: string; reassign_to?: string; statuses?: unknown },
+): Promise<number | null> {
+  const statuses = Array.isArray(reassign.statuses)
+    ? reassign.statuses.filter((s): s is string => typeof s === 'string' && (REASSIGN_STATUSES as readonly string[]).includes(s))
+    : []
+  if (!statuses.length) return null
+
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('id, source, data, bevatel_conversation_id, bevatel_contact_id, tenant_id')
+    .eq('tenant_id', tenantId)
+    .eq('assigned_sales_id', suspendedId)
+    .in('status', statuses)
+  if (!leads?.length) return 0
+
+  // Who a lead can land on — built once, reused for every lead below.
+  let targets: { id: string; team_id: string | null }[]
+  if (reassign.mode === 'round_robin') {
+    const { data: reps } = await supabase
+      .from('profiles')
+      .select('id, team_id')
+      .eq('tenant_id', tenantId)
+      .neq('id', suspendedId)
+      .eq('suspended', false)
+      .in('role', ['client_sales_manager', 'client_user'])
+      .order('full_name')
+    targets = reps || []
+  } else if (reassign.reassign_to) {
+    const { data: rep } = await supabase
+      .from('profiles')
+      .select('id, team_id')
+      .eq('id', reassign.reassign_to)
+      .eq('tenant_id', tenantId)
+      .single()
+    targets = rep ? [rep] : []
+  } else {
+    targets = []
+  }
+  if (!targets.length) return null
+
+  // The assignee for each lead is decided here, in one pass, before any
+  // writes — so the round-robin split (lead i → targets[i % targets.length])
+  // is a plain, race-free distribution rather than the live "next in
+  // rotation" counter used for real-time incoming leads (assignRoundRobin
+  // and its Bevatel/Rafeeq Social siblings), which doesn't fit a one-off bulk
+  // move like this.
+  const plan = leads.map((lead, i) => ({ lead, target: targets[i % targets.length] }))
+
+  await Promise.all(plan.map(({ lead, target }) =>
+    Promise.all([
+      supabase.from('leads')
+        .update({ assigned_sales_id: target.id, assigned_team_id: target.team_id, updated_at: new Date().toISOString() })
+        .eq('id', lead.id),
+      supabase.from('lead_activities').insert({
+        tenant_id: tenantId, lead_id: lead.id, actor_id: actorId, type: 'assignment', mentioned_id: target.id,
+      }),
+    ])
+  ))
+
+  // Mirror the new owner onto Bevatel/Rafeeq Social same as a manual
+  // reassign does (see /api/leads/[id]/assign) — after the response, so a
+  // suspension touching many leads doesn't sit waiting on external API calls.
+  after(async () => {
+    await Promise.all(plan.map(({ lead, target }) =>
+      Promise.all([
+        pushAssigneeToBevatel(lead as unknown as Lead, target.id).catch(console.error),
+        pushAssigneeToRafeeqSocial(lead as unknown as Lead, target.id).catch(console.error),
+      ])
+    ))
+  })
+
+  return plan.length
+}
 
 // Verify the target member is in the caller's tenant (and team, for managers).
 async function canManage(auth: Awaited<ReturnType<typeof requireTeamManager>>, targetId: string, supabase: ReturnType<typeof createAdminSupabase>) {
@@ -27,7 +117,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!target) return NextResponse.json({ error: 'غير مصرح' }, { status: 403 })
 
   const body = await request.json()
-  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, email, monthly_target, excluded_from_distribution } = body
+  const { full_name, phone, job_title, team_id, suspended, password, role, bevatel_agent_id, bevatel_extension, rafeeqsocial_team_member_id, email, monthly_target, excluded_from_distribution, reassign } = body
 
   const isAdmin = auth.role === 'client_admin'
 
@@ -77,6 +167,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Only makes sense on the transition INTO suspended — never on unsuspend,
+  // and never as a side effect of some unrelated field edit that happens to
+  // also carry a stale `reassign` from an earlier request body.
+  let reassignedCount: number | null = null
+  if (suspended === true && reassign && typeof reassign === 'object') {
+    reassignedCount = await reassignSuspendedMembersLeads(supabase, auth.tenantId, auth.userId, id, reassign)
+  }
+
   // Auth account updates (email / password) live in auth.users, not profiles.
   const authUpdates: { email?: string; password?: string } = {}
   if (typeof email === 'string' && email.trim()) authUpdates.email = email.trim()
@@ -101,7 +199,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, reassigned: reassignedCount })
 }
 
 // DELETE — permanently delete the member's account (admin only).
